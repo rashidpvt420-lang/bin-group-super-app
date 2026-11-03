@@ -26,6 +26,7 @@ import { collection, db, functions, httpsCallable, onSnapshot, orderBy, query, w
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const clean = (value: unknown) => String(value || '').trim();
@@ -190,7 +191,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         <Paper sx={{ p: 10, textAlign: 'center', bgcolor: binThemeTokens.softCanvas, borderRadius: 6, border: '1px dashed #E5E7EB' }}>
           <Building2 size={48} color="#9CA3AF" />
           <Typography variant="h6" sx={{ color: '#344054', fontWeight: 900, mt: 2 }}>No referrals yet</Typography>
-          <Typography variant="body2" sx={{ color: '#475467', mt: 1 }}>Tap Submit referral above to add one.</Typography>
+          <Typography variant="body2" sx={{ color: '#475467', mt: 1 }}><Bi en={"Tap Submit referral above to add one."} ar={"اضغط \"إرسال إحالة\" بالأعلى لإضافة إحالة."} /></Typography>
         </Paper>
       ) : (
         <Stack spacing={3}>
@@ -216,7 +217,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                       <Stack direction="row" spacing={4} sx={{ minWidth: { md: 400 } }}>
                         <Box><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>EST. VALUE</Typography><Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.estimatedValue ? `AED ${Number(ref.estimatedValue).toLocaleString()}` : 'N/A'}</Typography></Box>
                         <Box><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>COMMISSION</Typography><Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.commissionAmount ? `AED ${Number(ref.commissionAmount).toLocaleString()}` : ref.commissionStatus || 'N/A'}</Typography></Box>
-                        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}><Tooltip title="View Referral Audit"><IconButton aria-label="View referral audit" sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}><FileText size={20} /></IconButton></Tooltip></Box>
+                        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}><Tooltip title="Referral audit view is not available yet"><span><IconButton disabled aria-label="View referral audit" sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}><FileText size={20} /></IconButton></span></Tooltip></Box>
                       </Stack>
                     </Stack>
                     {ref.notes && <Box sx={{ mt: 3, p: 2, bgcolor: '#F3F4F6', borderRadius: 3, border: '1px solid #E5E7EB' }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>NOTES</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{ref.notes}</Typography></Box>}
@@ -231,18 +232,18 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
       )}
 
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
-        <DialogTitle sx={{ fontWeight: 950 }}>Submit New Referral</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 950 }}><Bi en={"Submit New Referral"} ar={"إرسال إحالة جديدة"} /></DialogTitle>
         <form onSubmit={handleAddReferral}>
           <DialogContent>
             <Stack spacing={3} sx={{ mt: 1 }}>
-              <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth><MenuItem value="property">Property Owner / Asset</MenuItem><MenuItem value="contract">Contract / Lease Opportunity</MenuItem></TextField>
+              <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth><MenuItem value="property"><Bi en={"Property Owner / Asset"} ar={"مالك العقار / الأصل"} /></MenuItem><MenuItem value="contract"><Bi en={"Contract / Lease Opportunity"} ar={"فرصة عقد / إيجار"} /></MenuItem></TextField>
               <Grid container spacing={2}><Grid item xs={12} md={6}><TextField required label="Client / Owner Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth /></Grid><Grid item xs={12}><TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth /></Grid></Grid>
-              {referralType === 'contract' ? <><TextField select label="Select Verified BIN Listing" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>{propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.title || prop.id} · {prop.publicLocationQuery || prop.area || prop.emirate || 'UAE'}</MenuItem>)}</TextField><Grid container spacing={2}><Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease">Annual Lease</MenuItem><MenuItem value="maintenance_contract">Maintenance Contract</MenuItem><MenuItem value="property_management">Property Management</MenuItem></TextField></Grid><Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid></Grid></> : <Grid container spacing={2}><Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid></Grid>}
+              {referralType === 'contract' ? <><TextField select label="Select Verified BIN Listing" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>{propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.title || prop.id} · {prop.publicLocationQuery || prop.area || prop.emirate || 'UAE'}</MenuItem>)}</TextField><Grid container spacing={2}><Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease"><Bi en={"Annual Lease"} ar={"إيجار سنوي"} /></MenuItem><MenuItem value="maintenance_contract"><Bi en={"Maintenance Contract"} ar={"عقد صيانة"} /></MenuItem><MenuItem value="property_management"><Bi en={"Property Management"} ar={"إدارة العقارات"} /></MenuItem></TextField></Grid><Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid></Grid></> : <Grid container spacing={2}><Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid></Grid>}
               <TextField label="Estimated Contract / Asset Value (AED)" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} fullWidth InputProps={{ startAdornment: <DollarSign size={18} /> as any }} />
               <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={3} fullWidth />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3 }}><Button aria-label="Back" onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/referrals'); }}>Back</Button><Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? <CircularProgress size={20} /> : 'Submit Referral'}</Button></DialogActions>
+          <DialogActions sx={{ p: 3 }}><Button aria-label="Back" onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/referrals'); }}><Bi en={"Back"} ar={"رجوع"} /></Button><Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? <CircularProgress size={20} /> : 'Submit Referral'}</Button></DialogActions>
         </form>
       </Dialog>
     </BrokerPageFrame>
