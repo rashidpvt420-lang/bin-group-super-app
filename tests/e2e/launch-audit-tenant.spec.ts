@@ -5,6 +5,7 @@
  * emergency form, chat, profile, reviewed correction history, gate pass, AR/EN switch.
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAuthenticatedPortalReady } from './helpers/portalReadiness';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
@@ -33,6 +34,7 @@ async function login(page: Page) {
 
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
+  await assertAuthenticatedPortalReady(page, expectedPath, 'TENANT PORTAL');
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
@@ -119,13 +121,18 @@ test.describe('Tenant launch audit', () => {
     await expect(requestForm, 'Maintenance request form must render an input').toBeVisible({ timeout: 20_000 });
   });
 
-  test('tenant emergency page renders (no submit)', async () => {
+  test('tenant emergency page renders without submitting an SOS', async () => {
     const page = pageForAudit();
     await page.goto('/tenant/emergency', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/emergency');
-    const body = await page.locator('body').innerText({ timeout: 10_000 });
-    expect(body, 'Emergency page must have relevant content').toMatch(/emergency|sos|urgent|استغاثة|طارئ/i);
+    await expect(
+      page.getByRole('heading', { name: /EMERGENCY SOS|نداء الطوارئ|طوارئ/i }),
+      'The authenticated emergency page must render its emergency heading.',
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByTestId('tenant-sos-trigger'),
+      'The emergency dispatch control must be visible but this audit must not submit it.',
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test('tenant correction submission and immutable history are reachable', async () => {
