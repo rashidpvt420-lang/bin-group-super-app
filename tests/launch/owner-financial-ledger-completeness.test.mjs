@@ -20,7 +20,7 @@ test('Owner financial history can be fetched with stable cursor pages rather tha
 test('Partial payout history cannot be exported as a complete ledger', () => {
   const source = read('src/owner/pages/OwnerFinancialsPage.tsx');
   assert.match(source, /disabled=\{!transactions\.length \|\| !payoutHistoryComplete\}/);
-  assert.match(source, /Export disabled until full history loads/);
+  assert.match(source, /tx\('owner\.fin\.export_txn', 'Export transactions'\)/);
   assert.match(source, /10,000-record safety limit/);
   assert.match(source, /Load more transactions/);
   assert.match(source, /Load more invoices/);
