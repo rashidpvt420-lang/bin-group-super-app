@@ -6,6 +6,7 @@
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
+import { waitForRolePortalReady } from './helpers/rolePortalReady';
 
 const EMAIL    = process.env.E2E_OWNER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
@@ -33,6 +34,7 @@ async function login(page: Page) {
 
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
+  await waitForRolePortalReady(page, expectedPath);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
