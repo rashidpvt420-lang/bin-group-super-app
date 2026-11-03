@@ -153,6 +153,11 @@ export default function PaymentApprovalsPage() {
     const pendingOlderRowsRef = React.useRef<PaymentRecord[]>([]);
     const paidOlderRowsRef = React.useRef<PaymentRecord[]>([]);
     const receiptOlderRowsRef = React.useRef<ReceiptRepairRecord[]>([]);
+    const setQueueLimitWarning = React.useCallback((source: string, reachedLimit: boolean) => {
+        setQueueLimitWarnings((current) => reachedLimit
+            ? (current.includes(source) ? current : [...current, source])
+            : current.filter((item) => item !== source));
+    }, []);
 
     React.useEffect(() => {
         pendingCursorRef.current = null;
@@ -181,11 +186,6 @@ export default function PaymentApprovalsPage() {
             setRows([...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a)));
             setLoading(false);
             setError(null);
-        };
-        const setQueueLimitWarning = (source: string, reachedLimit: boolean) => {
-            setQueueLimitWarnings((current) => reachedLimit
-                ? (current.includes(source) ? current : [...current, source])
-                : current.filter((item) => item !== source));
         };
         const handleError = (err: any) => {
             console.error('[ADMIN_PAYMENTS] stream failed', err);
@@ -384,6 +384,7 @@ export default function PaymentApprovalsPage() {
                     internalNotes: internalNotes.trim(), contentType: receiptFile?.type,
                     encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '' });
                 setNotice('Design Cash/Cheque deposit verified. Engineer handoff remains a separate protected action; no Owner account was activated.');
+                removeFromOlderQueues(approvalTarget.id);
                 setApprovalTarget(null);
                 setReceiptFile(null);
                 return;
