@@ -55,7 +55,8 @@ test('Broker commission history and payout status queries are bounded and pagina
   assert.match(page, /startAfter\(commissionsCursorRef\.current\)/);
   assert.match(page, /broker-commissions-partial/);
   assert.match(page, /limit\(1\)\), \(snapshot\)/);
-  assert.match(page, /hasMoreCommissions\);/);
+  assert.match(page, /hasMoreCommissions\} onClick/);
+  assert.match(page, /disabled=\{payoutBusy \|\| payableIds\.length === 0 \|\| hasMoreCommissions\}/);
 });
 
 test('Owner, Tenant and Technician live audits wait for authenticated role shells', async () => {
