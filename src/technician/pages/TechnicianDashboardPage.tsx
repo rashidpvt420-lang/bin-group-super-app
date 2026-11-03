@@ -55,6 +55,7 @@ import { AVAILABILITY_REPORT_INTERVAL_MS, reportTechnicianAvailabilityLocation }
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { slaMinutesForPriority } from '../../config/uaeDominationBlueprint';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
@@ -99,20 +100,6 @@ const formatTime = (value: any) => {
     }
 };
 
-const CANONICAL_SLA_MINUTES: Record<string, number> = {
-    EMERGENCY: 30,
-    SOS: 30,
-    CRITICAL: 30,
-    HIGH: 120,
-    URGENT: 120,
-    MEDIUM: 240,
-    SAME_DAY: 240,
-    STANDARD: 480,
-    NORMAL: 480,
-    LOW: 1440,
-    MINOR: 1440,
-};
-
 const getSlaTimeRemaining = (job: any) => {
     const serverDeadline = job?.slaDueAt || job?.slaDeadline || job?.slaTargetTime;
     let limitTime: Date | null = null;
@@ -121,7 +108,7 @@ const getSlaTimeRemaining = (job: any) => {
     } else if (job?.createdAt) {
         const created = typeof job.createdAt.toDate === 'function' ? job.createdAt.toDate() : new Date(job.createdAt);
         const priorityKey = String(job.slaPriority || job.priority || '').toUpperCase().trim();
-        const slaMinutes = CANONICAL_SLA_MINUTES[priorityKey] ?? 480;
+        const slaMinutes = slaMinutesForPriority(priorityKey);
         limitTime = new Date(created.getTime() + slaMinutes * 60000);
     }
 
