@@ -5,6 +5,7 @@
  * documents, property passport, tickets, AR/EN switch.
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAuthenticatedPortalReady } from './helpers/portalReadiness';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_OWNER_MAILBOX_EMAIL    ?? '';
@@ -33,6 +34,7 @@ async function login(page: Page) {
 
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
+  await assertAuthenticatedPortalReady(page, expectedPath, 'OWNER PORTAL');
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
