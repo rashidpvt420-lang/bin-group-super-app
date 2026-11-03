@@ -38,7 +38,7 @@ import {
     Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { Clock, FileCheck2, WalletCards } from 'lucide-react';
-import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { collection, db, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 type Broker = {
@@ -183,6 +183,11 @@ export default function BrokerManagementPage() {
     const [brokers, setBrokers] = useState<Broker[]>([]);
     const [documents, setDocuments] = useState<Record<string, BrokerDocument[]>>({});
     const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+    const [olderPayoutRequests, setOlderPayoutRequests] = useState<PayoutRequest[]>([]);
+    const [hasMorePayoutRequests, setHasMorePayoutRequests] = useState(false);
+    const [loadingMorePayoutRequests, setLoadingMorePayoutRequests] = useState(false);
+    const payoutCursorRef = React.useRef<any>(null);
+    const olderPayoutPageLoadedRef = React.useRef(false);
     const [kycReviewSummaries, setKycReviewSummaries] = useState<Record<string, BrokerKycReviewSummary>>({});
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
     const [reviewBroker, setReviewBroker] = useState<Broker | null>(null);
@@ -220,19 +225,49 @@ export default function BrokerManagementPage() {
     }, []);
 
     useEffect(() => {
+        payoutCursorRef.current = null;
+        olderPayoutPageLoadedRef.current = false;
+        setOlderPayoutRequests([]);
+        setHasMorePayoutRequests(false);
         const payoutQuery = query(collection(db, 'broker_payout_requests'), orderBy('createdAt', 'desc'), limit(100));
         const unsubscribe = onSnapshot(payoutQuery, (snapshot) => {
+            if (!olderPayoutPageLoadedRef.current) payoutCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            if (!olderPayoutPageLoadedRef.current) setHasMorePayoutRequests(snapshot.size >= 100);
             setPayoutRequests(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as PayoutRequest[]);
         }, (error) => console.warn('[BROKER_ADMIN] payout request listener failed', error));
         return () => unsubscribe();
     }, []);
 
+    const visiblePayoutRequests = useMemo(() => Array.from(new Map<string, PayoutRequest>([...payoutRequests, ...olderPayoutRequests].map((request) => [request.id, request] as const)).values()), [payoutRequests, olderPayoutRequests]);
     const stats = useMemo(() => ({
         total: brokers.length,
         pending: brokers.filter(brokerNeedsReview).length,
         approved: brokers.filter((broker) => statusText(broker.status || broker.approvalStatus) === 'APPROVED').length,
-        payoutPending: payoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
-    }), [brokers, payoutRequests]);
+        payoutPending: visiblePayoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
+    }), [brokers, visiblePayoutRequests]);
+
+    const loadOlderPayoutRequests = async () => {
+        if (!payoutCursorRef.current || !hasMorePayoutRequests || loadingMorePayoutRequests) return;
+        setLoadingMorePayoutRequests(true);
+        try {
+            const page = await getDocs(query(collection(db, 'broker_payout_requests'), orderBy('createdAt', 'desc'), startAfter(payoutCursorRef.current), limit(100)));
+            const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as PayoutRequest[];
+            setOlderPayoutRequests((current) => {
+                const merged = new Map<string, PayoutRequest>(current.map((request) => [request.id, request] as const));
+                rows.forEach((request) => merged.set(request.id, request));
+                return [...merged.values()];
+            });
+            if (page.docs.length > 0) {
+                payoutCursorRef.current = page.docs[page.docs.length - 1];
+                olderPayoutPageLoadedRef.current = true;
+            }
+            setHasMorePayoutRequests(page.size >= 100);
+        } catch (error: any) {
+            setNotice(error?.message || 'Older broker payout requests could not be loaded.');
+        } finally {
+            setLoadingMorePayoutRequests(false);
+        }
+    };
 
     const selectedDocuments = selectedBroker ? documents[selectedBroker.id] || [] : [];
     const selectedSummary = selectedBroker ? kycReviewSummaries[selectedBroker.id] : undefined;
@@ -314,6 +349,10 @@ export default function BrokerManagementPage() {
                 paymentReference: action === 'MARK_PAID' ? reason.trim() : '',
             });
             setNotice(`Payout request ${action.replace('_', ' ').toLowerCase()} saved.`);
+            const nextStatus = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'PAID';
+            const updateRows = (current: PayoutRequest[]) => current.map((row) => row.id === request.id ? { ...row, status: nextStatus, approvalStatus: action === 'REJECT' ? 'REJECTED' : 'APPROVED', paymentStatus: nextStatus } : row);
+            setPayoutRequests(updateRows);
+            setOlderPayoutRequests(updateRows);
         } catch (error: any) {
             setNotice(error?.message || 'Payout request review failed.');
         } finally {
@@ -423,7 +462,7 @@ export default function BrokerManagementPage() {
                             <Typography variant="h6" sx={{ fontWeight: 950 }}>Broker Payout Requests</Typography>
                         </Stack>
                         <Stack spacing={2}>
-                            {payoutRequests.map((request) => {
+                            {visiblePayoutRequests.map((request) => {
                                 const status = statusText(request.status);
                                 return (
                                     <Box key={request.id} sx={{ p: 2, borderRadius: 2, border: '1px solid #e5e7eb', bgcolor: alpha('#C9A646', 0.03) }}>
@@ -452,7 +491,9 @@ export default function BrokerManagementPage() {
                                     </Box>
                                 );
                             })}
-                            {payoutRequests.length === 0 && <Alert severity="info">No broker payout requests have been submitted yet.</Alert>}
+                            {visiblePayoutRequests.length === 0 && <Alert severity="info">No broker payout requests have been submitted yet.</Alert>}
+                            {hasMorePayoutRequests && <Alert severity="warning" data-testid="admin-broker-payouts-incomplete">The latest 100 payout requests are loaded. Load older requests before treating the payout queue or its KPI as complete.</Alert>}
+                            {hasMorePayoutRequests && <Button variant="outlined" fullWidth disabled={loadingMorePayoutRequests} onClick={() => void loadOlderPayoutRequests()}>{loadingMorePayoutRequests ? 'Loading older payout requests…' : 'Load older payout requests'}</Button>}
                         </Stack>
                     </Paper>
                 </Grid>
