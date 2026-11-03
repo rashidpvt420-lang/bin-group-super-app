@@ -33,6 +33,7 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity, options: OwnerFi
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
   const [streamError, setStreamError] = useState('');
+  const [invoiceHistoryLimited, setInvoiceHistoryLimited] = useState(false);
 
   const uid = String(user?.uid || '').trim();
 
@@ -49,11 +50,12 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity, options: OwnerFi
     }
 
     setInvoicesLoading(true);
-    const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', uid), limit(40));
+    const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', uid), limit(100));
     return onSnapshot(
       invoiceQ,
       (snap) => {
         setInvoices(snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+        setInvoiceHistoryLimited(snap.size >= 100);
         setInvoicesLoading(false);
       },
       (error) => {
@@ -107,7 +109,7 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity, options: OwnerFi
     properties,
     summary,
     loading: passportsLoading || (!usesExternalInvoices && invoicesLoading) || propertiesLoading,
-    error: passportError || streamError,
+    error: passportError || streamError || (invoiceHistoryLimited ? 'Invoice history is capped at 100 loaded records; financial summaries may be incomplete until the full ledger is reconciled.' : ''),
     feeRate,
   };
 }

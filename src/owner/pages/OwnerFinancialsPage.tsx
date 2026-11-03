@@ -72,24 +72,49 @@ export default function OwnerFinancialsPage() {
             if (payoutsReady && invoicesReady) setLoading(false);
         };
 
-        // Sort the Owner-scoped result on the client. Combining where +
-        // orderBy previously required a production composite index and left
-        // the page on an infinite loader when that stream failed.
-        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), limit(50));
-        const unsubscribeTrans = onSnapshot(transQ, (snap) => {
-            const rows = snap.docs
-                .map(d => ({ id: d.id, ...d.data() }))
-                .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
-                .slice(0, 25);
-            setTransactions(rows);
-            payoutsReady = true;
+        // UID is the authoritative owner key. Keep a verified-email query as a
+        // compatibility path for historical payouts that predate ownerUid.
+        // Merge and deduplicate because migrated records may match both queries.
+        let uidPayoutRows: any[] = [];
+        let legacyPayoutRows: any[] = [];
+        let uidPayoutReady = false;
+        let legacyPayoutReady = false;
+        const publishPayouts = () => {
+            const merged = new Map<string, any>();
+            [...uidPayoutRows, ...legacyPayoutRows].forEach((row) => {
+                if (!merged.has(row.id)) merged.set(row.id, row);
+            });
+            const rows = Array.from(merged.values())
+                .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date));
+            setTransactions(rows.slice(0, 25));
+        };
+        const finishPayoutSource = (source: 'uid' | 'legacy') => {
+            if (source === 'uid') uidPayoutReady = true;
+            else legacyPayoutReady = true;
+            payoutsReady = uidPayoutReady && legacyPayoutReady;
             finishStreams();
+        };
+
+        const uidPayoutQ = query(collection(db, 'payouts'), where('ownerUid', '==', user.uid), limit(50));
+        const unsubscribeUidPayouts = onSnapshot(uidPayoutQ, (snap) => {
+            uidPayoutRows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            publishPayouts();
+            finishPayoutSource('uid');
         }, (error) => {
-            console.error('Owner payout stream failed:', error);
-            setTransactions([]);
-            setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
-            payoutsReady = true;
-            finishStreams();
+            console.error('Owner payout stream failed (UID query):', error);
+            setLoadError('UID-scoped payout history is unavailable. Verify account permissions before relying on payout totals.');
+            finishPayoutSource('uid');
+        });
+
+        const legacyPayoutQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), limit(50));
+        const unsubscribeLegacyPayouts = onSnapshot(legacyPayoutQ, (snap) => {
+            legacyPayoutRows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            publishPayouts();
+            finishPayoutSource('legacy');
+        }, (error) => {
+            console.error('Owner payout stream failed (legacy email query):', error);
+            setLoadError('Legacy payout history is unavailable. Verify the owner account mapping before relying on payout totals.');
+            finishPayoutSource('legacy');
         });
 
         const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(100));
@@ -109,7 +134,8 @@ export default function OwnerFinancialsPage() {
         });
 
         return () => {
-            unsubscribeTrans();
+            unsubscribeUidPayouts();
+            unsubscribeLegacyPayouts();
             unsubscribeInvoices();
         };
     }, [user?.email, user?.uid]);
@@ -136,6 +162,10 @@ export default function OwnerFinancialsPage() {
             {visibleError && (
                 <Alert severity="warning" sx={{ mb: 3 }}>{visibleError}</Alert>
             )}
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+                Financial figures are based on the records currently loaded: up to 100 invoices and up to 50 payout records per owner UID/email query. This is not a complete historical ledger; reconcile the full account history before making financial decisions.
+            </Alert>
 
             <OwnerPdcRegisterCard />
 

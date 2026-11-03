@@ -2377,7 +2377,11 @@ service cloud.firestore {
     }
 
     match /payouts/{payoutId} {
-      allow read: if isAdmin() || emailOwns(resource.data);
+      // UID ownership is authoritative for new records; verified-email matching
+      // remains a read-only compatibility path for legacy payout documents.
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.get('ownerUid', null) == request.auth.uid) ||
+        emailOwns(resource.data);
       allow write: if isAdmin();
     }
 
