@@ -11,7 +11,7 @@ import {
     Calendar, MapPin, ChevronRight
 } from 'lucide-react';
 import { 
-    db, collection, query, where, getDocs, startAfter, documentId,
+    db, collection, query, where, getDocs, startAfter,
     orderBy, limit, onSnapshot 
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -44,7 +44,6 @@ export default function TechnicianHistoryPage() {
             where('assignedTechnicianId', '==', user.uid),
             where('status', 'in', ['completed', 'CLOSED', 'disputed']),
             orderBy('updatedAt', 'desc'),
-            orderBy(documentId(), 'asc'),
             limit(50)
         );
 
@@ -79,7 +78,6 @@ export default function TechnicianHistoryPage() {
                 where('assignedTechnicianId', '==', user.uid),
                 where('status', 'in', ['completed', 'CLOSED', 'disputed']),
                 orderBy('updatedAt', 'desc'),
-                orderBy(documentId(), 'asc'),
                 startAfter(historyCursorRef.current),
                 limit(50),
             ));
