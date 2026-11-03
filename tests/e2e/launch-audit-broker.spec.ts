@@ -5,6 +5,7 @@
  * profile, AR/EN switch.
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAuthenticatedPortalReady } from './helpers/portalReadiness';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_BROKER_MAILBOX_EMAIL    ?? '';
@@ -31,13 +32,8 @@ async function login(page: Page) {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
-async function waitForResolvedBrokerShell(page: Page, context: string) {
-  const authSpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
-  await expect(authSpinner, `${context}: broker identity must resolve before shell assertions`).toBeHidden({ timeout: 20_000 });
-}
-
 async function assertHealthy(page: Page, context: string) {
-  await waitForResolvedBrokerShell(page, context);
+  await assertAuthenticatedPortalReady(page, context, 'BIN BROKER');
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
