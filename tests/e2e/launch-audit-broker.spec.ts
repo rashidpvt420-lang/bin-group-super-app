@@ -6,7 +6,6 @@
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
-import { waitForRolePortalReady } from './helpers/rolePortalReady';
 
 const EMAIL    = process.env.E2E_BROKER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
@@ -32,8 +31,13 @@ async function login(page: Page) {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
+async function waitForResolvedBrokerShell(page: Page, context: string) {
+  const authSpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
+  await expect(authSpinner, `${context}: broker identity must resolve before shell assertions`).toBeHidden({ timeout: 20_000 });
+}
+
 async function assertHealthy(page: Page, context: string) {
-  await waitForRolePortalReady(page, context);
+  await waitForResolvedBrokerShell(page, context);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
