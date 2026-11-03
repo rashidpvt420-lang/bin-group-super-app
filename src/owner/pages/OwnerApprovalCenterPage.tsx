@@ -154,7 +154,7 @@ export default function OwnerApprovalCenterPage() {
         </Typography>
       </Stack>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        {signOffs.length === 0 && !signOffsError && (
+        {signOffs.length === 0 && !signOffsError && !signOffsMayBeTruncated && (
           <Grid item xs={12}>
             <Alert severity="info">No completed tickets are waiting for owner sign-off.</Alert>
           </Grid>
@@ -205,7 +205,7 @@ export default function OwnerApprovalCenterPage() {
         </Typography>
       </Stack>
       <Grid container spacing={2}>
-        {items.length === 0 && !requestsError && (
+        {items.length === 0 && !requestsError && !requestsMayBeTruncated && (
           <Grid item xs={12}>
             <Alert severity="info">No pending cost / quote approval requests for this owner account.</Alert>
           </Grid>
