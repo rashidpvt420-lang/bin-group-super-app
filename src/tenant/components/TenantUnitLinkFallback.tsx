@@ -4,6 +4,7 @@ import { Link2, ShieldCheck } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 type TenantUnitLinkFallbackProps = {
   message?: string;
@@ -59,13 +60,13 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
             <Link2 size={24} />
           </Box>
           <Box>
-            <Typography variant={compact ? 'h6' : 'h5'} sx={{ color: '#fff', fontWeight: 950 }}>Link my unit</Typography>
+            <Typography variant={compact ? 'h6' : 'h5'} sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"Link my unit"} ar={"ربط وحدتي"} /></Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.52)' }}>{message || 'No assigned unit is linked to this tenant profile yet.'}</Typography>
           </Box>
         </Stack>
 
         <Alert icon={<ShieldCheck size={18} />} severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
-          This creates a pending verification request only. BIN GROUP or the property owner must verify the tenancy before unit access is granted.
+          <Bi en={"This creates a pending verification request only. BIN GROUP or the property owner must verify the tenancy before unit access is granted."} ar={"ينشئ هذا طلب تحقق معلقاً فقط. يجب أن تتحقق BIN GROUP أو مالك العقار من الإيجار قبل منح الوصول للوحدة."} />
         </Alert>
 
         {notice && <Alert data-testid="tenant-unit-link-notice" severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}

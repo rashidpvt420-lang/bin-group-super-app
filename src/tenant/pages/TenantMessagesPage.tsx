@@ -6,6 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 
@@ -177,7 +178,7 @@ export default function TenantMessagesPage() {
                                 ))}
                                 {conversations.length === 0 && (
                                     <Typography variant="caption" color="textSecondary" align="center" display="block" sx={{ mt: 5 }}>
-                                        No active conversations.
+                                        <Bi en={"No active conversations."} ar={"لا توجد محادثات نشطة."} />
                                     </Typography>
                                 )}
                             </List>
@@ -247,13 +248,13 @@ export default function TenantMessagesPage() {
                 <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>START CONVERSATION</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}>
-                        Select the team or contact you would like to start a private conversation with.
+                        <Bi en={"Select the team or contact you would like to start a private conversation with."} ar={"اختر الفريق أو جهة الاتصال لبدء محادثة خاصة."} />
                     </Typography>
                     <FormControl fullWidth variant="filled">
-                        <InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}>Recipient Team</InputLabel>
+                        <InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Recipient Team"} ar={"الفريق المستلم"} /></InputLabel>
                         <Select value={convType} onChange={e => setConvType(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}>
-                            <MenuItem value="tenant_admin">Support Admin Team</MenuItem>
-                            <MenuItem value="tenant_technician">Technician Dispatch</MenuItem>
+                            <MenuItem value="tenant_admin"><Bi en={"Support Admin Team"} ar={"فريق الدعم الإداري"} /></MenuItem>
+                            <MenuItem value="tenant_technician"><Bi en={"Technician Dispatch"} ar={"إرسال الفنيين"} /></MenuItem>
                         </Select>
                     </FormControl>
                 </DialogContent>

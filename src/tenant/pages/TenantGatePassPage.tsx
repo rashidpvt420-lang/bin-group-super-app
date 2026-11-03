@@ -11,6 +11,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { db, collection, onSnapshot, query, where, functions, httpsCallable, getDocs, limit } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 export default function TenantGatePassPage() {
     const { t, isRTL } = useLanguage();
@@ -161,7 +162,7 @@ export default function TenantGatePassPage() {
                                             <Chip label={pass.visitorType?.toUpperCase()} size="small" sx={{ bgcolor: pass.visitorType === 'contractor' ? alpha('#f59e0b', 0.15) : pass.visitorType === 'delivery' ? alpha('#3b82f6', 0.15) : alpha(binThemeTokens.gold, 0.15), color: pass.visitorType === 'contractor' ? '#f59e0b' : pass.visitorType === 'delivery' ? '#3b82f6' : binThemeTokens.gold, fontWeight: 950, fontSize: '0.6rem' }} />
                                         </Box>
                                         <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Phone size={14} /> {pass.visitorPhone || 'No Phone Registered'}</Typography>
-                                        <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Clock size={14} /> {pass.duration} Hours Validity</Typography>
+                                        <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Clock size={14} /> {pass.duration} <Bi en={"Hours Validity"} ar={"ساعات الصلاحية"} /></Typography>
                                         <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontFamily: 'monospace' }}><Calendar size={13} /> {pass.createdAt?.toDate ? pass.createdAt.toDate().toLocaleString() : 'Just now'}</Typography>
                                         <Box sx={{ pt: 1, display: 'flex', justifyContent: 'flex-end' }}><Button variant="outlined" color="error" size="small" onClick={() => handleRevokePass(pass.id)} startIcon={<Trash2 size={14} />} sx={{ fontWeight: 900, borderRadius: 2 }}>REVOKE</Button></Box>
                                     </Stack>
@@ -174,18 +175,18 @@ export default function TenantGatePassPage() {
 
             <Dialog open={openAdd} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', minWidth: { xs: '90%', sm: 480 } } }}>
                 <form onSubmit={handleCreatePass}>
-                    <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}>Generate Access Pass</DialogTitle>
+                    <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}><Bi en={"Generate Access Pass"} ar={"إنشاء تصريح دخول"} /></DialogTitle>
                     <DialogContent sx={{ p: 4 }}>
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}>Generate a security-cleared entry pass. The QR code can be screenshotted and shared with your visitor.</Typography>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}><Bi en={"Generate a security-cleared entry pass. The QR code can be screenshotted and shared with your visitor."} ar={"أنشئ تصريح دخول معتمد أمنياً. يمكن تصوير رمز QR ومشاركته مع زائرك."} /></Typography>
                         <Stack spacing={3}>
                             <TextField fullWidth label="Visitor Full Name *" required value={visitorName} onChange={e => setVisitorName(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
                             <TextField fullWidth label="Visitor Phone Number" value={visitorPhone} onChange={e => setVisitorPhone(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
-                                    <FormControl fullWidth variant="filled"><InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}>Visitor Type</InputLabel><Select value={visitorType} onChange={e => setVisitorType(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}><MenuItem value="visitor">Guest / Family</MenuItem><MenuItem value="contractor">Contractor / Support</MenuItem><MenuItem value="delivery">Delivery Driver</MenuItem></Select></FormControl>
+                                    <FormControl fullWidth variant="filled"><InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Visitor Type"} ar={"نوع الزائر"} /></InputLabel><Select value={visitorType} onChange={e => setVisitorType(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}><MenuItem value="visitor"><Bi en={"Guest / Family"} ar={"ضيف / عائلة"} /></MenuItem><MenuItem value="contractor"><Bi en={"Contractor / Support"} ar={"مقاول / دعم"} /></MenuItem><MenuItem value="delivery"><Bi en={"Delivery Driver"} ar={"سائق توصيل"} /></MenuItem></Select></FormControl>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <FormControl fullWidth variant="filled"><InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}>Validity</InputLabel><Select value={duration} onChange={e => setDuration(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}><MenuItem value="1">1 Hour</MenuItem><MenuItem value="4">4 Hours</MenuItem><MenuItem value="12">12 Hours</MenuItem><MenuItem value="24">24 Hours</MenuItem></Select></FormControl>
+                                    <FormControl fullWidth variant="filled"><InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Validity"} ar={"الصلاحية"} /></InputLabel><Select value={duration} onChange={e => setDuration(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}><MenuItem value="1"><Bi en={"1 Hour"} ar={"ساعة واحدة"} /></MenuItem><MenuItem value="4"><Bi en={"4 Hours"} ar={"4 ساعات"} /></MenuItem><MenuItem value="12"><Bi en={"12 Hours"} ar={"12 ساعة"} /></MenuItem><MenuItem value="24"><Bi en={"24 Hours"} ar={"24 ساعة"} /></MenuItem></Select></FormControl>
                                 </Grid>
                             </Grid>
                         </Stack>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Paper, Stack, Typography } from '@mui/material';
 import { collection, db, functions, httpsCallable, onSnapshot, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 /** Feature 4: tenant sees a pending renewal offer and accepts or declines it. */
 export default function TenantRenewalOfferPanel({ uid }: { uid: string }) {
@@ -26,12 +27,12 @@ export default function TenantRenewalOfferPanel({ uid }: { uid: string }) {
       {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: offers.length ? 2 : 0 }}>{message.text}</Alert>}
       {offers.map((o) => (
         <Stack key={o.id} spacing={1}>
-          <Typography variant="h6" component="h2" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>Lease renewal offer</Typography>
-          <Typography sx={{ color: binThemeTokens.textPrimary }}>New term {o.newStartDate} to {o.newEndDate} · AED {Number(o.newAnnualRent).toLocaleString('en-AE')} per year</Typography>
+          <Typography variant="h6" component="h2" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Lease renewal offer"} ar={"عرض تجديد الإيجار"} /></Typography>
+          <Typography sx={{ color: binThemeTokens.textPrimary }}><Bi en={"New term"} ar={"المدة الجديدة"} /> {o.newStartDate} to {o.newEndDate} · AED {Number(o.newAnnualRent).toLocaleString('en-AE')} <Bi en={"per year"} ar={"سنوياً"} /></Typography>
           {o.message && <Typography sx={{ color: binThemeTokens.textSecondary }}>{o.message}</Typography>}
           <Stack direction="row" spacing={1}>
-            <Button variant="contained" disabled={busy === o.id} onClick={() => respond(o.id, 'ACCEPT')}>Accept</Button>
-            <Button variant="outlined" disabled={busy === o.id} onClick={() => respond(o.id, 'DECLINE')} sx={{ color: binThemeTokens.textPrimary }}>Decline</Button>
+            <Button variant="contained" disabled={busy === o.id} onClick={() => respond(o.id, 'ACCEPT')}><Bi en={"Accept"} ar={"قبول"} /></Button>
+            <Button variant="outlined" disabled={busy === o.id} onClick={() => respond(o.id, 'DECLINE')} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Decline"} ar={"رفض"} /></Button>
           </Stack>
         </Stack>
       ))}

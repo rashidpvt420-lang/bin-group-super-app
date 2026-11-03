@@ -17,6 +17,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { EMPTY_PROOF_FORM, tenantProofFormError, type TenantProofMethod } from '../tenantPaymentProof';
 import TenantRenewalOfferPanel from '../components/TenantRenewalOfferPanel';
 import TenantRentSchedulePanel, { type RentInstallment } from '../components/TenantRentSchedulePanel';
+import Bi from '../../components/Bi';
 
 type Payment = {
     id: string;
@@ -224,10 +225,10 @@ export default function TenantPaymentsPage() {
                         PAYMENTS & RECEIPTS
                     </Typography>
                     <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mt: 0.5 }}>
-                        Your Payment History
+                        <Bi en={"Your Payment History"} ar={"سجل مدفوعاتك"} />
                     </Typography>
                     <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 0.5 }}>
-                        View all payments, submit proof, and track verification status.
+                        <Bi en={"View all payments, submit proof, and track verification status."} ar={"اعرض جميع المدفوعات وأرسل الإثبات وتابع حالة التحقق."} />
                     </Typography>
                 </Box>
                 <Button
@@ -273,9 +274,9 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 4 }}>
                 <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>HOW TO SUBMIT PAYMENT</Typography>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem' }}>
-                    <Typography variant="body2">1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted.</Typography>
-                    <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque</Typography>
-                    <Typography variant="body2">3. Admin will verify the payment within 24 hours and update your status</Typography>
+                    <Typography variant="body2"><Bi en={"1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted."} ar={"1. ادفع الإيجار نقداً (مقابل إيصال رسمي) أو بشيك. لا يُقبل التحويل البنكي أو الدفع الإلكتروني."} /></Typography>
+                    <Typography variant="body2"><Bi en={"2. Click \"SUBMIT PAYMENT PROOF\", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque"} ar={"2. اضغط \"إرسال إثبات الدفع\"، اختر نقداً أو شيك، وارفع صورة الإيصال أو الشيك"} /></Typography>
+                    <Typography variant="body2"><Bi en={"3. Admin will verify the payment within 24 hours and update your status"} ar={"3. ستتحقق الإدارة من الدفعة خلال 24 ساعة وتحدّث حالتك"} /></Typography>
                 </Stack>
             </Paper>
 
@@ -283,12 +284,12 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ bgcolor: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, overflow: 'hidden' }}>
                 <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <CreditCard size={20} color={binThemeTokens.gold} /> Payment Transactions
+                        <CreditCard size={20} color={binThemeTokens.gold} /> <Bi en={"Payment Transactions"} ar={"المعاملات المالية"} />
                     </Typography>
                 </Box>
                 {loadError && (
                     <Alert severity="error" role="alert" data-testid="tenant-payments-load-error" sx={{ m: 3 }}>
-                        Payment records could not be loaded, so this list may be incomplete: {loadError}
+                        <Bi en={"Payment records could not be loaded, so this list may be incomplete:"} ar={"تعذر تحميل سجلات الدفع، لذا قد تكون القائمة غير مكتملة:"} /> {loadError}
                     </Alert>
                 )}
                 {loading ? (
@@ -298,7 +299,7 @@ export default function TenantPaymentsPage() {
                         <DollarSign size={48} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 16px' }} />
                         <Typography sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 800 }}>NO PAYMENT RECORDS YET</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>
-                            Submit your first payment proof to get started.
+                            <Bi en={"Submit your first payment proof to get started."} ar={"أرسل أول إثبات دفع للبدء."} />
                         </Typography>
                     </Box>
                 ) : (
@@ -347,7 +348,7 @@ export default function TenantPaymentsPage() {
                 PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
             >
                 <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    Submit Payment Proof
+                    <Bi en={"Submit Payment Proof"} ar={"إرسال إثبات الدفع"} />
                 </DialogTitle>
                 <DialogContent sx={{ pt: 3 }}>
                     <Stack spacing={2.5}>
@@ -422,7 +423,7 @@ export default function TenantPaymentsPage() {
                             />
                         </Button>
                         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.05), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 3 }}>
-                            Admin will verify your payment within 24 hours. You will be notified once confirmed.
+                            <Bi en={"Admin will verify your payment within 24 hours. You will be notified once confirmed."} ar={"ستتحقق الإدارة من دفعتك خلال 24 ساعة وسيتم إشعارك عند التأكيد."} />
                         </Alert>
                     </Stack>
                 </DialogContent>

@@ -3,6 +3,7 @@ import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography } 
 import { FileText, FolderOpen, ShieldCheck } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { listUnifiedDocumentVault, openUnifiedDocument, type UnifiedVaultArtifact } from '../../services/unifiedDocumentVault';
+import Bi from '../../components/Bi';
 
 export default function TenantDocumentsPage() {
   const [documents, setDocuments] = useState<UnifiedVaultArtifact[]>([]);
@@ -50,8 +51,8 @@ export default function TenantDocumentsPage() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Typography variant="h4" fontWeight={950} color="#FFF">Tenant Document Vault</Typography>
-      <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1, mb: 4 }}>Lease, handover and approved property documents authorized for this Tenant.</Typography>
+      <Typography variant="h4" fontWeight={950} color="#FFF"><Bi en={"Tenant Document Vault"} ar={"خزنة مستندات المستأجر"} /></Typography>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1, mb: 4 }}><Bi en={"Lease, handover and approved property documents authorized for this Tenant."} ar={"مستندات الإيجار والتسليم والعقار المعتمدة لهذا المستأجر."} /></Typography>
 
       {loadError && <Alert severity="error" data-testid="tenant-documents-load-failed" sx={{ mb: 3 }}>{loadError}</Alert>}
 

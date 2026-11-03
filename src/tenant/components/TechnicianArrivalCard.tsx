@@ -3,6 +3,7 @@ import { Alert, Box, Chip, LinearProgress, Paper, Stack, Typography, alpha } fro
 import { MapPin, Navigation, UserRound } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { etaMinutes, staleLocationLabel } from '../../utils/eta';
+import Bi from '../../components/Bi';
 
 type Props = {
   ticket: any;
@@ -30,7 +31,7 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Box sx={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}><Navigation size={20} /></Box>
             <Box>
-              <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>Technician Arrival</Typography>
+              <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}><Bi en={"Technician Arrival"} ar={"وصول الفني"} /></Typography>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>{locationLabel}</Typography>
             </Box>
           </Stack>
@@ -44,11 +45,11 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
 
         {eta ? (
           <Alert severity="success" sx={{ bgcolor: alpha('#10b981', 0.08), color: '#f8fafc', border: `1px solid ${alpha('#10b981', 0.22)}` }}>
-            Estimated arrival: approximately {eta} minutes.
+            <Bi en={"Estimated arrival: approximately"} ar={"الوصول المتوقع: تقريباً"} /> {eta} <Bi en={"minutes."} ar={"دقيقة."} />
           </Alert>
         ) : (
           <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-            Technician has been assigned. A rough arrival estimate appears once foreground location sharing starts.
+            <Bi en={"Technician has been assigned. A rough arrival estimate appears once foreground location sharing starts."} ar={"تم إسناد فني. سيظهر تقدير تقريبي للوصول عند بدء مشاركة الموقع."} />
           </Alert>
         )}
 
@@ -57,7 +58,7 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
         <Stack direction="row" spacing={1} alignItems="center">
           <MapPin size={14} color="rgba(255,255,255,0.45)" />
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700 }}>
-            Location summary requires technician foreground location sharing to be active on the technician device.
+            <Bi en={"Location summary requires technician foreground location sharing to be active on the technician device."} ar={"ملخص الموقع يتطلب تفعيل مشاركة الموقع على جهاز الفني."} />
           </Typography>
         </Stack>
       </Stack>
