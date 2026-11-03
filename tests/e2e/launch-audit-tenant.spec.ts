@@ -33,7 +33,9 @@ async function login(page: Page) {
 
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
-  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  const bodyLocator = page.locator('body');
+  await expect(bodyLocator, `${expectedPath}: wait for authenticated Tenant identity resolution`).not.toContainText(/Authenticating BIN-Groups Identity\.\.\./i, { timeout: 30_000 });
+  const body = await bodyLocator.innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
   expect(body, `${expectedPath}: no access-denied`).not.toMatch(ACCESS_DENIED);
