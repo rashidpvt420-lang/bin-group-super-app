@@ -40,8 +40,13 @@ test('Technician history makes the 50-record KPI scope explicit', async () => {
   assert.match(page, /MISSIONS IN LOADED HISTORY/);
 });
 
-test('Tenant live audit waits for identity resolution before checking route content', async () => {
-  const page = await read('tests/e2e/launch-audit-tenant.spec.ts');
-  assert.match(page, /wait for authenticated Tenant identity resolution/);
-  assert.match(page, /not\.toContainText\(\/Authenticating BIN-Groups Identity/);
+test('Owner, Tenant and Technician live audits wait for authenticated role shells', async () => {
+  const owner = await read('tests/e2e/launch-audit-owner.spec.ts');
+  const tenant = await read('tests/e2e/launch-audit-tenant.spec.ts');
+  const technician = await read('tests/e2e/launch-audit-technician.spec.ts');
+  const broker = await read('tests/e2e/launch-audit-broker.spec.ts');
+  assert.match(owner, /Owner identity must resolve/);
+  assert.match(tenant, /wait for authenticated Tenant identity resolution/);
+  assert.match(technician, /Technician identity must resolve/);
+  assert.match(broker, /waitForResolvedBrokerShell/);
 });
