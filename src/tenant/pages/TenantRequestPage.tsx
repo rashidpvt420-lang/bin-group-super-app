@@ -274,11 +274,20 @@ export default function TenantRequestPage() {
     const uploadPhotosToStorage = async (ticketId: string): Promise<string[]> => {
         if (photos.length === 0) throw new Error('At least one photo is required before dispatch.');
         const urls: string[] = [];
-        const timestamp = Date.now();
         for (let index = 0; index < photos.length; index += 1) {
             const file = photos[index];
-            const fileName = `${timestamp}_${index + 1}_${sanitizeStorageFileName(file.name)}`;
+            // Stable per-ticket path makes retries idempotent. Reuse a file that
+            // was already uploaded before a partial failure; Storage rules are
+            // create-only for tenant evidence, so re-uploading would be denied.
+            const fileName = `${index + 1}_${sanitizeStorageFileName(file.name)}`;
             const fileRef = ref(storage, `maintenanceTickets/${ticketId}/tenant/${fileName}`);
+            try {
+                urls.push(await getDownloadURL(fileRef));
+                continue;
+            } catch {
+                // No readable object at the deterministic path yet; attempt the
+                // create-only upload below. Upload errors remain visible to user.
+            }
             await uploadBytes(fileRef, file, {
                 contentType: file.type || 'image/jpeg',
                 customMetadata: {
