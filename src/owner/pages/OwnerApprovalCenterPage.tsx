@@ -81,7 +81,7 @@ export default function OwnerApprovalCenterPage() {
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
       if (!requestOlderPageLoadedRef.current) requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;
-      setRequestsMayBeTruncated(snap.size >= REQUEST_PAGE_SIZE);
+      if (!requestOlderPageLoadedRef.current) setRequestsMayBeTruncated(snap.size >= REQUEST_PAGE_SIZE);
       setItems(rows);
       setRequestsError('');
       setNotes((current) => {
@@ -102,7 +102,7 @@ export default function OwnerApprovalCenterPage() {
         .map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) }))
         .filter((ticket) => isOwnerPendingSignOff(ticket));
       if (!ticketOlderPageLoadedRef.current) ticketCursorRef.current = snap.docs[snap.docs.length - 1] || null;
-      setSignOffsMayBeTruncated(snap.size >= SIGN_OFF_PAGE_SIZE);
+      if (!ticketOlderPageLoadedRef.current) setSignOffsMayBeTruncated(snap.size >= SIGN_OFF_PAGE_SIZE);
       setSignOffs(rows);
       setSignOffsError('');
     }, (err) => {
