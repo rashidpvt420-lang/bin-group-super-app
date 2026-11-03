@@ -51,12 +51,14 @@ test('Technician history makes the 50-record KPI scope explicit', async () => {
 
 test('Broker commission history and payout status queries are bounded and paginated', async () => {
   const page = await read('src/broker/pages/BrokerCommissionsPage.tsx');
-  assert.match(page, /orderBy\(documentId\(\), 'asc'\), limit\(50\)/);
+  assert.match(page, /orderBy\('createdAt', 'desc'\), limit\(50\)/);
   assert.match(page, /startAfter\(commissionsCursorRef\.current\)/);
   assert.match(page, /broker-commissions-partial/);
   assert.match(page, /limit\(1\)\), \(snapshot\)/);
   assert.match(page, /hasMoreCommissions\} onClick/);
   assert.match(page, /disabled=\{payoutBusy \|\| payableIds\.length === 0 \|\| hasMoreCommissions\}/);
+  const indexes = JSON.parse(await read('firestore.indexes.json'));
+  assert.ok(indexes.indexes.some((index) => index.collectionGroup === 'broker_payout_requests' && index.fields.some((field) => field.fieldPath === 'brokerId') && index.fields.some((field) => field.fieldPath === 'createdAt')));
 });
 
 test('Owner, Tenant and Technician live audits wait for authenticated role shells', async () => {
