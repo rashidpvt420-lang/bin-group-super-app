@@ -60,23 +60,27 @@ export default function OwnerApprovalCenterPage() {
   const [signOffsLoadingMore, setSignOffsLoadingMore] = React.useState(false);
   const requestCursorRef = React.useRef<any>(null);
   const ticketCursorRef = React.useRef<any>(null);
+  const requestOlderPageLoadedRef = React.useRef(false);
+  const ticketOlderPageLoadedRef = React.useRef(false);
   const [submittingId, setSubmittingId] = React.useState('');
   const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
   const { ticketPropertyLabel } = useOwnerPropertyLabels(ownerId);
-  const visibleItems = React.useMemo(() => Array.from(new Map([...items, ...olderItems].map((row) => [row.id, row])).values()), [items, olderItems]);
-  const visibleSignOffs = React.useMemo(() => Array.from(new Map([...signOffs, ...olderSignOffs].map((row) => [row.id, row])).values()), [signOffs, olderSignOffs]);
+  const visibleItems = React.useMemo(() => Array.from(new Map<string, ApprovalRequest>([...items, ...olderItems].map((row) => [row.id, row] as const)).values()), [items, olderItems]);
+  const visibleSignOffs = React.useMemo(() => Array.from(new Map<string, SignOffTicket>([...signOffs, ...olderSignOffs].map((row) => [row.id, row] as const)).values()), [signOffs, olderSignOffs]);
 
   React.useEffect(() => {
     if (!ownerId) return undefined;
     requestCursorRef.current = null;
     ticketCursorRef.current = null;
+    requestOlderPageLoadedRef.current = false;
+    ticketOlderPageLoadedRef.current = false;
     setOlderItems([]);
     setOlderSignOffs([]);
     const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), limit(REQUEST_PAGE_SIZE));
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
-      requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;
+      if (!requestOlderPageLoadedRef.current) requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;
       setRequestsMayBeTruncated(snap.size >= REQUEST_PAGE_SIZE);
       setItems(rows);
       setRequestsError('');
@@ -97,7 +101,7 @@ export default function OwnerApprovalCenterPage() {
       const rows = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) }))
         .filter((ticket) => isOwnerPendingSignOff(ticket));
-      ticketCursorRef.current = snap.docs[snap.docs.length - 1] || null;
+      if (!ticketOlderPageLoadedRef.current) ticketCursorRef.current = snap.docs[snap.docs.length - 1] || null;
       setSignOffsMayBeTruncated(snap.size >= SIGN_OFF_PAGE_SIZE);
       setSignOffs(rows);
       setSignOffsError('');
@@ -120,9 +124,16 @@ export default function OwnerApprovalCenterPage() {
     try {
       const page = await getDocs(query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), startAfter(requestCursorRef.current), limit(REQUEST_PAGE_SIZE)));
       const rows = page.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
-      setOlderItems((current) => Array.from(new Map([...current, ...rows].map((row) => [row.id, row])).values()));
-      rows.forEach((row) => setNotes((current) => current[row.id] === undefined ? { ...current, [row.id]: row.decisionNote || '' } : current));
-      requestCursorRef.current = page.docs[page.docs.length - 1] || requestCursorRef.current;
+      setOlderItems((current) => Array.from(new Map<string, ApprovalRequest>([...current, ...rows].map((row) => [row.id, row] as const)).values()));
+      setNotes((current) => {
+        const next = { ...current };
+        rows.forEach((row) => { if (next[row.id] === undefined) next[row.id] = row.decisionNote || ''; });
+        return next;
+      });
+      if (page.docs.length > 0) {
+        requestCursorRef.current = page.docs[page.docs.length - 1];
+        requestOlderPageLoadedRef.current = true;
+      }
       setRequestsMayBeTruncated(page.size >= REQUEST_PAGE_SIZE);
     } catch (error: any) {
       setRequestsError(error?.message || 'Unable to load older approval requests.');
@@ -137,8 +148,11 @@ export default function OwnerApprovalCenterPage() {
     try {
       const page = await getDocs(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), orderBy(documentId()), startAfter(ticketCursorRef.current), limit(SIGN_OFF_PAGE_SIZE)));
       const rows = page.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) })).filter((ticket) => isOwnerPendingSignOff(ticket));
-      setOlderSignOffs((current) => Array.from(new Map([...current, ...rows].map((row) => [row.id, row])).values()));
-      ticketCursorRef.current = page.docs[page.docs.length - 1] || ticketCursorRef.current;
+      setOlderSignOffs((current) => Array.from(new Map<string, SignOffTicket>([...current, ...rows].map((row) => [row.id, row] as const)).values()));
+      if (page.docs.length > 0) {
+        ticketCursorRef.current = page.docs[page.docs.length - 1];
+        ticketOlderPageLoadedRef.current = true;
+      }
       setSignOffsMayBeTruncated(page.size >= SIGN_OFF_PAGE_SIZE);
     } catch (error: any) {
       setSignOffsError(error?.message || 'Unable to load older ticket sign-offs.');
