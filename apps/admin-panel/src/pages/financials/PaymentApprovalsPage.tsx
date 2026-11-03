@@ -5,7 +5,7 @@ import {
     TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
-import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 
 type PaymentRecord = {
     id: string;
@@ -139,8 +139,36 @@ export default function PaymentApprovalsPage() {
     const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
     const [queueLimitWarnings, setQueueLimitWarnings] = React.useState<string[]>([]);
+    const [hasMorePending, setHasMorePending] = React.useState(false);
+    const [hasMorePaid, setHasMorePaid] = React.useState(false);
+    const [hasMoreReceipts, setHasMoreReceipts] = React.useState(false);
+    const [loadingQueue, setLoadingQueue] = React.useState('');
+
+    const pendingCursorRef = React.useRef<any>(null);
+    const paidCursorRef = React.useRef<any>(null);
+    const receiptCursorRef = React.useRef<any>(null);
+    const pendingOlderLoadedRef = React.useRef(false);
+    const paidOlderLoadedRef = React.useRef(false);
+    const receiptOlderLoadedRef = React.useRef(false);
+    const pendingOlderRowsRef = React.useRef<PaymentRecord[]>([]);
+    const paidOlderRowsRef = React.useRef<PaymentRecord[]>([]);
+    const receiptOlderRowsRef = React.useRef<ReceiptRepairRecord[]>([]);
 
     React.useEffect(() => {
+        pendingCursorRef.current = null;
+        paidCursorRef.current = null;
+        receiptCursorRef.current = null;
+        pendingOlderLoadedRef.current = false;
+        paidOlderLoadedRef.current = false;
+        receiptOlderLoadedRef.current = false;
+        pendingOlderRowsRef.current = [];
+        paidOlderRowsRef.current = [];
+        receiptOlderRowsRef.current = [];
+        setRows([]);
+        setReceiptRepairs([]);
+        setHasMorePending(false);
+        setHasMorePaid(false);
+        setHasMoreReceipts(false);
         let pendingRows: PaymentRecord[] = [];
         let paidAwaitingApprovalRows: PaymentRecord[] = [];
         let pendingReady = false;
@@ -149,7 +177,7 @@ export default function PaymentApprovalsPage() {
         const publish = () => {
             if (!pendingReady || !paidReady) return;
             const merged = new Map<string, PaymentRecord>();
-            [...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
+            [...pendingOlderRowsRef.current, ...paidOlderRowsRef.current, ...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
             setRows([...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a)));
             setLoading(false);
             setError(null);
@@ -165,28 +193,38 @@ export default function PaymentApprovalsPage() {
             setError(err?.message || 'Payment approvals stream failed.');
         };
 
-        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
-        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), limit(50));
+        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), orderBy(documentId(), 'asc'), limit(50));
         const receiptRepairQuery = query(
             collection(db, 'invoices'),
             where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
+            orderBy(documentId(), 'asc'),
             limit(30),
         );
         const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
+            if (!pendingOlderLoadedRef.current) pendingCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            setHasMorePending(snapshot.size >= 50);
             setQueueLimitWarning('Pending payment queue', snapshot.size >= 50);
             pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
             pendingReady = true;
             publish();
         }, handleError);
         const unsubscribePaidAwaitingApproval = onSnapshot(paidAwaitingApprovalQuery, (snapshot) => {
+            if (!paidOlderLoadedRef.current) paidCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            setHasMorePaid(snapshot.size >= 50);
             setQueueLimitWarning('Paid awaiting approval queue', snapshot.size >= 50);
             paidAwaitingApprovalRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => row.unlocksDashboard !== true);
             paidReady = true;
             publish();
         }, handleError);
         const unsubscribeReceiptRepairs = onSnapshot(receiptRepairQuery, (snapshot) => {
+            if (!receiptOlderLoadedRef.current) receiptCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            setHasMoreReceipts(snapshot.size >= 30);
             setQueueLimitWarning('Receipt repair queue', snapshot.size >= 30);
-            setReceiptRepairs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+            const firstPage = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+            const merged = new Map<string, ReceiptRepairRecord>();
+            [...receiptOlderRowsRef.current, ...firstPage].forEach((row) => merged.set(row.id, row));
+            setReceiptRepairs([...merged.values()]);
         }, (err) => {
             console.error('[ADMIN_PAYMENTS] receipt repair stream failed', err);
         });
@@ -197,6 +235,71 @@ export default function PaymentApprovalsPage() {
             unsubscribeReceiptRepairs();
         };
     }, []);
+
+    const loadOlderPaymentQueue = async (queue: 'pending' | 'paid') => {
+        const cursor = queue === 'pending' ? pendingCursorRef.current : paidCursorRef.current;
+        const hasMore = queue === 'pending' ? hasMorePending : hasMorePaid;
+        if (!cursor || !hasMore || loadingQueue) return;
+        setLoadingQueue(queue);
+        try {
+            const pageQuery = queue === 'pending'
+                ? query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), startAfter(cursor), limit(50))
+                : query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), orderBy(documentId(), 'asc'), startAfter(cursor), limit(50));
+            const page = await getDocs(pageQuery);
+            const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => queue !== 'paid' || row.unlocksDashboard !== true);
+            const target = queue === 'pending' ? pendingOlderRowsRef : paidOlderRowsRef;
+            const mergedOlder = new Map<string, PaymentRecord>(target.current.map((row) => [row.id, row] as const));
+            rows.forEach((row) => mergedOlder.set(row.id, row));
+            target.current = [...mergedOlder.values()];
+            if (page.docs.length > 0) {
+                if (queue === 'pending') { pendingCursorRef.current = page.docs[page.docs.length - 1]; pendingOlderLoadedRef.current = true; }
+                else { paidCursorRef.current = page.docs[page.docs.length - 1]; paidOlderLoadedRef.current = true; }
+            }
+            if (queue === 'pending') setHasMorePending(page.size >= 50);
+            else setHasMorePaid(page.size >= 50);
+            setRows((current) => {
+                const merged = new Map<string, PaymentRecord>(current.map((row) => [row.id, row] as const));
+                rows.forEach((row) => merged.set(row.id, row));
+                return [...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a));
+            });
+        } catch (error: any) {
+            setError(error?.message || 'Unable to load older payment approvals.');
+        } finally {
+            setLoadingQueue('');
+        }
+    };
+
+    const loadOlderReceipts = async () => {
+        if (!receiptCursorRef.current || !hasMoreReceipts || loadingQueue) return;
+        setLoadingQueue('receipts');
+        try {
+            const page = await getDocs(query(
+                collection(db, 'invoices'),
+                where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
+                orderBy(documentId(), 'asc'),
+                startAfter(receiptCursorRef.current),
+                limit(30),
+            ));
+            const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+            const mergedOlder = new Map<string, ReceiptRepairRecord>(receiptOlderRowsRef.current.map((row) => [row.id, row] as const));
+            rows.forEach((row) => mergedOlder.set(row.id, row));
+            receiptOlderRowsRef.current = [...mergedOlder.values()];
+            setReceiptRepairs((current) => {
+                const merged = new Map<string, ReceiptRepairRecord>(current.map((row) => [row.id, row] as const));
+                rows.forEach((row) => merged.set(row.id, row));
+                return [...merged.values()];
+            });
+            if (page.docs.length > 0) {
+                receiptCursorRef.current = page.docs[page.docs.length - 1];
+                receiptOlderLoadedRef.current = true;
+            }
+            setHasMoreReceipts(page.size >= 30);
+        } catch (error: any) {
+            setError(error?.message || 'Unable to load older receipt repairs.');
+        } finally {
+            setLoadingQueue('');
+        }
+    };
 
     const openApproveDialog = React.useCallback((row: PaymentRecord) => {
         setApprovalTarget(row);
@@ -409,6 +512,7 @@ export default function PaymentApprovalsPage() {
                             </Stack>
                         ))}
                     </Stack>
+                    {hasMoreReceipts && <Button variant="outlined" sx={{ mt: 2 }} disabled={Boolean(loadingQueue)} onClick={() => void loadOlderReceipts()}>{loadingQueue === 'receipts' ? 'Loading…' : 'Load older receipt repairs'}</Button>}
                 </Paper>
             )}
 
@@ -439,6 +543,10 @@ export default function PaymentApprovalsPage() {
                             </TableBody>
                         </Table>
                     </TableContainer>
+                    {(hasMorePending || hasMorePaid) && <Stack direction="row" spacing={1} sx={{ p: 2 }}>
+                        {hasMorePending && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('pending')}>{loadingQueue === 'pending' ? 'Loading…' : 'Load older pending payments'}</Button>}
+                        {hasMorePaid && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('paid')}>{loadingQueue === 'paid' ? 'Loading…' : 'Load older paid approvals'}</Button>}
+                    </Stack>}
                 )}
             </Paper>
 
