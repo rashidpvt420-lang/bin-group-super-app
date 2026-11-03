@@ -101,7 +101,7 @@ export default function OwnerFinancialsPage() {
             publishPayouts();
             finishPayoutSource('uid');
         }, (error) => {
-            console.error('Owner UID payout stream failed:', error);
+            console.error('Owner payout stream failed (UID query):', error);
             setLoadError('UID-scoped payout history is unavailable. Verify account permissions before relying on payout totals.');
             finishPayoutSource('uid');
         });
@@ -112,7 +112,7 @@ export default function OwnerFinancialsPage() {
             publishPayouts();
             finishPayoutSource('legacy');
         }, (error) => {
-            console.error('Owner legacy-email payout stream failed:', error);
+            console.error('Owner payout stream failed (legacy email query):', error);
             setLoadError('Legacy payout history is unavailable. Verify the owner account mapping before relying on payout totals.');
             finishPayoutSource('legacy');
         });
