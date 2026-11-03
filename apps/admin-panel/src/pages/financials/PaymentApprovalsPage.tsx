@@ -193,8 +193,8 @@ export default function PaymentApprovalsPage() {
             setError(err?.message || 'Payment approvals stream failed.');
         };
 
-        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), limit(50));
-        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), orderBy(documentId(), 'asc'), limit(50));
+        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
+        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
         const receiptRepairQuery = query(
             collection(db, 'invoices'),
             where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
@@ -249,8 +249,8 @@ export default function PaymentApprovalsPage() {
         setLoadingQueue(queue);
         try {
             const pageQuery = queue === 'pending'
-                ? query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), startAfter(cursor), limit(50))
-                : query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), orderBy(documentId(), 'asc'), startAfter(cursor), limit(50));
+                ? query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), startAfter(cursor), limit(50))
+                : query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), startAfter(cursor), limit(50));
             const page = await getDocs(pageQuery);
             const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => queue !== 'paid' || row.unlocksDashboard !== true);
             const target = queue === 'pending' ? pendingOlderRowsRef : paidOlderRowsRef;
