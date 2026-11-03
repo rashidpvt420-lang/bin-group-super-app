@@ -138,6 +138,7 @@ export default function PaymentApprovalsPage() {
     const [internalNotes, setInternalNotes] = React.useState('');
     const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
+    const [queueLimitWarnings, setQueueLimitWarnings] = React.useState<string[]>([]);
 
     React.useEffect(() => {
         let pendingRows: PaymentRecord[] = [];
@@ -153,6 +154,11 @@ export default function PaymentApprovalsPage() {
             setLoading(false);
             setError(null);
         };
+        const setQueueLimitWarning = (source: string, reachedLimit: boolean) => {
+            setQueueLimitWarnings((current) => reachedLimit
+                ? (current.includes(source) ? current : [...current, source])
+                : current.filter((item) => item !== source));
+        };
         const handleError = (err: any) => {
             console.error('[ADMIN_PAYMENTS] stream failed', err);
             setLoading(false);
@@ -167,16 +173,19 @@ export default function PaymentApprovalsPage() {
             limit(30),
         );
         const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
+            setQueueLimitWarning('Pending payment queue', snapshot.size >= 50);
             pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
             pendingReady = true;
             publish();
         }, handleError);
         const unsubscribePaidAwaitingApproval = onSnapshot(paidAwaitingApprovalQuery, (snapshot) => {
+            setQueueLimitWarning('Paid awaiting approval queue', snapshot.size >= 50);
             paidAwaitingApprovalRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => row.unlocksDashboard !== true);
             paidReady = true;
             publish();
         }, handleError);
         const unsubscribeReceiptRepairs = onSnapshot(receiptRepairQuery, (snapshot) => {
+            setQueueLimitWarning('Receipt repair queue', snapshot.size >= 30);
             setReceiptRepairs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
         }, (err) => {
             console.error('[ADMIN_PAYMENTS] receipt repair stream failed', err);
@@ -358,6 +367,7 @@ export default function PaymentApprovalsPage() {
             </Stack>
 
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
+            {queueLimitWarnings.length > 0 && <Alert severity="warning" data-testid="admin-payment-queue-capped" sx={{ mb: 3 }}>At least one Finance queue reached its display limit ({queueLimitWarnings.join(', ')}). Older items may be hidden. Do not treat the visible rows or an empty subset as a complete queue until the full queue is reviewed.</Alert>}
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
 
