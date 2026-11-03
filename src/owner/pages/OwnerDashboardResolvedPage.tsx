@@ -250,11 +250,6 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
 
 type ActivationStep = { gate: string; status: string; detail: string; tone: string };
 
-const isDoneStatus = (value: unknown) => {
-  const status = String(value || '').trim().toUpperCase().replace(/\s+/g, '_');
-  return ['DONE', 'ACTIVE', 'APPROVED', 'VERIFIED', 'SIGNED', 'COMPLETE', 'COMPLETED', 'READY'].includes(status);
-};
-
 const hasTitleUpload = (property: any) => Boolean(
   property?.titleDeedUrl ||
   property?.titleDeedFileUrl ||
@@ -263,26 +258,59 @@ const hasTitleUpload = (property: any) => Boolean(
   property?.documents?.titleDeedUrl
 );
 
-const hasTitleEvidence = (property: any) => Boolean(
-  property?.titleDeedVerified === true ||
-  property?.ownershipVerified === true ||
-  isDoneStatus(property?.titleDeedStatus) ||
-  isDoneStatus(property?.ownershipVerificationStatus)
-);
+// Only explicit verification flags count as ownership verification. Uploads,
+// document numbers, and generic ACTIVE/READY statuses are not proof of review.
+const hasTitleEvidence = (property: any) =>
+  property?.titleDeedVerified === true || property?.ownershipVerified === true;
 
 const hasGeoUpload = (property: any) => Boolean(
   property?.coordinates ||
   property?.location?.lat ||
   property?.lat ||
-  property?.latitude
+  property?.latitude ||
+  property?.geo?.lat ||
+  property?.geo?.point?.latitude
 );
 
-const hasGeoEvidence = (property: any) => Boolean(
-  property?.geoVerified === true ||
-  property?.gpsVerified === true ||
-  property?.locationVerified === true ||
-  isDoneStatus(property?.dispatchGeographyStatus)
-);
+const timestampMillis = (value: any): number | null => {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (Number.isFinite(Number(value.seconds))) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+// Match Tenant dispatch readiness: raw coordinates or legacy flags alone do
+// not make a property safe to dispatch to.
+const hasGeoEvidence = (property: any) => {
+  const geo = property?.geo;
+  const verification = property?.geoVerification;
+  if (!geo || !verification) return false;
+  const lat = Number(geo.lat ?? geo.point?.latitude ?? geo.latitude);
+  const lng = Number(geo.lng ?? geo.point?.longitude ?? geo.longitude);
+  const verifiedAt = timestampMillis(geo.verifiedAt);
+  const authorityVerifiedAt = timestampMillis(verification.verifiedAt);
+  const verifiedBy = String(geo.verifiedBy || '').trim();
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 &&
+    lng >= -180 && lng <= 180 &&
+    !(lat === 0 && lng === 0) &&
+    geo.verified === true &&
+    geo.dispatchReady === true &&
+    geo.requiresGeoReview !== true &&
+    geo.source === 'admin_manual' &&
+    Number(geo.verificationVersion) === 1 &&
+    verification.state === 'VERIFIED' &&
+    verification.source === 'FOUNDER_MFA_REVIEW' &&
+    Number(verification.verificationVersion) === 1 &&
+    verifiedBy.length > 0 &&
+    verifiedBy === String(verification.verifiedBy || '').trim() &&
+    verifiedAt !== null &&
+    verifiedAt > 0 &&
+    verifiedAt === authorityVerifiedAt;
+};
 
 const buildActivationTimeline = (
   resolution: OwnerResolution,
