@@ -21,6 +21,7 @@ import { formatAED } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { registerArabicFont } from '../utils/arabicPdfFont';
+import Bi from '../components/Bi';
 
 const ExecutiveReportingPage: React.FC = () => {
     const navigate = useNavigate();
@@ -152,7 +153,7 @@ const ExecutiveReportingPage: React.FC = () => {
                         BOARD LEVEL OVERSIGHT
                     </Typography>
                     <Typography variant="h3" fontWeight="950" sx={{ color: '#111827', letterSpacing: -2 }}>
-                        Executive <Box component="span" sx={{ color: '#7A5C12' }}>Portfolio Terminal</Box>
+                        <Bi en={"Executive"} ar={"التنفيذي"} /> <Box component="span" sx={{ color: '#7A5C12' }}><Bi en={"Portfolio Terminal"} ar={"منصة المحفظة"} /></Box>
                     </Typography>
                 </Box>
                 <Button 
@@ -199,7 +200,7 @@ const ExecutiveReportingPage: React.FC = () => {
                             <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950 }}>PORTFOLIO BPI AVG</Typography>
                             <Box sx={{ textAlign: 'center', py: 2 }}>
                                 <Typography variant="h1" fontWeight="950" color="#111827">{stats.portfolioBPI}%</Typography>
-                                <Typography variant="body2" color="#475569">Institutional Resilience Benchmark</Typography>
+                                <Typography variant="body2" color="#475569"><Bi en={"Institutional Resilience Benchmark"} ar={"مؤشر المرونة المؤسسية"} /></Typography>
                             </Box>
                             <LinearProgress variant="determinate" value={stats.portfolioBPI} sx={{ mt: 2, height: 8, borderRadius: 4, bgcolor: '#E5E7EB', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                         </Paper>

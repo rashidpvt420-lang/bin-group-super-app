@@ -50,6 +50,7 @@ import {
   shouldResubscribeShiftAfterQuickAction,
   staffShiftDocId,
 } from "./staffShiftSchedule";
+import Bi from '../Bi';
 
 interface StaffTodayDashboardProps {
   userName?: string;
@@ -388,7 +389,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                   <Chip label={clockedIn ? "ON DUTY" : "OFF DUTY"} color={clockedIn ? "success" : "default"} size="small" />
                 </Stack>
                 <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                  {displayRole} • Shift: {shiftLabel}
+                  {displayRole} <Bi en={"• Shift:"} ar={"• الوردية:"} /> {shiftLabel}
                 </Typography>
               </Box>
             </Stack>
@@ -444,7 +445,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                     </Stack>
                     <Box sx={{ mt: 2, p: 2, bgcolor: "#0f172a", borderRadius: 2 }}>
                       <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                        SLA deadline: <strong>{readableDateTime(activeJob.slaDeadline)}</strong>
+                        <Bi en={"SLA deadline:"} ar={"موعد مستوى الخدمة:"} /> <strong>{readableDateTime(activeJob.slaDeadline)}</strong>
                       </Typography>
                     </Box>
                     <Button
@@ -456,13 +457,13 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                       startIcon={<CheckIcon />}
                       sx={{ mt: 2.5 }}
                     >
-                      Prepare Completion Report
+                      <Bi en={"Prepare Completion Report"} ar={"إعداد تقرير الإكمال"} />
                     </Button>
                   </>
                 ) : (
                   <Box sx={{ py: 2, textAlign: "center" }}>
-                    <Typography variant="h6" sx={{ fontWeight: 800 }}>No Active Job Dispatched</Typography>
-                    <Typography variant="body2" sx={{ color: "#94a3b8", mt: 1 }}>Assigned work appears here automatically.</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}><Bi en={"No Active Job Dispatched"} ar={"لا توجد مهمة نشطة"} /></Typography>
+                    <Typography variant="body2" sx={{ color: "#94a3b8", mt: 1 }}><Bi en={"Assigned work appears here automatically."} ar={"يظهر العمل المسند هنا تلقائياً."} /></Typography>
                   </Box>
                 )}
               </CardContent>
@@ -497,7 +498,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Overtime</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}><Bi en={"Overtime"} ar={"العمل الإضافي"} /></Typography>
                     <Typography variant="caption" sx={{ color: "#94a3b8" }}>
                       {overtimeTracker ? `${overtimeTracker.estimatedMinutes || "—"} min requested` : "No active overtime request"}
                     </Typography>
@@ -510,7 +511,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
 
           {pendingTrackers.length > 0 && (
             <Grid item xs={12}>
-              <Typography variant="h6" sx={{ fontWeight: 800, my: 1 }}>Pending Requests & Approvals</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, my: 1 }}><Bi en={"Pending Requests & Approvals"} ar={"الطلبات والموافقات المعلقة"} /></Typography>
               {pendingTrackers.map((tracker) => (
                 <UnifiedRequestStatusTracker
                   key={tracker.id}
@@ -554,7 +555,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
       />
 
       <Dialog open={overtimeDialogOpen} onClose={() => setOvertimeDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Request Overtime</DialogTitle>
+        <DialogTitle><Bi en={"Request Overtime"} ar={"طلب عمل إضافي"} /></DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
@@ -575,9 +576,9 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOvertimeDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setOvertimeDialogOpen(false)}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
           <Button variant="contained" disabled={actionBusy === "REQUEST_OVERTIME"} onClick={() => void submitOvertime()}>
-            Submit
+            <Bi en={"Submit"} ar={"إرسال"} />
           </Button>
         </DialogActions>
       </Dialog>

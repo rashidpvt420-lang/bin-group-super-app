@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextFi
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
 import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import Bi from './Bi';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'staff';
 
@@ -189,8 +190,8 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>BIN CONNECT</Typography>
-          <Typography variant="h3" sx={{ fontWeight: 950 }}>My Conversations</Typography>
-          <Typography sx={{ color: dark ? 'rgba(255,255,255,.62)' : binThemeTokens.textSecondary, maxWidth: 880, mt: 1 }}>Continue your CEO/admin, Majlis staff, maintenance, feature suggestion, dashboard issue, owner, tenant, technician, or broker conversations from one inbox.</Typography>
+          <Typography variant="h3" sx={{ fontWeight: 950 }}><Bi en={"My Conversations"} ar={"محادثاتي"} /></Typography>
+          <Typography sx={{ color: dark ? 'rgba(255,255,255,.62)' : binThemeTokens.textSecondary, maxWidth: 880, mt: 1 }}><Bi en={"Continue your CEO/admin, Majlis staff, maintenance, feature suggestion, dashboard issue, owner, tenant, technician, or broker conversations from one inbox."} ar={"تابع محادثاتك مع الإدارة وفريق المجلس والصيانة والاقتراحات ومشكلات اللوحة والملاك والمستأجرين والفنيين والوسطاء من صندوق واحد."} /></Typography>
         </Box>
         <Chip label={`${threads.length} conversations`} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.goldHover, fontWeight: 950 }} />
       </Stack>
@@ -202,13 +203,13 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
           <Paper sx={{ borderRadius: 4, overflow: 'hidden', bgcolor: dark ? 'rgba(255,255,255,.045)' : '#fff', border: `1px solid ${dark ? 'rgba(255,255,255,.10)' : binThemeTokens.border}` }}>
             <Box sx={{ p: 2 }}>
               <TextField select fullWidth size="small" label="Filter" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}>
-                <MenuItem value="all">All channels</MenuItem>
+                <MenuItem value="all"><Bi en={"All channels"} ar={"جميع القنوات"} /></MenuItem>
                 {Object.entries(CHANNEL_LABELS).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
               </TextField>
             </Box>
             <Divider />
             <Stack sx={{ maxHeight: '65vh', overflow: 'auto' }}>
-              {filteredThreads.length === 0 ? <Typography sx={{ p: 3, color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>No conversations yet. Use the floating BIN Connect button to start one.</Typography> : filteredThreads.map((thread) => {
+              {filteredThreads.length === 0 ? <Typography sx={{ p: 3, color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}><Bi en={"No conversations yet. Use the floating BIN Connect button to start one."} ar={"لا توجد محادثات بعد. استخدم زر BIN Connect العائم لبدء محادثة."} /></Typography> : filteredThreads.map((thread) => {
                 const active = thread.id === selectedId;
                 return <Box key={thread.id} onClick={() => setSelection({ uid, epoch: identity.current.epoch, id: thread.id })} sx={{ p: 2, cursor: 'pointer', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.08)' : binThemeTokens.border}`, bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
                   <Stack direction="row" justifyContent="space-between" gap={1}><Typography fontWeight={950}>{thread.title || 'BIN Connect'}</Typography><Chip size="small" label={thread.status || 'open'} /></Stack>
@@ -221,13 +222,13 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
         </Grid>
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 3, borderRadius: 4, minHeight: '68vh', bgcolor: dark ? 'rgba(255,255,255,.045)' : '#fff', border: `1px solid ${dark ? 'rgba(255,255,255,.10)' : binThemeTokens.border}` }}>
-            {!selected ? <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 420, color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}><MessageSquare size={44} /><Typography sx={{ mt: 2 }}>Select a conversation.</Typography></Stack> : <Stack spacing={2}>
+            {!selected ? <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 420, color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}><MessageSquare size={44} /><Typography sx={{ mt: 2 }}><Bi en={"Select a conversation."} ar={"اختر محادثة."} /></Typography></Stack> : <Stack spacing={2}>
               <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
                 <Box>
                   <Typography variant="h5" fontWeight={950}>{selected.title || 'BIN Connect'}</Typography>
                   <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.58)' : binThemeTokens.textSecondary }}>{CHANNEL_LABELS[selected.channel || ''] || selected.channel} · {selected.status || 'open'}</Typography>
-                  {selected.context && <Typography variant="body2" sx={{ color: binThemeTokens.goldHover, mt: .6 }}>Context: {selected.context}</Typography>}
-                  {(selected.propertyId || selected.unitId || selected.ticketId) && <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>Property: {selected.propertyId || 'N/A'} · Unit: {selected.unitId || 'N/A'} · Ticket: {selected.ticketId || 'N/A'}</Typography>}
+                  {selected.context && <Typography variant="body2" sx={{ color: binThemeTokens.goldHover, mt: .6 }}><Bi en={"Context:"} ar={"السياق:"} /> {selected.context}</Typography>}
+                  {(selected.propertyId || selected.unitId || selected.ticketId) && <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}><Bi en={"Property:"} ar={"العقار:"} /> {selected.propertyId || 'N/A'} <Bi en={"· Unit:"} ar={"· الوحدة:"} /> {selected.unitId || 'N/A'} <Bi en={"· Ticket:"} ar={"· الطلب:"} /> {selected.ticketId || 'N/A'}</Typography>}
                 </Box>
                 <Button onClick={closeThread} disabled={draftCurrent && busy} startIcon={<CheckCircle2 size={16} />} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Mark resolved</Button>
               </Stack>
