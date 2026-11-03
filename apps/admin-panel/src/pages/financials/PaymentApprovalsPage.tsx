@@ -566,11 +566,11 @@ export default function PaymentApprovalsPage() {
                             </TableBody>
                         </Table>
                     </TableContainer>
-                    {(hasMorePending || hasMorePaid) && <Stack direction="row" spacing={1} sx={{ p: 2 }}>
-                        {hasMorePending && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('pending')}>{loadingQueue === 'pending' ? 'Loading…' : 'Load older pending payments'}</Button>}
-                        {hasMorePaid && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('paid')}>{loadingQueue === 'paid' ? 'Loading…' : 'Load older paid approvals'}</Button>}
-                    </Stack>}
                 )}
+                {!loading && (hasMorePending || hasMorePaid) && <Stack direction="row" spacing={1} sx={{ p: 2 }}>
+                    {hasMorePending && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('pending')}>{loadingQueue === 'pending' ? 'Loading…' : 'Load older pending payments'}</Button>}
+                    {hasMorePaid && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('paid')}>{loadingQueue === 'paid' ? 'Loading…' : 'Load older paid approvals'}</Button>}
+                </Stack>}
             </Paper>
 
             <Dialog data-testid="admin-payment-approval-dialog" open={Boolean(approvalTarget)} onClose={() => !busyId && setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
