@@ -44,8 +44,8 @@ async function fetchAllOwnerFinancialRows(baseQuery: any) {
 }
 const payoutStatusColor = (value: unknown) => {
     const status = String(value || '').trim().toUpperCase();
-    if (['PAID', 'COMPLETED', 'APPROVED', 'SETTLED'].includes(status)) return '#10b981';
-    if (['PENDING', 'PROCESSING', 'REQUESTED', 'UNDER_REVIEW'].includes(status)) return '#f59e0b';
+    if (['PAID', 'COMPLETED', 'SETTLED'].includes(status)) return '#10b981';
+    if (['PENDING', 'PROCESSING', 'REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'IN_PROGRESS'].includes(status)) return '#f59e0b';
     if (['FAILED', 'REJECTED', 'CANCELLED', 'VOIDED', 'DISPUTED'].includes(status)) return '#ef4444';
     return '#64748b';
 };
@@ -358,7 +358,7 @@ export default function OwnerFinancialsPage() {
                                         </TableCell>
                                         <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
                                         <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
-                                        <TableCell><Chip label={String(invoice.status || invoice.paymentStatus || 'PENDING').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: alpha(String(invoice.status || invoice.paymentStatus || '').toUpperCase() === 'PAID' ? '#10b981' : '#f59e0b', 0.12), color: String(invoice.status || invoice.paymentStatus || '').toUpperCase() === 'PAID' ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></TableCell>
+                                        <TableCell><Chip label={String(invoice.status || invoice.paymentStatus || 'PENDING').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: alpha(payoutStatusColor(invoice.status || invoice.paymentStatus), 0.12), color: payoutStatusColor(invoice.status || invoice.paymentStatus), fontWeight: 950 }} /></TableCell>
                                         <TableCell align="right">
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
                                                 <Button
