@@ -23,6 +23,10 @@ test('Owner approval center warns when either bounded source reaches its cap', a
   assert.match(page, /owner-signoffs-capped/);
   assert.match(page, /!signOffsMayBeTruncated/);
   assert.match(page, /!requestsMayBeTruncated/);
+  assert.match(page, /startAfter\(requestCursorRef\.current\)/);
+  assert.match(page, /startAfter\(ticketCursorRef\.current\)/);
+  assert.match(page, /Load older approval requests/);
+  assert.match(page, /Load older ticket sign-offs/);
 });
 
 test('Finance queues identify visible query caps instead of implying the queue is complete', async () => {
@@ -31,6 +35,9 @@ test('Finance queues identify visible query caps instead of implying the queue i
   assert.match(page, /Paid awaiting approval queue', snapshot\.size >= 50/);
   assert.match(page, /Receipt repair queue', snapshot\.size >= 30/);
   assert.match(page, /admin-payment-queue-capped/);
+  assert.match(page, /startAfter\(cursor\)/);
+  assert.match(page, /loadOlderPaymentQueue/);
+  assert.match(page, /loadOlderReceipts/);
 });
 
 test('Technician history makes the 50-record KPI scope explicit', async () => {
@@ -38,6 +45,17 @@ test('Technician history makes the 50-record KPI scope explicit', async () => {
   assert.match(page, /setHistoryMayBeTruncated\(snap\.size >= 50\)/);
   assert.match(page, /technician-history-capped/);
   assert.match(page, /MISSIONS IN LOADED HISTORY/);
+  assert.match(page, /startAfter\(historyCursorRef\.current\)/);
+  assert.match(page, /Load older missions/);
+});
+
+test('Broker commission history and payout status queries are bounded and paginated', async () => {
+  const page = await read('src/broker/pages/BrokerCommissionsPage.tsx');
+  assert.match(page, /orderBy\(documentId\(\), 'asc'\), limit\(50\)/);
+  assert.match(page, /startAfter\(commissionsCursorRef\.current\)/);
+  assert.match(page, /broker-commissions-partial/);
+  assert.match(page, /limit\(1\)\), \(snapshot\)/);
+  assert.match(page, /hasMoreCommissions\);/);
 });
 
 test('Owner, Tenant and Technician live audits wait for authenticated role shells', async () => {
