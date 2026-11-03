@@ -5,6 +5,7 @@
  * history, HR, profile, AR/EN switch.
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAuthenticatedPortalReady } from './helpers/portalReadiness';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TECHNICIAN_EMAIL    ?? '';
@@ -32,6 +33,7 @@ async function login(page: Page) {
 }
 
 async function assertHealthy(page: Page, context: string) {
+  await assertAuthenticatedPortalReady(page, context, 'BIN Technician');
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
