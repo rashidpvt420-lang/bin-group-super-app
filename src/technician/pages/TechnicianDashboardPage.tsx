@@ -108,7 +108,16 @@ const getSlaTimeRemaining = (job: any) => {
     } else if (job?.createdAt) {
         const created = typeof job.createdAt.toDate === 'function' ? job.createdAt.toDate() : new Date(job.createdAt);
         const priorityKey = String(job.slaPriority || job.priority || '').toUpperCase().trim();
-        const slaMinutes = slaMinutesForPriority(priorityKey);
+        const canonicalPriorityKey = ['EMERGENCY', 'SOS', 'CRITICAL'].includes(priorityKey)
+            ? 'EMERGENCY'
+            : ['URGENT', 'HIGH'].includes(priorityKey)
+                ? 'HIGH'
+                : ['MEDIUM', 'SAME_DAY'].includes(priorityKey)
+                    ? 'MEDIUM'
+                    : ['LOW', 'MINOR'].includes(priorityKey)
+                        ? 'LOW'
+                        : 'STANDARD';
+        const slaMinutes = slaMinutesForPriority(canonicalPriorityKey);
         limitTime = new Date(created.getTime() + slaMinutes * 60000);
     }
 
