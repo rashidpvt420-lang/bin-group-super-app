@@ -31,11 +31,25 @@ async function login(page: Page) {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
+// Every page.goto is a full reload, so RoleContext must re-prove the persisted
+// session (token + App Check + own-profile read) before the portal renders.
+// Until then App.tsx shows the auth splash. Reading the body during the splash
+// let route checks pass on splash text and made content checks fail. Wait for
+// the splash to clear (bounded by RoleContext's 16s hard deadline) and fail
+// if the boot ends on the slow-connection recovery screen instead of the page.
+const AUTH_SPLASH = /Authenticating BIN-Groups Identity|جاري توثيق هوية مجموعة بن/i;
+const AUTH_RECOVERY = /Connection is slow/i;
+
+async function waitForSessionRestore(page: Page, expectedPath: string) {
+  await expect(page.getByText(AUTH_SPLASH), `${expectedPath}: authenticated session must restore past the auth splash`).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.getByText(AUTH_RECOVERY), `${expectedPath}: session restore must not fall to the recovery screen`).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must survive session restore`, timeout: 5_000 }).toBe(expectedPath);
+}
+
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
-  const bodyLocator = page.locator('body');
-  await expect(bodyLocator, `${expectedPath}: wait for authenticated Tenant identity resolution`).not.toContainText(/Authenticating BIN-Groups Identity\.\.\./i, { timeout: 30_000 });
-  const body = await bodyLocator.innerText({ timeout: 20_000 });
+  await waitForSessionRestore(page, expectedPath);
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
   expect(body, `${expectedPath}: no access-denied`).not.toMatch(ACCESS_DENIED);
