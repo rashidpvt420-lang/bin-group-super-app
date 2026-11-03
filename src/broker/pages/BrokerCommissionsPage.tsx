@@ -155,7 +155,7 @@ export default function BrokerCommissionsPage() {
       subtitle="Verified commission settlement and payout tracking"
       loading={loading}
       actions={<Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
-        <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+        <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0 || hasMoreCommissions} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
           {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
         </Button>
         <Button variant="outlined" startIcon={<Download size={18} />} onClick={() => setShowStatement((v) => !v)} aria-expanded={showStatement} data-testid="broker-export-statement">OFFICIAL STATEMENT</Button>
@@ -176,6 +176,7 @@ export default function BrokerCommissionsPage() {
         <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>SECURE PAYOUT WORKFLOW</Typography>
         <Typography variant="h6" fontWeight={950}>{payableIds.length ? `${payableIds.length} approved commission(s) ready` : 'No approved commission is payable'}</Typography>
         <Typography variant="body2" color="text.secondary">Every request requires a short-lived, single-use code sent to the verified Broker email. The code is bound to the exact commissions and amount.</Typography>
+        {hasMoreCommissions && <Alert severity="warning" sx={{ mt: 2 }}>Load all available commission pages before requesting payout. This prevents a partial history from being mistaken for the complete eligible payout set.</Alert>}
         {latestPayout && <Chip sx={{ mt: 2 }} label={String(latestPayout.status || 'PENDING_ADMIN_REVIEW').replaceAll('_', ' ').toUpperCase()} />}
       </Paper>
 
