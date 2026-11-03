@@ -15,6 +15,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import { STATUS_TONES } from '../../theme/statusColors';
+import Bi from '../../components/Bi';
 
 export default function BrokerDocumentsPage() {
     const { user } = useRole();
@@ -215,9 +216,9 @@ export default function BrokerDocumentsPage() {
                 <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), width: 'fit-content', borderRadius: '50%', margin: '0 auto 24px auto' }}>
                     <Lock size={32} color={binThemeTokens.gold} />
                 </Box>
-                <Typography variant="h5" fontWeight="950" color={binThemeTokens.textPrimary}>Referral Supporting Evidence</Typography>
+                <Typography variant="h5" fontWeight="950" color={binThemeTokens.textPrimary}><Bi en={"Referral Supporting Evidence"} ar={"المستندات الداعمة للإحالة"} /></Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, maxWidth: 400, margin: '12px auto 32px auto', fontWeight: 700 }}>
-                    Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin.
+                    <Bi en={"Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin."} ar={"ارفع اتفاقيات السرية أو التفويضات الموقعة أو تقارير التقييم. جميع الملفات مشفرة ولا يصل إليها إلا مسؤول النظام."} />
                 </Typography>
                 <Stack direction="row" spacing={2} justifyContent="center">
                     <Button
@@ -235,7 +236,7 @@ export default function BrokerDocumentsPage() {
             <Box sx={{ mt: 6, p: 3, bgcolor: alpha('#3b82f6', 0.05), borderRadius: 4, border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', gap: 3 }}>
                 <Info size={24} color="#3b82f6" />
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
-                    Security Protocol: Files are scanned for malware upon upload. Sensitive personal information is redacted automatically where necessary for institutional compliance.
+                    <Bi en={"Security Protocol: Files are scanned for malware upon upload. Sensitive personal information is redacted automatically where necessary for institutional compliance."} ar={"بروتوكول الأمان: تُفحص الملفات من البرمجيات الضارة عند الرفع، وتُحجب المعلومات الشخصية الحساسة تلقائياً عند الحاجة للامتثال."} />
                 </Typography>
             </Box>
 
