@@ -18,6 +18,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { computeTechnicianHistoryStats, formatPercentOrNoData, type TechnicianHistoryStats } from './technicianHistoryStats';
 import { STATUS_TONES } from '../../theme/statusColors';
+import Bi from '../../components/Bi';
 
 export default function TechnicianHistoryPage() {
     const { user } = useRole();
@@ -65,7 +66,7 @@ export default function TechnicianHistoryPage() {
             {/* Header */}
             <Box sx={{ mb: 6 }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>MISSION ARCHIVE</Typography>
-                <Typography variant="h4" fontWeight="950" color="#FFF">Work History & KPIs</Typography>
+                <Typography variant="h4" fontWeight="950" color="#FFF"><Bi en={"Work History & KPIs"} ar={"سجل العمل ومؤشرات الأداء"} /></Typography>
             </Box>
 
             {/* KPI Performance Section */}
@@ -125,7 +126,7 @@ export default function TechnicianHistoryPage() {
             {history.length === 0 ? (
                 <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.05)' }}>
                     <Typography color="textSecondary" variant="h6" fontWeight="900">NO COMPLETED MISSIONS ARCHIVED</Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', mt: 1 }}>Missions will appear here once they are completed or closed.</Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', mt: 1 }}><Bi en={"Missions will appear here once they are completed or closed."} ar={"ستظهر المهام هنا بعد إكمالها أو إغلاقها."} /></Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3}>
@@ -158,7 +159,7 @@ export default function TechnicianHistoryPage() {
                                     </Stack>
                                     <Typography variant="h6" fontWeight="950" color="#FFF">{job.category || 'Maintenance'}</Typography>
                                     <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                                        <MapPin size={14} /> {job.propertyName} · Unit {job.unitNumber}
+                                        <MapPin size={14} /> {job.propertyName} <Bi en={"· Unit"} ar={"· الوحدة"} /> {job.unitNumber}
                                     </Typography>
                                 </Box>
 

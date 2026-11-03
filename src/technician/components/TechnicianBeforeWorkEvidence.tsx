@@ -19,6 +19,7 @@ import {
   isRetryableTechnicianEvidenceError,
   queueTechnicianEvidence,
 } from '../utils/offlineEvidenceQueue';
+import Bi from '../../components/Bi';
 
 const assignedTechnicianId = (data: Record<string, any>) => String(
   data.assignedTechnicianId || data.technicianId || data.assignedTechId || data.technicianUid || data.techId || '',
@@ -164,7 +165,7 @@ export default function TechnicianBeforeWorkEvidence() {
             BEFORE-WORK SITE EVIDENCE
           </Typography>
           <Typography variant="body2" sx={{ color: '#667085', mt: 0.5 }}>
-            Capture the actual work area after verified arrival. Tenant fault evidence alone does not replace this technician proof.
+            <Bi en={"Capture the actual work area after verified arrival. Tenant fault evidence alone does not replace this technician proof."} ar={"صوّر منطقة العمل الفعلية بعد التحقق من الوصول. صور المستأجر للعطل لا تغني عن إثبات الفني."} />
           </Typography>
         </Box>
         <Button

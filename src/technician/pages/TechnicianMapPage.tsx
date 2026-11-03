@@ -14,6 +14,7 @@ import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, getTechnicianLocation, getTicketJobLocation, isLocationStale } from '../../utils/liveTracking';
 import { onSnapshotSplitIn } from '../../utils/queryUtils';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../utils/ticketConstants';
+import Bi from '../../components/Bi';
 
 // Colours readable on the white technician shell (>= 4.5:1). The page was written for the old dark
 // theme: white headings, rgba(255,255,255,.3-.6) secondary text, a #0f172a preview panel whose
@@ -121,10 +122,10 @@ export default function TechnicianMapPage() {
           FIELD OPERATIONS
         </Typography>
         <Typography variant="h4" fontWeight="950" sx={{ color: MAP_READABLE.ink }}>
-          Mission Control & Navigation
+          <Bi en={"Mission Control & Navigation"} ar={"التحكم بالمهمة والملاحة"} />
         </Typography>
         <Typography variant="body2" sx={{ color: MAP_READABLE.muted, mt: 1, maxWidth: 760 }}>
-          GPS sharing is foreground-only and starts when you press ON THE WAY. The in-app time and distance figures are approximate straight-line estimates, not road navigation.
+          <Bi en={"GPS sharing is foreground-only and starts when you press ON THE WAY. The in-app time and distance figures are approximate straight-line estimates, not road navigation."} ar={"مشاركة الموقع تعمل فقط والتطبيق مفتوح وتبدأ عند الضغط على \"في الطريق\". أرقام الوقت والمسافة تقديرية بخط مستقيم وليست ملاحة طرق."} />
         </Typography>
       </Box>
 
@@ -137,7 +138,7 @@ export default function TechnicianMapPage() {
             {profileTrackingFresh ? <Wifi size={22} color={MAP_READABLE.green} /> : <WifiOff size={22} color={MAP_READABLE.red} />}
             <Box>
               <Typography variant="body2" fontWeight="900" sx={{ color: MAP_READABLE.ink }}>
-                Your GPS: {profileTrackingFresh ? 'Foreground tracking fresh' : profileLocationStale ? 'Stale / offline' : 'Tracking not active'}
+                <Bi en={"Your GPS:"} ar={"موقعك:"} /> {profileTrackingFresh ? 'Foreground tracking fresh' : profileLocationStale ? 'Stale / offline' : 'Tracking not active'}
               </Typography>
               <Typography variant="caption" sx={{ color: MAP_READABLE.muted }}>
                 {techProfile.currentLocation?.lat?.toFixed?.(5)}, {techProfile.currentLocation?.lng?.toFixed?.(5)} · {getStaleLabel(profileLocationTimestamp)}
@@ -153,7 +154,7 @@ export default function TechnicianMapPage() {
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}><Compass size={64} color="#98A2B3" /></Box>
           <Typography variant="h6" fontWeight="950" sx={{ color: MAP_READABLE.ink }}>NO ACTIVE MISSIONS REQUIRING NAVIGATION</Typography>
           <Typography variant="body2" sx={{ color: MAP_READABLE.muted, mt: 1, maxWidth: 400, mx: 'auto' }}>
-            The authenticated production query returned no active assigned mission.
+            <Bi en={"The authenticated production query returned no active assigned mission."} ar={"لا توجد مهمة نشطة مسندة إليك حالياً."} />
           </Typography>
           <Button variant="outlined" onClick={() => navigate('/technician/jobs')} sx={{ mt: 4, borderColor: binThemeTokens.gold, color: MAP_READABLE.gold, fontWeight: 950 }}>
             GO TO JOB LIST
@@ -185,7 +186,7 @@ export default function TechnicianMapPage() {
                           {resolved.hasExactCoordinates ? <Navigation size={44} color={MAP_READABLE.gold} /> : <ShieldAlert size={44} color={MAP_READABLE.red} />}
                           <Typography variant="h6" fontWeight="950" sx={{ color: MAP_READABLE.ink }}>{resolved.hasExactCoordinates ? 'Verified pin available' : 'Exact GPS pin missing'}</Typography>
                           {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Straight-line estimate ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#111827', fontWeight: 950, '& .MuiChip-icon': { color: '#111827' } }} />}
-                          {dist !== null && <Typography variant="caption" sx={{ color: MAP_READABLE.muted, fontWeight: 700 }}>{dist.toFixed(1)} km approximate straight-line distance · road routing not included</Typography>}
+                          {dist !== null && <Typography variant="caption" sx={{ color: MAP_READABLE.muted, fontWeight: 700 }}>{dist.toFixed(1)} <Bi en={"km approximate straight-line distance · road routing not included"} ar={"كم مسافة تقريبية بخط مستقيم · لا تشمل مسار الطريق"} /></Typography>}
                           <Button variant="contained" onClick={() => openMap(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, borderRadius: 4 }}>
                             OPEN TRAFFIC-AWARE GOOGLE MAPS
                           </Button>
@@ -204,7 +205,7 @@ export default function TechnicianMapPage() {
                               {isOnTheWay && <Chip size="small" icon={locationStale ? <WifiOff size={11} /> : <Wifi size={11} />} label={locationStale ? 'GPS STALE' : 'FOREGROUND GPS FRESH'} sx={{ bgcolor: alpha(locationStale ? MAP_READABLE.red : MAP_READABLE.green, 0.1), color: locationStale ? MAP_READABLE.red : MAP_READABLE.green, fontWeight: 950, fontSize: '0.65rem' }} />}
                             </Stack>
                             <Typography variant="h5" fontWeight="950" sx={{ color: MAP_READABLE.ink, overflowWrap: 'anywhere' }}>{job.propertyName || 'Assigned Property'}</Typography>
-                            <Typography variant="body1" sx={{ color: MAP_READABLE.muted, mt: 0.5, fontWeight: 600 }}>Unit {job.unitNumber || 'N/A'} · {job.category || job.complaintCategory || 'Maintenance'}</Typography>
+                            <Typography variant="body1" sx={{ color: MAP_READABLE.muted, mt: 0.5, fontWeight: 600 }}><Bi en={"Unit"} ar={"الوحدة"} /> {job.unitNumber || 'N/A'} · {job.category || job.complaintCategory || 'Maintenance'}</Typography>
                             <Typography variant="body2" sx={{ color: MAP_READABLE.muted, mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}><MapPin size={13} />{resolved.address || job.jobLocation?.address || 'No address saved'} · {resolved.emirate}</Typography>
                           </Box>
                         </Stack>
