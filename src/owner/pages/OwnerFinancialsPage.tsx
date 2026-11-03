@@ -32,7 +32,7 @@ async function fetchAllOwnerFinancialRows(baseQuery: any) {
             ? query(baseQuery, startAfter(cursor), limit(FINANCIAL_HISTORY_PAGE_SIZE))
             : query(baseQuery, limit(FINANCIAL_HISTORY_PAGE_SIZE));
         const page = await getDocs(pageQuery);
-        rows.push(...page.docs.map((document) => ({ id: document.id, ...document.data() })));
+        rows.push(...page.docs.map((document) => ({ id: document.id, ...(document.data() as Record<string, unknown>) })));
         pagesRead += 1;
         if (page.docs.length < FINANCIAL_HISTORY_PAGE_SIZE) {
             complete = true;
