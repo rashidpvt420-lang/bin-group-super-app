@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
@@ -273,7 +274,9 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
 export const adminReviewBrokerCommission = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    await requireAdmin(request.auth);
+    // Financial decision (approve / reject / mark paid): MFA Finance Admin only. Operations and
+    // general "manager" roles may still verify RERA, but cannot decide commission money.
+    await requireMfaFinanceAdminActor(request);
     const commissionId = String(request.data?.commissionId || "").trim();
     const action = String(request.data?.action || "").trim().toUpperCase();
     const reason = String(request.data?.reason || "").trim().slice(0, 1000);

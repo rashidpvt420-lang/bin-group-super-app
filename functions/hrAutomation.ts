@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
@@ -276,8 +277,10 @@ export const adminGeneratePayrollBatch = onCall(
 export const adminSettlePayrollRecord = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {
+        // Settling payroll releases money: MFA Finance Admin only. HR may prepare payroll, not pay it.
         requirePayrollAdmin(request.auth);
         await requirePrivilegedMfaSession(request.auth);
+        await requireMfaFinanceAdminActor(request);
         const payrollId = safeText(request.data?.payrollId);
         const paymentReference = safeText(request.data?.paymentReference).slice(0, 180);
         if (!payrollId || paymentReference.length < 4) {
