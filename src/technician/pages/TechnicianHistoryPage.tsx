@@ -51,7 +51,7 @@ export default function TechnicianHistoryPage() {
         const unsub = onSnapshot(q, (snap) => {
             const docs: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             if (!olderHistoryLoadedRef.current) historyCursorRef.current = snap.docs[snap.docs.length - 1] || null;
-            setHistoryMayBeTruncated(snap.size >= 50);
+            if (!olderHistoryLoadedRef.current) setHistoryMayBeTruncated(snap.size >= 50);
             setHistory((current) => {
                 const latestIds = new Set(docs.map((row) => row.id));
                 const merged = new Map<string, any>();
