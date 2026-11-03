@@ -7,6 +7,7 @@ import { useLanguage } from '@bin/shared';
 import SafeIcon from '../../components/SafeIcon';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
+import Bi from '../../components/Bi';
 
 // Payable equation source: Owner-scoped propertyPassports with the same 5%
 // management-fee rule as /owner/financials. Paid invoices and VERIFIED NOI are
@@ -96,7 +97,7 @@ export default function OwnerFinancialTruthCard() {
         </Stack>
 
         {loading ? (
-          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.goldText }} /><Typography variant="body2">Loading live Owner financial source…</Typography></Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.goldText }} /><Typography variant="body2"><Bi en={"Loading live Owner financial source…"} ar={"جارٍ تحميل البيانات المالية…"} /></Typography></Stack>
         ) : error ? (
           <Alert severity="warning">{error}</Alert>
         ) : summary.primaryKind === 'empty' ? (

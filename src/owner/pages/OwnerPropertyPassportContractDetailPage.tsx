@@ -8,6 +8,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import UaePropertyMap from '../../components/maps/UaePropertyMap';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
+import Bi from '../../components/Bi';
 
 type PassportTab = 'map' | 'documents' | 'handover' | 'maintenance' | 'systems';
 
@@ -210,7 +211,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
-        {passport.provisional && <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>This provisional property passport is generated from the linked active asset or active contract. Official passport issuance is pending.</Alert>}
+        {passport.provisional && <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}><Bi en={"This provisional property passport is generated from the linked active asset or active contract. Official passport issuance is pending."} ar={"هذا جواز عقار مؤقت من الأصل أو العقد النشط المرتبط. إصدار الجواز الرسمي قيد الانتظار."} /></Alert>}
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.66)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 6 }}>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={3}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2.5} alignItems="center">
@@ -243,7 +244,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
                 <Metric label="Units" value={passport.totalUnits || 0}><UsersRound size={20} /></Metric>
                 <Metric label="Floors" value={passport.floors || 0}><Layers size={20} /></Metric>
                 <Metric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></Metric>
-                <Button disabled={!canOpenMap} variant="contained" onClick={() => propertyLocation.googleMapsUrl && window.open(propertyLocation.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ bgcolor: canOpenMap ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: canOpenMap ? '#111827' : 'rgba(255,255,255,0.35)', fontWeight: 950 }}>Open Google Maps</Button>
+                <Button disabled={!canOpenMap} variant="contained" onClick={() => propertyLocation.googleMapsUrl && window.open(propertyLocation.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ bgcolor: canOpenMap ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: canOpenMap ? '#111827' : 'rgba(255,255,255,0.35)', fontWeight: 950 }}><Bi en={"Open Google Maps"} ar={"فتح خرائط Google"} /></Button>
               </Stack>
             </Grid>
           </Grid>
@@ -254,12 +255,12 @@ export default function OwnerPropertyPassportContractDetailPage() {
           <Stack spacing={2}>
             <PassportList title="Handover / Inspection Evidence" icon={<ClipboardCheck size={20} />} rows={inspections.map((row) => [row.inspectionType || row.type || 'Inspection', row.unitNumber || row.unitId || 'Property', row.status || fmt(row.createdAt || row.submittedAt)])} empty="No move-in, move-out, or inspection evidence is linked yet." />
             <Button variant="contained" onClick={() => navigate('/owner/inspections')} sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>
-              Open Owner Handover Center
+              <Bi en={"Open Owner Handover Center"} ar={"فتح مركز تسليم المالك"} />
             </Button>
           </Stack>
         )}
         {activeTab === 'maintenance' && <PassportList title="Maintenance Timeline" icon={<Wrench size={20} />} rows={missions.map((row) => [row.category || row.issueType || row.trade || 'Maintenance', row.status || 'Open', fmt(row.createdAt || row.updatedAt)])} empty="No maintenance tickets are linked to this property passport yet." />}
-        {activeTab === 'systems' && <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Building Systems</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.42)' }}>Systems will appear here when the official passport is issued.</Typography></Paper>}
+        {activeTab === 'systems' && <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}><Bi en={"Building Systems"} ar={"أنظمة المبنى"} /></Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.42)' }}><Bi en={"Systems will appear here when the official passport is issued."} ar={"ستظهر الأنظمة هنا عند إصدار الجواز الرسمي."} /></Typography></Paper>}
       </Stack>
     </Box>
   );

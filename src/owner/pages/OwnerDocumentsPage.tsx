@@ -3,6 +3,7 @@ import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography } 
 import { FileText, FolderOpen, ShieldCheck } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { listUnifiedDocumentVault, openUnifiedDocument, type UnifiedVaultArtifact } from '../../services/unifiedDocumentVault';
+import Bi from '../../components/Bi';
 
 export default function OwnerDocumentsPage() {
   const [documents, setDocuments] = useState<UnifiedVaultArtifact[]>([]);
@@ -50,8 +51,8 @@ export default function OwnerDocumentsPage() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Owner Document Vault</Typography>
-      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, mb: 4 }}>Contracts, final quotes, invoices, property reports and inspection records authorized for this Owner.</Typography>
+      <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Owner Document Vault"} ar={"خزنة مستندات المالك"} /></Typography>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, mb: 4 }}><Bi en={"Contracts, final quotes, invoices, property reports and inspection records authorized for this Owner."} ar={"العقود والعروض النهائية والفواتير وتقارير العقار وسجلات الفحص المصرح بها لهذا المالك."} /></Typography>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 

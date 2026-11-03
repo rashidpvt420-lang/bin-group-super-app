@@ -14,6 +14,7 @@ import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 const gold = binThemeTokens.gold;
 const MANAGEMENT_FEE_RATE = 0.05;
@@ -229,9 +230,9 @@ export default function OwnerPLReportPage() {
         </Stack>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-end' }} spacing={2}>
           <Box>
-            <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Profit & Loss {year}</Typography>
+            <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Profit & Loss"} ar={"الأرباح والخسائر"} /> {year}</Typography>
             <Typography variant="body2" sx={{ color: alpha('#fff', 0.4), fontWeight: 700 }}>
-              {passports.length} propert{passports.length === 1 ? 'y' : 'ies'} · Owner Financial Summary
+              {passports.length} propert{passports.length === 1 ? 'y' : 'ies'} <Bi en={"· Owner Financial Summary"} ar={"· الملخص المالي للمالك"} />
             </Typography>
           </Box>
           <Button
@@ -240,7 +241,7 @@ export default function OwnerPLReportPage() {
             onClick={() => generatePDF(user, passports, tickets, year)}
             sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, px: 3, py: 1.3, borderRadius: 3, boxShadow: `0 10px 28px ${alpha(gold, 0.32)}`, flexShrink: 0 }}
           >
-            Download PDF
+            <Bi en={"Download PDF"} ar={"تنزيل PDF"} />
           </Button>
         </Stack>
       </Box>
@@ -305,7 +306,7 @@ export default function OwnerPLReportPage() {
         <Paper sx={{ p: 5, bgcolor: CARD, border: BORDER, borderRadius: 4, textAlign: 'center' }}>
           <FileText size={36} color={alpha(gold, 0.3)} />
           <Typography sx={{ color: alpha('#fff', 0.35), mt: 2, fontWeight: 800 }}>
-            Add properties and financial data to generate your P&L report.
+            <Bi en={"Add properties and financial data to generate your P&L report."} ar={"أضف العقارات والبيانات المالية لإنشاء تقرير الأرباح والخسائر."} />
           </Typography>
         </Paper>
       )}
@@ -319,7 +320,7 @@ export default function OwnerPLReportPage() {
           <Box>
             <Typography variant="caption" sx={{ color: alpha('#22C55E', 0.7), fontWeight: 900, letterSpacing: 2 }}>TAX READINESS NOTE</Typography>
             <Typography sx={{ color: alpha('#fff', 0.6), fontWeight: 800, fontSize: '0.85rem', mt: 0.3 }}>
-              UAE Corporate Tax (Federal Decree-Law No. 47 of 2022) targets licensed business activity. Rental income earned directly by a natural-person landlord is generally outside Corporate Tax scope. If you hold property through a UAE company, Corporate Tax may apply once taxable income exceeds AED 375,000 (Small Business Relief may apply under AED 3M revenue). Maintenance costs, management fees, and operating expenses shown here are itemised as supporting documentation either way. This is a financial summary, not tax advice — confirm your specific position with a UAE-licensed tax advisor.
+              <Bi en={"UAE Corporate Tax (Federal Decree-Law No. 47 of 2022) targets licensed business activity. Rental income earned directly by a natural-person landlord is generally outside Corporate Tax scope. If you hold property through a UAE company, Corporate Tax may apply once taxable income exceeds AED 375,000 (Small Business Relief may apply under AED 3M revenue). Maintenance costs, management fees, and operating expenses shown here are itemised as supporting documentation either way. This is a financial summary, not tax advice — confirm your specific position with a UAE-licensed tax advisor."} ar={"ضريبة الشركات في الإمارات (المرسوم بقانون اتحادي رقم 47 لسنة 2022) تستهدف النشاط التجاري المرخص. دخل الإيجار الذي يحققه المالك كشخص طبيعي مباشرة يقع عادة خارج نطاقها. إذا كنت تملك العقار عبر شركة إماراتية فقد تنطبق الضريبة عند تجاوز الدخل الخاضع 375,000 درهم (قد ينطبق إعفاء الأعمال الصغيرة لإيرادات أقل من 3 ملايين درهم). تكاليف الصيانة والرسوم والمصاريف مفصلة هنا كمستندات داعمة. هذا ملخص مالي وليس استشارة ضريبية — تحقق من وضعك مع مستشار ضريبي مرخص في الإمارات."} />
             </Typography>
           </Box>
         </Stack>

@@ -8,6 +8,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { db, collection, query, where, getDocs } from '../lib/firebase';
+import Bi from '../components/Bi';
 
 interface ScheduledTask {
     id: string;
@@ -178,7 +179,7 @@ const MaintenanceCalendarPage: React.FC = () => {
                     PREVENTIVE MAINTENANCE CALENDAR
                 </Typography>
                 <Typography variant="h6" sx={{ color: '#475569', fontWeight: 500 }}>
-                    Live scheduled maintenance and service history from your property records.
+                    <Bi en={"Live scheduled maintenance and service history from your property records."} ar={"الصيانة المجدولة وسجل الخدمة من سجلات عقارك."} />
                 </Typography>
             </Box>
 
@@ -189,9 +190,9 @@ const MaintenanceCalendarPage: React.FC = () => {
                     <Stack spacing={3}>
                         {sortedTasks.length === 0 && !loadError && (
                             <Paper sx={{ p: 5, borderRadius: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB' }}>
-                                <Typography variant="h6" fontWeight={900} color="#111827">No scheduled maintenance yet</Typography>
+                                <Typography variant="h6" fontWeight={900} color="#111827"><Bi en={"No scheduled maintenance yet"} ar={"لا توجد صيانة مجدولة بعد"} /></Typography>
                                 <Typography variant="body2" color="#475569" sx={{ mt: 1 }}>
-                                    This page will populate automatically when a real maintenance ticket receives a service date.
+                                    <Bi en={"This page will populate automatically when a real maintenance ticket receives a service date."} ar={"ستمتلئ هذه الصفحة تلقائياً عند تحديد موعد لطلب صيانة فعلي."} />
                                 </Typography>
                             </Paper>
                         )}
@@ -249,13 +250,13 @@ const MaintenanceCalendarPage: React.FC = () => {
                             <Typography variant="h3" fontWeight="950" color="#111827">
                                 {completionMetric === null ? 'N/A' : `${completionMetric}%`}
                             </Typography>
-                            <Typography variant="body2" color="#475569">On-Time Completion Rate</Typography>
+                            <Typography variant="body2" color="#475569"><Bi en={"On-Time Completion Rate"} ar={"نسبة الإنجاز في الموعد"} /></Typography>
                             {completionMetric !== null && (
                                 <LinearProgress variant="determinate" value={completionMetric} sx={{ mt: 2, height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#047857' } }} />
                             )}
                             {completionMetric === null && (
                                 <Typography variant="caption" color="#475569" sx={{ display: 'block', mt: 2 }}>
-                                    Calculated only after completed tasks have real due and completion timestamps.
+                                    <Bi en={"Calculated only after completed tasks have real due and completion timestamps."} ar={"تُحسب فقط بعد وجود تواريخ استحقاق وإنجاز فعلية للمهام."} />
                                 </Typography>
                             )}
                         </Box>

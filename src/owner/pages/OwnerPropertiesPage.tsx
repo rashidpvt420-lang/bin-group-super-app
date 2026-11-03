@@ -12,6 +12,7 @@ import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/fir
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 export default function OwnerPropertiesPage() {
     const { user } = useRole();
@@ -161,7 +162,7 @@ export default function OwnerPropertiesPage() {
                                             <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, letterSpacing: -0.5 }}>{prop.propertyName}</Typography>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, color: binThemeTokens.textSecondary }}>
                                                 <MapPin size={14} />
-                                                <Typography variant="caption" sx={{ fontWeight: 700 }}>{prop.emirate} · {prop.unitsCount || 0} Units</Typography>
+                                                <Typography variant="caption" sx={{ fontWeight: 700 }}>{prop.emirate} · {prop.unitsCount || 0} <Bi en={"Units"} ar={"الوحدات"} /></Typography>
                                             </Box>
                                         </Box>
                                         <IconButton aria-label={`Open ${prop.propertyName || 'property'} passport`} sx={{ color: binThemeTokens.goldText, bgcolor: alpha(binThemeTokens.gold, 0.1) }} onClick={() => navigate(prop.passport?.id ? `/owner/property-passport/${prop.passport.id}` : '/owner/property-passport')}>

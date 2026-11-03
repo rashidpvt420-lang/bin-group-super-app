@@ -8,6 +8,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { STATUS_TONES } from '../../theme/statusColors';
 import OwnerPropertyLedgerCard from '../components/OwnerPropertyLedgerCard';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
@@ -191,7 +192,7 @@ export default function OwnerPropertyPassportResolvedPage() {
   if (loading) return (
     <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
       <CircularProgress sx={{ color: binThemeTokens.goldText }} />
-      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>Accessing Registry...</Typography>
+      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}><Bi en={"Accessing Registry..."} ar={"جارٍ الوصول إلى السجل..."} /></Typography>
     </Box>
   );
 
@@ -199,13 +200,13 @@ export default function OwnerPropertyPassportResolvedPage() {
     <Box sx={{ pb: 6 }}>
       <Box sx={{ mb: 6 }}>
         <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN ASSET REGISTRY</Typography>
-        <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>Property Passports</Typography>
-        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>Official digital twins of your real estate portfolio.</Typography>
+        <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}><Bi en={"Property Passports"} ar={"جوازات العقارات"} /></Typography>
+        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}><Bi en={"Official digital twins of your real estate portfolio."} ar={"النسخ الرقمية الرسمية لمحفظتك العقارية."} /></Typography>
       </Box>
 
       {usedFallback && (
         <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
-          Official property passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records.
+          <Bi en={"Official property passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records."} ar={"لم تصدر جوازات العقار الرسمية بعد، لذا تُعرض جوازات مؤقتة من الأصول والعقود النشطة المرتبطة."} />
         </Alert>
       )}
 
@@ -268,7 +269,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                       </Grid>
                       <Grid item xs={6} sm={3}>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>COMPOSITION</Typography>
-                        <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{unitCount(p)} Units · {p.floors || 0} Floors</Typography></Stack>
+                        <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{unitCount(p)} <Bi en={"Units ·"} ar={"وحدات ·"} /> {p.floors || 0} <Bi en={"Floors"} ar={"طوابق"} /></Typography></Stack>
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>ISSUANCE DATE</Typography>
@@ -285,7 +286,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                     {!p.placeholder && p.propertyId && <OwnerPropertyLedgerCard propertyId={p.propertyId} />}
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
+                      <Button fullWidth variant="outlined" data-testid="passport-print-pdf" onClick={() => window.print()} startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
                       <Button fullWidth variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(`/owner/property-passport/${p.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>VIEW DETAILS</Button>
                     </Box>
                   </Box>

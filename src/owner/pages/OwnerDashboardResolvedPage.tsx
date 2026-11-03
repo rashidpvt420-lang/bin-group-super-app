@@ -31,6 +31,7 @@ import {
   countOwnerOpenTickets,
 } from '../utils/ownerTicketAttentionCounts';
 import { STATUS_TONES } from '../../theme/statusColors';
+import Bi from '../../components/Bi';
 
 /** OWNER_OPEN_TICKET_STATUSES plus legacy lower-case spellings (see OWNER_OPEN_TICKET_QUERY_VALUES). */
 const ACTIVE_TICKET_STATUS_LIST = OWNER_OPEN_TICKET_QUERY_VALUES;
@@ -920,7 +921,7 @@ function OwnerActivationTimeline({ steps, compact = false }: { steps: Activation
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
           <Typography variant={compact ? 'subtitle1' : 'h6'} sx={{ color: '#fff', fontWeight: 950 }}>
-            {doneCount}/{steps.length} gates complete
+            {doneCount}/{steps.length} <Bi en={"gates complete"} ar={"بوابات مكتملة"} />
           </Typography>
         </Box>
         <Chip size="small" label={doneCount === steps.length ? 'READY' : 'ACTION NEEDED'} sx={{ bgcolor: alpha(doneCount === steps.length ? '#10b981' : '#f59e0b', 0.12), color: doneCount === steps.length ? '#10b981' : '#f59e0b', fontWeight: 950, width: 'fit-content' }} />

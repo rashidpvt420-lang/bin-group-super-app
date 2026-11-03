@@ -9,6 +9,7 @@ import ContractSignatureOtpControl from '../components/ContractSignatureOtpContr
 import { isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
 import { STATUS_TONES } from '../../theme/statusColors';
+import Bi from '../../components/Bi';
 
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -491,23 +492,23 @@ export default function OwnerActivationPage() {
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
-          <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>15% Mobilization Payment Gate</Typography>
+          <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}><Bi en={"15% Mobilization Payment Gate"} ar={"بوابة دفعة التعبئة 15%"} /></Typography>
           <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, maxWidth: 820, mt: 1 }}>
-            First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification.
+            <Bi en={"First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification."} ar={"وقّع أولاً العقد المعتمد من الإدارة، ثم أكمل طلب دفعة التعبئة 15%. يُفتح الوصول الكامل بعد تحقق الإدارة من الدفع فقط."} />
           </Typography>
         </Box>
 
         {error && <Alert severity="error">{error}</Alert>}
         {paymentConfigurationError && <Alert severity="error">{paymentConfigurationError}</Alert>}
         {success && <Alert severity="success">{success}</Alert>}
-        {activated && <Alert severity="success">Your owner profile already has verified payment and active contract access.</Alert>}
-        {signedWaitingActivation && !activated && <Alert severity="info">Contract is signed and ready for payment/admin activation.</Alert>}
+        {activated && <Alert severity="success"><Bi en={"Your owner profile already has verified payment and active contract access."} ar={"ملفك كمالك لديه دفع موثق وعقد نشط."} /></Alert>}
+        {signedWaitingActivation && !activated && <Alert severity="info"><Bi en={"Contract is signed and ready for payment/admin activation."} ar={"العقد موقّع وجاهز للدفع/التفعيل من الإدارة."} /></Alert>}
         {missingLockedSchedule && !activated && (
           <Alert severity="error" sx={{ alignItems: 'center' }}>
-            Activation is blocked because this contract has no authoritative locked mobilization amount. Admin must regenerate or migrate the quote/payment schedule; no fallback amount will be submitted.
+            <Bi en={"Activation is blocked because this contract has no authoritative locked mobilization amount. Admin must regenerate or migrate the quote/payment schedule; no fallback amount will be submitted."} ar={"التفعيل متوقف لعدم وجود مبلغ تعبئة معتمد لهذا العقد. يجب على الإدارة إعادة إنشاء العرض/جدول الدفع؛ لن يُرسل مبلغ بديل."} />
           </Alert>
         )}
-        {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
+        {!primaryContract?.id && <Alert severity="warning"><Bi en={"No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature."} ar={"لم يتم العثور على عقد لهذا الحساب. اطلب من الإدارة اعتماد العقد وإرساله للتوقيع."} /></Alert>}
 
         <ActivationTimeline gates={activationGates} />
 
@@ -546,7 +547,7 @@ export default function OwnerActivationPage() {
                 </Grid>
 
                 <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                  Owner signature is processed through a secure backend callable. The client cannot unlock the dashboard or mark payment verified by itself.
+                  <Bi en={"Owner signature is processed through a secure backend callable. The client cannot unlock the dashboard or mark payment verified by itself."} ar={"يُعالج توقيع المالك عبر خادم آمن. لا يمكن للتطبيق فتح اللوحة أو توثيق الدفع بنفسه."} />
                 </Alert>
 
                 {canSign && (
@@ -580,7 +581,7 @@ export default function OwnerActivationPage() {
                 {canSubmitPaymentRequest && (
                   <Stack spacing={1.5}>
                     <FormControl fullWidth required>
-                      <InputLabel id="owner-activation-payment-method-label">Approved payment method</InputLabel>
+                      <InputLabel id="owner-activation-payment-method-label"><Bi en={"Approved payment method"} ar={"طريقة الدفع المعتمدة"} /></InputLabel>
                       <Select
                         labelId="owner-activation-payment-method-label"
                         label="Approved payment method"
@@ -614,7 +615,7 @@ export default function OwnerActivationPage() {
                     </Button>
                     {paymentConfiguration?.officeLocation && (
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>
-                        Approved office: {paymentConfiguration.officeLocation}
+                        <Bi en={"Approved office:"} ar={"المكتب المعتمد:"} /> {paymentConfiguration.officeLocation}
                       </Typography>
                     )}
                   </Stack>
@@ -629,7 +630,7 @@ export default function OwnerActivationPage() {
             <Paper sx={{ p: 4, height: '100%', bgcolor: 'rgba(15,23,42,0.38)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
               <Stack spacing={2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                 <Chip icon={<LockKeyhole size={14} />} label="NO ORPHAN CONTRACTS" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 950 }} />
-                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Activation rules</Typography>
+                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}><Bi en={"Activation rules"} ar={"قواعد التفعيل"} /></Typography>
                 <Stack spacing={1.5}>
                   {[
                     'Contract must exist and be linked to owner email/UID.',
@@ -670,7 +671,7 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
             OWNER ACTIVATION TIMELINE
           </Typography>
           <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>
-            {doneCount}/{gates.length} gates complete
+            {doneCount}/{gates.length} <Bi en={"gates complete"} ar={"بوابات مكتملة"} />
           </Typography>
         </Box>
         <Chip

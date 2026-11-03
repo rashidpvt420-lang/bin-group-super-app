@@ -16,6 +16,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../utils/formatters';
+import Bi from '../components/Bi';
 
 interface UnitData {
     id: string;
@@ -174,8 +175,8 @@ export default function PropertyUnitsPage() {
                                         return (
                                             <TableRow key={unit.id} hover>
                                                 <TableCell>
-                                                    <Typography variant="body1" fontWeight="950">Unit {unit.unitNumber}</Typography>
-                                                    <Typography variant="caption" color="#475569">Floor {unit.floorNumber || 'N/A'}</Typography>
+                                                    <Typography variant="body1" fontWeight="950"><Bi en={"Unit"} ar={"الوحدة"} /> {unit.unitNumber}</Typography>
+                                                    <Typography variant="caption" color="#475569"><Bi en={"Floor"} ar={"الطابق"} /> {unit.floorNumber || 'N/A'}</Typography>
                                                 </TableCell>
                                                 <TableCell>
                                                     {unit.tenant ? (
@@ -236,12 +237,12 @@ export default function PropertyUnitsPage() {
                             <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900 }}>MAINTENANCE VELOCITY</Typography>
                             <Stack spacing={3} sx={{ mt: 3 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Typography variant="body2" color="#475569">Active Tickets</Typography>
+                                    <Typography variant="body2" color="#475569"><Bi en={"Active Tickets"} ar={"الطلبات النشطة"} /></Typography>
                                     <Typography variant="h6" fontWeight="950" color="#ef4444">{tickets.filter(t => !['COMPLETED', 'CLOSED'].includes(t.status)).length}</Typography>
                                 </Box>
                                 <Divider sx={{ borderColor: '#E5E7EB' }} />
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Typography variant="body2" color="#475569">Occupancy Rate</Typography>
+                                    <Typography variant="body2" color="#475569"><Bi en={"Occupancy Rate"} ar={"نسبة الإشغال"} /></Typography>
                                     <Typography variant="h6" fontWeight="950" color="#10b981">
                                         {units.length > 0 ? Math.round((units.filter(u => u.occupancyStatus === 'OCCUPIED').length / units.length) * 100) : 0}%
                                     </Typography>
@@ -254,7 +255,7 @@ export default function PropertyUnitsPage() {
                                 <ShieldCheck color={'#7A5C12'} /> GOVT COMPLIANCE
                             </Typography>
                             <Typography variant="body2" sx={{ color: '#475569', mt: 2, mb: 3 }}>
-                                Review the uploaded property certificates. Compliance must be confirmed from valid documents and the inspection review.
+                                <Bi en={"Review the uploaded property certificates. Compliance must be confirmed from valid documents and the inspection review."} ar={"راجع شهادات العقار المرفوعة. يجب تأكيد الامتثال من مستندات سارية ومراجعة الفحص."} />
                             </Typography>
                             <Button fullWidth variant="outlined" onClick={() => navigate('/owner/documents')} sx={{ color: '#7A5C12', borderColor: binThemeTokens.gold, fontWeight: 900 }}>
                                 VIEW CERTIFICATES

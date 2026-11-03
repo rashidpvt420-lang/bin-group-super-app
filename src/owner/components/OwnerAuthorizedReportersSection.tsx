@@ -4,6 +4,7 @@ import { Users, Shield, UserPlus, X, AlertCircle, Eye, ClipboardCheck, KeyRound 
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { PropertyReporter, ReporterAccessType, ReporterPermissionScope } from '../utils/ownerReporterResolver';
+import Bi from '../../components/Bi';
 
 interface OwnerAuthorizedReportersSectionProps {
   properties: any[];
@@ -103,13 +104,13 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                 {t('owner.authorizedReporters') || 'Authorized Property Access'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-                Majlis Residents, Staff & Owner Delegates
+                <Bi en={"Majlis Residents, Staff & Owner Delegates"} ar={"سكان المجلس والموظفون ومندوبو المالك"} />
               </Typography>
             </Box>
           </Stack>
           {!showAddForm && (
             <Button variant="outlined" startIcon={<UserPlus size={16} />} onClick={() => setShowAddForm(true)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
-              Add Person
+              <Bi en={"Add Person"} ar={"إضافة شخص"} />
             </Button>
           )}
         </Stack>
@@ -133,18 +134,18 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
         </Grid>
 
         <Alert severity="info" sx={{ mb: 3, bgcolor: alpha('#38bdf8', 0.08), color: '#dbeafe', border: `1px solid ${alpha('#38bdf8', 0.22)}` }}>
-          For Majlis, hospitals, schools, government sites, villas, and non-tenant buildings: add the resident, site supervisor, receptionist, security officer, or owner delegate here. They use their own login/UID and can report AC or maintenance complaints without using the owner account.
+          <Bi en={"For Majlis, hospitals, schools, government sites, villas, and non-tenant buildings: add the resident, site supervisor, receptionist, security officer, or owner delegate here. They use their own login/UID and can report AC or maintenance complaints without using the owner account."} ar={"للمجالس والمستشفيات والمدارس والمواقع الحكومية والفلل والمباني دون مستأجرين: أضف الساكن أو المشرف أو موظف الاستقبال أو الأمن أو مندوب المالك. يستخدمون حساباتهم الخاصة للإبلاغ عن الأعطال دون حساب المالك."} />
         </Alert>
 
         {showAddForm && (
           <Box component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 }, mb: 4, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Add Authorized Person</Typography>
+              <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Add Authorized Person"} ar={"إضافة شخص معتمد"} /></Typography>
               <IconButton onClick={() => setShowAddForm(false)} sx={{ color: binThemeTokens.textPrimary }}><X size={20} /></IconButton>
             </Stack>
             <Stack spacing={2.5}>
               <FormControl fullWidth>
-                <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Select Property</InputLabel>
+                <InputLabel sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Select Property"} ar={"اختر العقار"} /></InputLabel>
                 <Select
                   value={formData.propertyId}
                   label="Select Property"
@@ -163,7 +164,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Access Type</InputLabel>
+                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Access Type"} ar={"نوع الوصول"} /></InputLabel>
                     <Select value={formData.accessType} label="Access Type" required onChange={(e) => handleAccessTypeChange(e.target.value as ReporterAccessType)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
                       {accessOptions.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
                     </Select>
@@ -171,7 +172,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Permission Scope</InputLabel>
+                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Permission Scope"} ar={"نطاق الصلاحية"} /></InputLabel>
                     <Select value={formData.permissionScope} label="Permission Scope" required onChange={(e) => setFormData({ ...formData, permissionScope: e.target.value as ReporterPermissionScope })} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
                       {permissionOptions.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
                     </Select>
@@ -226,11 +227,11 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                   </Stack>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 0.5, ...textSafeSx }}>{reporter.roleLabel} • {reporter.propertyName}</Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', ...textSafeSx }}>{reporter.reporterEmail} • {reporter.reporterPhone}</Typography>
-                  {reporter.occupiedArea && <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 0.5 }}>Area: {reporter.occupiedArea}</Typography>}
-                  {reporter.inviteCode && <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: binThemeTokens.goldText, mt: 0.5, fontWeight: 900 }}><KeyRound size={13} /> Invite Code: {reporter.inviteCode}</Typography>}
+                  {reporter.occupiedArea && <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 0.5 }}><Bi en={"Area:"} ar={"المنطقة:"} /> {reporter.occupiedArea}</Typography>}
+                  {reporter.inviteCode && <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: binThemeTokens.goldText, mt: 0.5, fontWeight: 900 }}><KeyRound size={13} /> <Bi en={"Invite Code:"} ar={"رمز الدعوة:"} /> {reporter.inviteCode}</Typography>}
                 </Box>
                 <Button size="small" color="error" variant="outlined" onClick={() => onRemoveReporter(reporter.id)} sx={{ fontWeight: 900, borderRadius: 2 }}>
-                  Revoke
+                  <Bi en={"Revoke"} ar={"إلغاء الصلاحية"} />
                 </Button>
               </Box>
             ))}

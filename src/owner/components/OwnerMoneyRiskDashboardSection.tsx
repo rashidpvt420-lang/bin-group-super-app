@@ -18,6 +18,7 @@ import {
 import { CalendarCheck, ClipboardCheck, Coins, CreditCard, ReceiptText, ShieldAlert, ShieldCheck, TrendingUp, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 type Props = {
   properties: any[];
@@ -99,15 +100,15 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER MONEY, PROOF & HANDOVER CONTROL</Typography>
-          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>Rent, payment proof, approvals, and property risk</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.52)', mt: 1 }}>Owner-facing control center for collections, pending proof, overdue exposure, handover reviews, service risk, and preventive maintenance.</Typography>
+          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}><Bi en={"Rent, payment proof, approvals, and property risk"} ar={"الإيجار وإثباتات الدفع والموافقات ومخاطر العقار"} /></Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.52)', mt: 1 }}><Bi en={"Owner-facing control center for collections, pending proof, overdue exposure, handover reviews, service risk, and preventive maintenance."} ar={"مركز تحكم المالك للتحصيل والإثباتات المعلقة والمتأخرات ومراجعات التسليم ومخاطر الخدمة والصيانة الوقائية."} /></Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Chip label={`NEXT: ${nextAction}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} />
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Financials</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/payment-proof')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Payment Proof</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Approvals</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Move-In / Move-Out</Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"Financials"} ar={"الماليات"} /></Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/payment-proof')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"Payment Proof"} ar={"إثبات الدفع"} /></Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"Approvals"} ar={"الموافقات"} /></Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"Move-In / Move-Out"} ar={"الدخول / الخروج"} /></Button>
         </Stack>
       </Stack>
 
@@ -127,13 +128,13 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Property / Tenant Group</TableCell>
-              <TableCell>Unit Scope</TableCell>
-              <TableCell align="right">Due</TableCell>
-              <TableCell align="right">Collected</TableCell>
-              <TableCell align="right">Balance</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Proof</TableCell>
+              <TableCell><Bi en={"Property / Tenant Group"} ar={"العقار / مجموعة المستأجرين"} /></TableCell>
+              <TableCell><Bi en={"Unit Scope"} ar={"نطاق الوحدة"} /></TableCell>
+              <TableCell align="right"><Bi en={"Due"} ar={"المستحق"} /></TableCell>
+              <TableCell align="right"><Bi en={"Collected"} ar={"المحصّل"} /></TableCell>
+              <TableCell align="right"><Bi en={"Balance"} ar={"الرصيد"} /></TableCell>
+              <TableCell><Bi en={"Status"} ar={"الحالة"} /></TableCell>
+              <TableCell align="right"><Bi en={"Proof"} ar={"الإثبات"} /></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -147,20 +148,20 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
                   <TableCell align="right" sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</TableCell>
                   <TableCell align="right" sx={{ color: row.balance ? '#f59e0b' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</TableCell>
                   <TableCell><Chip size="small" label={status.label} sx={{ bgcolor: alpha(status.color, 0.12), color: status.color, fontWeight: 950 }} /></TableCell>
-                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/payment-proof?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>View Proof</Button></TableCell>
+                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/payment-proof?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"View Proof"} ar={"عرض الإثبات"} /></Button></TableCell>
                 </TableRow>
               );
             })}
             {propertyRentRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'rgba(255,255,255,.45)', fontWeight: 800 }}>No rent ledger rows are linked yet. Add properties, units, leases, or payment proof to populate this control center.</TableCell>
+                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'rgba(255,255,255,.45)', fontWeight: 800 }}><Bi en={"No rent ledger rows are linked yet. Add properties, units, leases, or payment proof to populate this control center."} ar={"لا توجد سجلات إيجار مرتبطة بعد. أضف عقارات أو وحدات أو عقود أو إثباتات دفع."} /></TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mt: 3 }}>Preventive calendar preview: AC service, water tank cleaning, fire-safety inspection, pest control, lift inspection, pump-room check, and roof/drainage review.</Typography>
+      <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mt: 3 }}><Bi en={"Preventive calendar preview: AC service, water tank cleaning, fire-safety inspection, pest control, lift inspection, pump-room check, and roof/drainage review."} ar={"معاينة جدول الصيانة الوقائية: صيانة التكييف، تنظيف الخزانات، فحص السلامة من الحريق، مكافحة الآفات، فحص المصاعد، غرفة المضخات، ومراجعة الأسطح والتصريف."} /></Typography>
     </Paper>
   );
 }

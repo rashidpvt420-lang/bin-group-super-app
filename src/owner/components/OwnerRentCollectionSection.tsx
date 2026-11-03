@@ -5,6 +5,7 @@ import { Wallet, TrendingUp, AlertTriangle, Clock, CheckCircle2 } from 'lucide-r
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
+import Bi from '../../components/Bi';
 
 interface OwnerRentCollectionSectionProps {
   ledgerSummary: TenantLedgerSummary | null;
@@ -83,12 +84,12 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
                 {t('owner.rentCollection') || 'Rent Collection'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-                Tenant Ledger & Collection Rate
+                <Bi en={"Tenant Ledger & Collection Rate"} ar={"دفتر المستأجرين ونسبة التحصيل"} />
               </Typography>
             </Box>
           </Stack>
           <Button variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>
-            View Financials
+            <Bi en={"View Financials"} ar={"عرض الماليات"} />
           </Button>
         </Stack>
 
@@ -104,9 +105,9 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
         {!hasRows ? (
           <Box sx={{ p: 6, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4 }}>
             <Wallet size={36} color="rgba(255,255,255,0.25)" style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}>No Tenant Ledger Records Yet</Typography>
+            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}><Bi en={"No Tenant Ledger Records Yet"} ar={"لا توجد سجلات مستأجرين بعد"} /></Typography>
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>
-              Occupancies, leases, and ledger entries will populate this table as tenants are onboarded.
+              <Bi en={"Occupancies, leases, and ledger entries will populate this table as tenants are onboarded."} ar={"ستظهر الإشغالات والعقود والقيود هنا عند تسجيل المستأجرين."} />
             </Typography>
           </Box>
         ) : (
@@ -147,7 +148,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
                     <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.lastPaymentDate || '—'}</TableCell>
                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <Button size="small" onClick={() => navigate('/owner/tenants')} sx={{ color: binThemeTokens.goldText, fontWeight: 900, minWidth: 0 }}>
-                        View
+                        <Bi en={"View"} ar={"عرض"} />
                       </Button>
                     </TableCell>
                   </TableRow>

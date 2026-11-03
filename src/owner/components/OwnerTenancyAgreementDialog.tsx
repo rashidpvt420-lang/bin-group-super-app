@@ -3,6 +3,7 @@ import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuI
 import { functions, httpsCallable, storage, ref, uploadBytes } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 /** Which registry applies, shown to the owner before saving. Mirrors functions/leaseAgreements.ts. */
 export function registryLabel(emirate?: string) {
@@ -46,12 +47,12 @@ export default function OwnerTenancyAgreementDialog({ open, onClose, unit, emira
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 950 }}>Tenancy agreement · Unit {unit.unitNumber || unit.id}</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 950 }}><Bi en={"Tenancy agreement · Unit"} ar={"عقد الإيجار · الوحدة"} /> {unit.unitNumber || unit.id}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <TextField select label="Agreement type" value={form.agreementType} onChange={set('agreementType')}>
-            <MenuItem value="GOVERNMENT">Government registered ({registryLabel(emirate)})</MenuItem>
-            <MenuItem value="PRIVATE">Private agreement (not registered)</MenuItem>
+            <MenuItem value="GOVERNMENT"><Bi en={"Government registered ("} ar={"مسجل حكومياً ("} />{registryLabel(emirate)})</MenuItem>
+            <MenuItem value="PRIVATE"><Bi en={"Private agreement (not registered)"} ar={"عقد خاص (غير مسجل)"} /></MenuItem>
           </TextField>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField type="date" label="Lease start" value={form.startDate} onChange={set('startDate')} InputLabelProps={{ shrink: true }} fullWidth required />
@@ -68,12 +69,12 @@ export default function OwnerTenancyAgreementDialog({ open, onClose, unit, emira
               </Button>
             </>
           )}
-          {!gov && <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>A private agreement is recorded without a registry number. You can switch to government registered later.</Typography>}
+          {!gov && <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"A private agreement is recorded without a registry number. You can switch to government registered later."} ar={"يُسجل العقد الخاص دون رقم تسجيل. يمكنك التحويل إلى مسجل حكومياً لاحقاً."} /></Typography>}
           {message && <Alert severity={message.ok ? 'success' : 'error'}>{message.text}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} sx={{ color: binThemeTokens.textSecondary }}>Close</Button>
+        <Button onClick={onClose} sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Close"} ar={"إغلاق"} /></Button>
         <Button variant="contained" disabled={saving || !form.startDate || !form.endDate} onClick={save} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{saving ? 'Saving…' : 'Save agreement'}</Button>
       </DialogActions>
     </Dialog>

@@ -17,6 +17,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
 import OwnerPdcRegisterCard from '../components/OwnerPdcRegisterCard';
+import Bi from '../../components/Bi';
 
 const MANAGEMENT_FEE_RATE = 0.05;
 const FINANCIAL_HISTORY_PAGE_SIZE = 100;
@@ -262,13 +263,13 @@ export default function OwnerFinancialsPage() {
 
             {invoiceHistoryComplete && payoutHistoryComplete ? (
                 <Alert severity="success" sx={{ mb: 3 }}>
-                    Complete financial history has been loaded for the Owner UID and verified-email ledger queries. The figures below use all records returned by those authorized queries.
+                    <Bi en={"Complete financial history has been loaded for the Owner UID and verified-email ledger queries. The figures below use all records returned by those authorized queries."} ar={"تم تحميل السجل المالي الكامل لحسابك. الأرقام أدناه تشمل جميع السجلات المصرح بها."} />
                 </Alert>
             ) : (
                 <Alert severity="warning" sx={{ mb: 3 }}>
                     <Stack spacing={1.5}>
                         <Typography variant="body2">
-                            Financial figures are currently partial: {invoices.length} invoice rows and {transactions.length} payout rows are loaded. Load complete history before relying on totals or exporting the ledger.
+                            <Bi en={"Financial figures are currently partial:"} ar={"الأرقام المالية جزئية حالياً:"} /> {invoices.length} <Bi en={"invoice rows and"} ar={"سجل فواتير و"} /> {transactions.length} <Bi en={"payout rows are loaded. Load complete history before relying on totals or exporting the ledger."} ar={"سجل مدفوعات محملة. حمّل السجل الكامل قبل الاعتماد على الإجماليات أو التصدير."} />
                         </Typography>
                         <Box>
                             <Button
@@ -367,7 +368,7 @@ export default function OwnerFinancialsPage() {
                                                     onClick={() => navigate(`/invoices/${invoice.id}`)}
                                                     sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}
                                                 >
-                                                    Open
+                                                    <Bi en={"Open"} ar={"فتح"} />
                                                 </Button>
                                                 <Button
                                                     size="small"
@@ -376,7 +377,7 @@ export default function OwnerFinancialsPage() {
                                                     onClick={() => invoice.pdfUrl && window.open(invoice.pdfUrl, '_blank', 'noopener,noreferrer')}
                                                     sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}
                                                 >
-                                                    Invoice
+                                                    <Bi en={"Invoice"} ar={"الفاتورة"} />
                                                 </Button>
                                                 <Button
                                                     size="small"
@@ -385,7 +386,7 @@ export default function OwnerFinancialsPage() {
                                                     onClick={() => invoice.receiptPdfUrl && window.open(invoice.receiptPdfUrl, '_blank', 'noopener,noreferrer')}
                                                     sx={{ color: invoice.receiptPdfUrl ? '#10b981' : binThemeTokens.textSecondary, fontWeight: 800 }}
                                                 >
-                                                    Receipt
+                                                    <Bi en={"Receipt"} ar={"الإيصال"} />
                                                 </Button>
                                             </Stack>
                                         </TableCell>
@@ -398,7 +399,7 @@ export default function OwnerFinancialsPage() {
                 {invoices.length > invoicesVisible && (
                     <Box sx={{ p: 2, textAlign: 'center' }}>
                         <Button variant="outlined" onClick={() => setInvoicesVisible((count) => count + 50)} sx={{ fontWeight: 900 }}>
-                            Load more invoices ({invoices.length - invoicesVisible} remaining)
+                            <Bi en={"Load more invoices ("} ar={"تحميل المزيد من الفواتير ("} />{invoices.length - invoicesVisible} <Bi en={"remaining)"} ar={"متبقية)"} />
                         </Button>
                     </Box>
                 )}
@@ -457,7 +458,7 @@ export default function OwnerFinancialsPage() {
                         {transactions.length > transactionsVisible && (
                             <Box sx={{ p: 2, textAlign: 'center' }}>
                                 <Button variant="outlined" onClick={() => setTransactionsVisible((count) => count + 25)} sx={{ fontWeight: 900 }}>
-                                    Load more transactions ({transactions.length - transactionsVisible} remaining)
+                                    <Bi en={"Load more transactions ("} ar={"تحميل المزيد من المعاملات ("} />{transactions.length - transactionsVisible} <Bi en={"remaining)"} ar={"متبقية)"} />
                                 </Button>
                             </Box>
                         )}

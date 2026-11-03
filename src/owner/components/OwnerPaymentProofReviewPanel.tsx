@@ -6,6 +6,7 @@ import { collection, db, limit, onSnapshot, query, where } from '../../lib/fireb
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 type ProofRow = { id: string; [key: string]: any };
 const n = (value: unknown) => Number(value || 0);
@@ -122,7 +123,7 @@ export default function OwnerPaymentProofReviewPanel() {
                   <TableCell><Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{proof.payerName || proof.tenantName || proof.ownerEmail || proof.payerEmail || 'Payer pending'}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{proof.propertyName || proof.propertyId || proof.contractId || 'Property / contract not linked'}</Typography></TableCell>
                   <TableCell><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 950 }}>{money(proof.amount || proof.paidAmount || proof.total)}</Typography></TableCell>
                   <TableCell><Chip label={status} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(tone, 0.12), color: tone }} /></TableCell>
-                  <TableCell align="right"><Button size="small" startIcon={<Eye size={14} />} onClick={() => setSelected(proof)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>View Details</Button></TableCell>
+                  <TableCell align="right"><Button size="small" startIcon={<Eye size={14} />} onClick={() => setSelected(proof)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"View Details"} ar={"عرض التفاصيل"} /></Button></TableCell>
                 </TableRow>
               );
             })}
@@ -132,7 +133,7 @@ export default function OwnerPaymentProofReviewPanel() {
       </TableContainer>}
 
       <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#FFFFFF', color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4, direction: isRTL ? 'rtl' : 'ltr' } }}>
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 950 }}>Payment Proof Detail<IconButton onClick={() => setSelected(null)} sx={{ color: binThemeTokens.textPrimary }}><X size={18} /></IconButton></DialogTitle>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 950 }}><Bi en={"Payment Proof Detail"} ar={"تفاصيل إثبات الدفع"} /><IconButton onClick={() => setSelected(null)} sx={{ color: binThemeTokens.textPrimary }}><X size={18} /></IconButton></DialogTitle>
         <DialogContent dividers sx={{ borderColor: binThemeTokens.border }}>
           {selected && <Stack spacing={2.2}>
             <Box><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>STATUS</Typography><Chip label={String(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')).replace(/_/g, ' ').toUpperCase()} sx={{ ml: 1, bgcolor: alpha(statusTone(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')), 0.12), color: statusTone(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')), fontWeight: 950 }} /></Box>
@@ -145,7 +146,7 @@ export default function OwnerPaymentProofReviewPanel() {
             </Grid>
             <Divider sx={{ borderColor: binThemeTokens.border }} />
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{selected.notes || selected.description || selected.memo || 'No memo was submitted with this proof.'}</Typography>
-            {proofUrl(selected) ? <Button variant="contained" onClick={() => window.open(proofUrl(selected), '_blank', 'noopener,noreferrer')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Open Uploaded Proof</Button> : <Alert severity="warning">No uploaded proof file URL is attached to this record.</Alert>}
+            {proofUrl(selected) ? <Button variant="contained" onClick={() => window.open(proofUrl(selected), '_blank', 'noopener,noreferrer')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}><Bi en={"Open Uploaded Proof"} ar={"فتح الإثبات المرفوع"} /></Button> : <Alert severity="warning"><Bi en={"No uploaded proof file URL is attached to this record."} ar={"لا يوجد ملف إثبات مرفق بهذا السجل."} /></Alert>}
           </Stack>}
         </DialogContent>
       </Dialog>

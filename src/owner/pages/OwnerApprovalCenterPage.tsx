@@ -5,6 +5,7 @@ import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orde
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
 import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
+import Bi from '../../components/Bi';
 
 type ApprovalRequest = {
   id: string;
@@ -128,27 +129,27 @@ export default function OwnerApprovalCenterPage() {
     <Box>
       <Stack spacing={1} sx={{ mb: 3 }}>
         <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER TRUST CENTER</Typography>
-        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>Approval Center</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}><Bi en={"Approval Center"} ar={"مركز الموافقات"} /></Typography>
         <Typography sx={{ color: binThemeTokens.textSecondary, maxWidth: 880 }}>
-          Review completed ticket sign-offs, quote requests, emergency overrides, and standard scopes before BIN GROUP closes or awards work.
+          <Bi en={"Review completed ticket sign-offs, quote requests, emergency overrides, and standard scopes before BIN GROUP closes or awards work."} ar={"راجع اعتمادات الطلبات المكتملة وطلبات العروض والتجاوزات الطارئة قبل أن تغلق BIN GROUP العمل أو تسنده."} />
         </Typography>
       </Stack>
-      {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}>Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting: {requestsError}</Alert>}
-      {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}>Ticket sign-offs could not be loaded. The list below may be incomplete: {signOffsError}</Alert>}
+      {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}><Bi en={"Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting:"} ar={"تعذر تحميل طلبات العروض والموافقات. قد تكون القائمة غير مكتملة، فلا تفترض عدم وجود طلبات:"} /> {requestsError}</Alert>}
+      {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}><Bi en={"Ticket sign-offs could not be loaded. The list below may be incomplete:"} ar={"تعذر تحميل اعتمادات الطلبات. قد تكون القائمة غير مكتملة:"} /> {signOffsError}</Alert>}
       {notice && <Alert severity={notice.includes('Failed') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>
-          Ticket sign-offs ({signOffs.length})
+          <Bi en={"Ticket sign-offs ("} ar={"اعتمادات الطلبات ("} />{signOffs.length})
         </Typography>
         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-          Completed work waiting for Approve &amp; Close. These also drive the Owner command strip pending-approvals count.
+          <Bi en={"Completed work waiting for Approve & Close. These also drive the Owner command strip pending-approvals count."} ar={"أعمال مكتملة بانتظار الموافقة والإغلاق، وتُحتسب في عدد الموافقات المعلقة."} />
         </Typography>
       </Stack>
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {signOffs.length === 0 && !signOffsError && (
           <Grid item xs={12}>
-            <Alert severity="info">No completed tickets are waiting for owner sign-off.</Alert>
+            <Alert severity="info"><Bi en={"No completed tickets are waiting for owner sign-off."} ar={"لا توجد طلبات مكتملة بانتظار اعتماد المالك."} /></Alert>
           </Grid>
         )}
         {signOffs.map((ticket) => (
@@ -161,7 +162,7 @@ export default function OwnerApprovalCenterPage() {
                       {ticket.title || ticket.category || ticket.trade || 'Completed ticket'} · {ticket.id.slice(0, 8).toUpperCase()}
                     </Typography>
                     <Typography sx={{ color: binThemeTokens.textSecondary }}>
-                      {ticketPropertyLabel(ticket)} · status {String(ticket.status || '').replace(/_/g, ' ')}
+                      {ticketPropertyLabel(ticket)} <Bi en={"· status"} ar={"· الحالة"} /> {String(ticket.status || '').replace(/_/g, ' ')}
                     </Typography>
                   </Box>
                   <Chip label="COMPLETED PENDING APPROVAL" color="warning" />
@@ -182,7 +183,7 @@ export default function OwnerApprovalCenterPage() {
                     onClick={() => navigate(`/owner/ticket/${ticket.id}`)}
                     sx={{ fontWeight: 900 }}
                   >
-                    Open ticket
+                    <Bi en={"Open ticket"} ar={"فتح الطلب"} />
                   </Button>
                 </Stack>
               </CardContent>
@@ -193,13 +194,13 @@ export default function OwnerApprovalCenterPage() {
 
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>
-          Cost / quote approvals ({items.length})
+          <Bi en={"Cost / quote approvals ("} ar={"موافقات التكلفة / العروض ("} />{items.length})
         </Typography>
       </Stack>
       <Grid container spacing={2}>
         {items.length === 0 && !requestsError && (
           <Grid item xs={12}>
-            <Alert severity="info">No pending cost / quote approval requests for this owner account.</Alert>
+            <Alert severity="info"><Bi en={"No pending cost / quote approval requests for this owner account."} ar={"لا توجد طلبات موافقة على تكلفة أو عروض معلقة."} /></Alert>
           </Grid>
         )}
         {items.map((request) => (
