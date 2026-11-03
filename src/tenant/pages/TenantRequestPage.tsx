@@ -41,6 +41,7 @@ import { useRole } from '../../context/RoleContext';
 import { notifyEmergency, notifyTicketCreated } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+import Bi from '../../components/Bi';
 
 const sanitizeStorageFileName = (name: string) =>
     name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
@@ -413,7 +414,7 @@ export default function TenantRequestPage() {
         return (
             <Paper data-testid="tenant-residence-loading" sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(22,22,24,.7)' }}>
                 <CircularProgress sx={{ color: binThemeTokens.gold }} />
-                <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.7)' }}>Loading residence and property details…</Typography>
+                <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.7)' }}><Bi en={"Loading residence and property details…"} ar={"جارٍ تحميل تفاصيل السكن والعقار…"} /></Typography>
             </Paper>
         );
     }
@@ -450,10 +451,10 @@ export default function TenantRequestPage() {
                 {!propertyGpsReady && (
                     <Alert severity="warning" sx={{ mb: 3 }}>
                         <Typography variant="body2" fontWeight="bold">
-                            Founder-verified property geography is required before dispatch.
+                            <Bi en={"Founder-verified property geography is required before dispatch."} ar={"يلزم التحقق من موقع العقار قبل الإرسال."} />
                         </Typography>
                         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-                            Property geography for {propertyData?.name || propertyData?.propertyName || 'your building'} is awaiting official verification. For urgent emergencies, contact building security or BIN GROUP Emergency Dispatch at 800-BINGROUP.
+                            <Bi en={"Property geography for"} ar={"موقع العقار لـ"} /> {propertyData?.name || propertyData?.propertyName || 'your building'} <Bi en={"is awaiting official verification. For urgent emergencies, contact building security or BIN GROUP Emergency Dispatch at 800-BINGROUP."} ar={"بانتظار التحقق الرسمي. للطوارئ العاجلة تواصل مع أمن المبنى أو طوارئ BIN GROUP على 800-BINGROUP."} />
                         </Typography>
                     </Alert>
                 )}
@@ -475,7 +476,7 @@ export default function TenantRequestPage() {
                         }
                         sx={{ mb: 3 }}
                     >
-                        Ticket #{failedTicketId.slice(0, 8)} was registered, but photo evidence upload failed. You can retry uploading the photos now without creating a duplicate ticket.
+                        <Bi en={"Ticket #"} ar={"الطلب رقم"} />{failedTicketId.slice(0, 8)} <Bi en={"was registered, but photo evidence upload failed. You can retry uploading the photos now without creating a duplicate ticket."} ar={"تم تسجيله، لكن فشل رفع الصور. يمكنك إعادة رفع الصور الآن دون إنشاء طلب مكرر."} />
                     </Alert>
                 )}
 
@@ -583,7 +584,7 @@ export default function TenantRequestPage() {
                             <Stack direction="row" spacing={2} alignItems="flex-start">
                                 <AlertCircle size={20} color={binThemeTokens.gold} />
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.72)' }}>
-                                    {selectedSlaPolicy.label}: {selectedSlaMinutes} minutes. {selectedSlaPolicy.tenantCopy}
+                                    {selectedSlaPolicy.label}: {selectedSlaMinutes} <Bi en={"minutes."} ar={"دقيقة."} /> {selectedSlaPolicy.tenantCopy}
                                 </Typography>
                             </Stack>
                         </Box>

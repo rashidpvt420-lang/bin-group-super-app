@@ -6,6 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { db, functions, httpsCallable, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import Bi from '../../components/Bi';
 
 export default function TenantParcelsPage() {
   const { tx, lang, isRTL } = useLanguage();
@@ -139,7 +140,7 @@ export default function TenantParcelsPage() {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="caption" color="textSecondary">
-                      Received: {p.receivedAt?.toDate ? p.receivedAt.toDate().toLocaleString() : '—'}
+                      <Bi en={"Received:"} ar={"تاريخ الاستلام:"} /> {p.receivedAt?.toDate ? p.receivedAt.toDate().toLocaleString() : '—'}
                     </Typography>
 
                     {isPending && (
@@ -157,7 +158,7 @@ export default function TenantParcelsPage() {
                   </Box>
                   {p.status === 'collected' && p.collectedAt && (
                     <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 800, mt: 1, alignSelf: 'flex-end' }}>
-                      Claimed by {p.collectedBy} on {p.collectedAt.toDate ? p.collectedAt.toDate().toLocaleString() : ''}
+                      <Bi en={"Claimed by"} ar={"استلمه"} /> {p.collectedBy} on {p.collectedAt.toDate ? p.collectedAt.toDate().toLocaleString() : ''}
                     </Typography>
                   )}
                 </Stack>

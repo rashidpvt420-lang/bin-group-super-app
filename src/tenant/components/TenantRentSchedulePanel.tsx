@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/materia
 import { CalendarClock, Download } from 'lucide-react';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 export type RentInstallment = {
   id: string;
@@ -46,23 +47,23 @@ export default function TenantRentSchedulePanel({ uid, onPay }: { uid: string; o
   const next = nextOpenInstallment(items);
   if (error) return <Alert severity="warning" sx={{ mb: 3 }}>{error}</Alert>;
   if (!items.length) {
-    return <Alert severity="info" sx={{ mb: 3 }} data-testid="rent-schedule-empty">Your owner has not set a rent schedule yet. Due dates and reminders will appear here once they do.</Alert>;
+    return <Alert severity="info" sx={{ mb: 3 }} data-testid="rent-schedule-empty"><Bi en={"Your owner has not set a rent schedule yet. Due dates and reminders will appear here once they do."} ar={"لم يحدد المالك جدول الإيجار بعد. ستظهر مواعيد الاستحقاق والتذكيرات هنا عند تحديده."} /></Alert>;
   }
   const days = next ? daysUntil(next.dueDate) : null;
   return (
     <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 3 }} data-testid="rent-schedule">
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
         <CalendarClock size={22} color={binThemeTokens.goldText} />
-        <Typography variant="h6" component="h2" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>Rent schedule</Typography>
+        <Typography variant="h6" component="h2" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Rent schedule"} ar={"جدول الإيجار"} /></Typography>
       </Stack>
       {next && (
         <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: binThemeTokens.softCanvas }}>
-          <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>Next payment</Typography>
+          <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}><Bi en={"Next payment"} ar={"الدفعة القادمة"} /></Typography>
           <Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>AED {next.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Typography>
           <Typography sx={{ color: days !== null && days < 0 ? '#B91C1C' : binThemeTokens.textPrimary, fontWeight: 800 }}>
             {days === null ? '' : days < 0 ? `${-days} day(s) overdue (due ${next.dueDate})` : days === 0 ? `Due today (${next.dueDate})` : `Due in ${days} day(s), on ${next.dueDate}`}
           </Typography>
-          <Button variant="contained" onClick={() => onPay(next)} sx={{ mt: 1.5, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 900 }}>Upload receipt for this payment</Button>
+          <Button variant="contained" onClick={() => onPay(next)} sx={{ mt: 1.5, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 900 }}><Bi en={"Upload receipt for this payment"} ar={"ارفع إيصال هذه الدفعة"} /></Button>
         </Box>
       )}
       <Stack spacing={1}>
@@ -78,7 +79,7 @@ export default function TenantRentSchedulePanel({ uid, onPay }: { uid: string; o
                 <Chip size="small" label={s.label} sx={{ color: s.color, borderColor: s.color, fontWeight: 800 }} variant="outlined" />
                 {i.status === 'PAID' && i.receiptPdfUrl && (
                   <Button size="small" href={i.receiptPdfUrl} target="_blank" rel="noopener noreferrer" startIcon={<Download size={14} />} sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>
-                    Receipt
+                    <Bi en={"Receipt"} ar={"الإيصال"} />
                   </Button>
                 )}
               </Stack>

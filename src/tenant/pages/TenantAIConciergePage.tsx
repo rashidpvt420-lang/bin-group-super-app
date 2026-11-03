@@ -13,6 +13,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import Bi from '../../components/Bi';
 
 // ── Conversation state machine ────────────────────────────────────────────────
 type Step = 'idle' | 'describe' | 'location' | 'photo' | 'confirm' | 'submitted' | 'error';
@@ -392,7 +393,7 @@ export default function TenantAIConciergePage() {
                 {submitting ? 'Submitting…' : 'Submit Ticket'}
               </Button>
               <Button fullWidth variant="outlined" onClick={handleRestart} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: binThemeTokens.textOnDarkMuted, fontWeight: 950, borderRadius: 4 }}>
-                Start Over
+                <Bi en={"Start Over"} ar={"البدء من جديد"} />
               </Button>
             </Stack>
           )}
@@ -410,7 +411,7 @@ export default function TenantAIConciergePage() {
                 {uploadingPhoto ? 'Uploading…' : 'Attach Photo'}
               </Button>
               <Button variant="outlined" onClick={handleSkipPhoto} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: binThemeTokens.textOnDarkMuted, fontWeight: 950, borderRadius: 4 }}>
-                Skip
+                <Bi en={"Skip"} ar={"تخطي"} />
               </Button>
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhotoSelect} />
             </Stack>
@@ -490,10 +491,10 @@ export default function TenantAIConciergePage() {
           {step === 'submitted' && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <Button fullWidth variant="contained" startIcon={<SafeIcon icon={CheckCircle2} size={18} />} onClick={() => { window.location.href = '/tenant/tickets'; }} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
-                View My Tickets
+                <Bi en={"View My Tickets"} ar={"عرض طلباتي"} />
               </Button>
               <Button fullWidth variant="outlined" startIcon={<SafeIcon icon={Send} size={18} />} onClick={handleRestart} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, borderRadius: 4 }}>
-                New Request
+                <Bi en={"New Request"} ar={"طلب جديد"} />
               </Button>
             </Stack>
           )}

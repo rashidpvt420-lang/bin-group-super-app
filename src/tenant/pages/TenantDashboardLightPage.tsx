@@ -24,6 +24,7 @@ import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
+import Bi from '../../components/Bi';
 
 const CLOSED_STATUSES = new Set(['CLOSED', 'COMPLETED', 'CANCELLED', 'CANCELED']);
 
@@ -462,7 +463,7 @@ export default function TenantDashboardLightPage() {
                   '&:hover': { borderColor: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.05) }
                 }}
               >
-                More Services
+                <Bi en={"More Services"} ar={"خدمات أخرى"} />
               </Button>
             </Paper>
           </Grid>
@@ -490,12 +491,12 @@ export default function TenantDashboardLightPage() {
       >
         <Stack spacing={3}>
           <Typography variant="h6" sx={{ color: binThemeTokens.goldText, fontWeight: 950, mb: 1 }}>
-            More Services
+            <Bi en={"More Services"} ar={"خدمات أخرى"} />
           </Typography>
-          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/notices'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Notices</Button>
-          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/marketplace'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Marketplace</Button>
-          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/messages'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Messages</Button>
-          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/profile'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Link my unit</Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/notices'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}><Bi en={"Notices"} ar={"الإشعارات"} /></Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/marketplace'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}><Bi en={"Marketplace"} ar={"السوق"} /></Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/messages'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}><Bi en={"Messages"} ar={"الرسائل"} /></Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/profile'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}><Bi en={"Link my unit"} ar={"ربط وحدتي"} /></Button>
         </Stack>
       </Drawer>
     </Box>
