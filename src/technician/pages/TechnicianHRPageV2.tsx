@@ -41,6 +41,19 @@ const documentTypes = [
   ['hr_support_file', 'HR Support File'],
 ];
 
+const leaveTypes = [
+  ['annual_leave', 'Annual leave'],
+  ['sick_leave', 'Sick leave'],
+  ['emergency_leave', 'Emergency leave'],
+  ['unpaid_leave', 'Unpaid leave'],
+];
+// Display only. The server recomputes the day count and rejects bad dates.
+const leaveDayCount = (start: string, end: string) => {
+  const a = Date.parse(`${start}T00:00:00Z`);
+  const b = Date.parse(`${end}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return 0;
+  return Math.round((b - a) / 86400000) + 1;
+};
 const requestTitle = (value: string) => String(value || 'hr_support').replace(/_/g, ' ');
 const safeFileName = (value: string) => String(value || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
 const sortByNewest = (items: any[]) => [...items].sort((a, b) => {
@@ -69,6 +82,13 @@ export default function TechnicianHRPageV2() {
   const [uploadMessage, setUploadMessage] = useState('');
   const [hrProfile, setHrProfile] = useState<any>(null);
   const [eosbScenario, setEosbScenario] = useState<EosbTerminationReason>('resignation');
+  const [leaveType, setLeaveType] = useState('annual_leave');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveNote, setLeaveNote] = useState('');
+  const [leaveCertificate, setLeaveCertificate] = useState<File | null>(null);
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveMessage, setLeaveMessage] = useState('');
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -118,13 +138,13 @@ export default function TechnicianHRPageV2() {
     role: user?.role || 'technician',
   });
 
-  const createAiCase = async (text = message, metadata: Record<string, unknown> = {}) => {
+  const createAiCase = async (text = message, metadata: Record<string, unknown> = {}, leave?: Record<string, unknown>) => {
     if (!user?.uid || !text.trim()) return;
     setLoading(true);
     try {
       const createStaffHrCase = httpsCallable(functions, 'createStaffHrCase');
-      const idempotencyKey = `${user.uid}:${text.trim()}:${JSON.stringify(metadata)}`;
-      const response: any = await createStaffHrCase({ message: text.trim(), metadata, idempotencyKey });
+      const idempotencyKey = `${user.uid}:${text.trim()}:${JSON.stringify(metadata)}:${JSON.stringify(leave || {})}`;
+      const response: any = await createStaffHrCase({ message: text.trim(), metadata, idempotencyKey, ...(leave ? { leave } : {}) });
       const result = response?.data?.classification;
       if (!response?.data?.ok || !result?.requestType) throw new Error('Server HR classifier did not return a case.');
       const optimisticId = `local-${Date.now()}`;
@@ -151,8 +171,9 @@ export default function TechnicianHRPageV2() {
         source: 'bin_people_ai_server_hr_case',
         paperless: true,
         status: 'pending_hr_review',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        startDate: String(leave?.startDate || new Date().toISOString().split('T')[0]),
+        endDate: String(leave?.endDate || new Date().toISOString().split('T')[0]),
+        ...(leave ? { leaveType: leave.leaveType, leaveDays: leaveDayCount(String(leave.startDate), String(leave.endDate)) } : {}),
         hours: 0,
       };
       const localCase = { ...base, createdAtLocal: now, optimistic: true };
@@ -211,6 +232,46 @@ export default function TechnicianHRPageV2() {
       setUploadMessage(`Upload failed: ${error?.message || 'Permission or network issue'}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const leaveDaysPreview = leaveDayCount(leaveStart, leaveEnd);
+
+  const submitLeaveForm = async () => {
+    if (!user?.uid) return;
+    setLeaveMessage('');
+    if (!leaveStart || !leaveEnd || leaveDaysPreview < 1) {
+      setLeaveMessage('Pick a start and end date. End must be on or after start.');
+      return;
+    }
+    if (leaveType === 'sick_leave' && !leaveCertificate) {
+      setLeaveMessage('Sick leave needs a medical certificate.');
+      return;
+    }
+    if (leaveCertificate && leaveCertificate.size > 15 * 1024 * 1024) {
+      setLeaveMessage('File is too large. Maximum allowed size is 15MB.');
+      return;
+    }
+    setLeaveSubmitting(true);
+    try {
+      let certificatePath: string | null = null;
+      if (leaveCertificate) {
+        certificatePath = `staffDocuments/${user.uid}/medical_certificate/${Date.now()}-${safeFileName(leaveCertificate.name)}`;
+        await uploadBytes(ref(storage, certificatePath), leaveCertificate, {
+          contentType: leaveCertificate.type || 'application/octet-stream',
+          customMetadata: { staffId: user.uid, documentType: 'medical_certificate', accessMode: 'firebase_storage_rules' },
+        });
+      }
+      const label = leaveTypes.find(([value]) => value === leaveType)?.[1] || leaveType;
+      const text = `${label}: ${leaveStart} to ${leaveEnd} (${leaveDaysPreview} days). ${leaveNote.trim()}`.trim();
+      await createAiCase(text, {}, { leaveType, startDate: leaveStart, endDate: leaveEnd, certificatePath });
+      setLeaveMessage(`Leave request sent to HR: ${leaveDaysPreview} days. Balance is deducted only when HR approves.`);
+      setLeaveNote('');
+      setLeaveCertificate(null);
+    } catch (error: any) {
+      setLeaveMessage(`Leave request failed: ${error?.message || 'Permission or network issue'}`);
+    } finally {
+      setLeaveSubmitting(false);
     }
   };
 
@@ -273,6 +334,27 @@ export default function TechnicianHRPageV2() {
           </Paper>
         </Grid>
       </Grid>
+
+      <Paper data-testid="leave-request-form" sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Sun color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Leave Request"} ar={"طلب إجازة"} /></Typography></Stack>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+          <TextField select label="Leave type" value={leaveType} onChange={(e) => setLeaveType(e.target.value)} sx={{ minWidth: 200, '& .MuiInputBase-root': { color: '#111827' } }}>
+            {leaveTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+          </TextField>
+          <TextField type="date" label="Start date" value={leaveStart} onChange={(e) => setLeaveStart(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ '& .MuiInputBase-root': { color: '#111827' } }} />
+          <TextField type="date" label="End date" value={leaveEnd} onChange={(e) => setLeaveEnd(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ '& .MuiInputBase-root': { color: '#111827' } }} />
+          <Chip data-testid="leave-day-count" label={`${leaveDaysPreview} days`} sx={{ alignSelf: 'center', fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} />
+        </Stack>
+        <TextField fullWidth multiline minRows={2} value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Reason (optional, any language)" sx={{ mt: 2, textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2 }} alignItems={{ md: 'center' }}>
+          <Button component="label" variant="outlined" startIcon={<CloudUpload size={18} />} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.24)', fontWeight: 900 }}>
+            {leaveCertificate ? leaveCertificate.name : leaveType === 'sick_leave' ? 'ATTACH MEDICAL CERTIFICATE (REQUIRED)' : 'ATTACH CERTIFICATE (OPTIONAL)'}
+            <input hidden type="file" accept="application/pdf,image/*" onChange={(e) => setLeaveCertificate(e.target.files?.[0] || null)} />
+          </Button>
+          <Button variant="contained" disabled={leaveSubmitting} onClick={submitLeaveForm} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{leaveSubmitting ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'SEND LEAVE REQUEST'}</Button>
+        </Stack>
+        {leaveMessage && <Alert severity={leaveMessage.startsWith('Leave request sent') ? 'success' : 'error'} sx={{ mt: 2 }}>{leaveMessage}</Alert>}
+      </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Staff Document Upload Vault"} ar={"خزنة مستندات الموظف"} /></Typography></Stack>

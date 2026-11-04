@@ -105,3 +105,42 @@ export function leaveSummary(joinDate: string, asOf: string, approved: LeaveReco
     sick: { serviceYearStart: yearStart, used: sickUsed, fullPayLeft: fullLeft, halfPayLeft: halfLeft, unpaidLeft },
   };
 }
+
+export const LEAVE_FORM_TYPES = ["annual_leave", "sick_leave", "emergency_leave", "unpaid_leave"] as const;
+export const MAX_LEAVE_FORM_DAYS = 90;
+
+export type LeaveFormResult =
+    | { ok: true; leaveType: string; startDate: string; endDate: string; leaveDays: number; certificatePath: string | null }
+    | { ok: false; error: string };
+
+/**
+ * Validates a structured leave form server-side. Day count is always recomputed here;
+ * any client-sent count is ignored. A certificate must sit under the caller's own
+ * protected staffDocuments/{uid}/medical_certificate/ path. Sick leave needs one.
+ */
+export function validateLeaveForm(input: unknown, uid: string, today: string): LeaveFormResult {
+    const raw = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+    const leaveType = String(raw.leaveType || "");
+    if (!(LEAVE_FORM_TYPES as readonly string[]).includes(leaveType)) return { ok: false, error: "Choose a leave type." };
+    const startDate = String(raw.startDate || "");
+    const endDate = String(raw.endDate || "");
+    const start = parseDay(startDate);
+    const end = parseDay(endDate);
+    const now = parseDay(today);
+    if (start === null || end === null || now === null) return { ok: false, error: "Start and end dates are required (YYYY-MM-DD)." };
+    if (end < start) return { ok: false, error: "End date must be on or after the start date." };
+    const day = 86400000;
+    if (start < now - 60 * day) return { ok: false, error: "Start date is more than 60 days in the past. Ask HR directly." };
+    if (start > now + 365 * day) return { ok: false, error: "Start date is more than a year ahead." };
+    const leaveDays = inclusiveDays(startDate, endDate);
+    if (leaveDays < 1 || leaveDays > MAX_LEAVE_FORM_DAYS) return { ok: false, error: `Leave must be 1 to ${MAX_LEAVE_FORM_DAYS} days.` };
+    const certRaw = raw.certificatePath ? String(raw.certificatePath) : "";
+    let certificatePath: string | null = null;
+    if (certRaw) {
+        const prefix = `staffDocuments/${uid}/medical_certificate/`;
+        if (!certRaw.startsWith(prefix) || certRaw.includes("..") || certRaw.length > 400) return { ok: false, error: "Certificate must be uploaded from this screen." };
+        certificatePath = certRaw;
+    }
+    if (leaveType === "sick_leave" && !certificatePath) return { ok: false, error: "Sick leave needs a medical certificate." };
+    return { ok: true, leaveType, startDate, endDate, leaveDays, certificatePath };
+}
