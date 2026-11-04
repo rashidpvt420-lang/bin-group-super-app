@@ -39,10 +39,10 @@ test('image edit tool keeps reference-bound edit and drops input_fidelity for GP
 test('client quote preview uses the same default rates as the server price list', async () => {
   const source = await read('functions/designPriceList.ts');
   const block = source.slice(source.indexOf('DEFAULT_DESIGN_RATES: DesignRates = {'), source.indexOf('};', source.indexOf('DEFAULT_DESIGN_RATES: DesignRates = {')));
+  const serverRates = new Map([...block.matchAll(/(\w+): ([0-9.]+)/g)].map((m) => [m[1], Number(m[2])]));
   for (const [key, value] of Object.entries(DEFAULT_DESIGN_PREVIEW_RATES)) {
-    const match = block.match(new RegExp(`${key}: ([0-9.]+)`));
-    assert.ok(match, key);
-    assert.equal(Number(match[1]), value, key);
+    assert.ok(serverRates.has(key), key);
+    assert.equal(serverRates.get(key), value, key);
   }
 });
 
