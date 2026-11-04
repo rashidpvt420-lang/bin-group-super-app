@@ -29,5 +29,6 @@ test('fixed Back pill is not drawn over company profile pages', () => {
 
 test('top chip wraps instead of truncating', () => {
   const src = read('src/pages/public/SimpleStartPage.tsx');
-  assert.match(src, /'BIN GROUP · Property Management & Maintenance'\} sx=\{\{ height: 'auto'[^\n]*whiteSpace: 'normal'/);
+  assert.match(src, /badge: 'BIN-GROUPS · Property Maintenance & Management'/);
+  assert.match(src, /label=\{c\.badge\} sx=\{\{ height: 'auto'[^\n]*whiteSpace: 'normal'/);
 });

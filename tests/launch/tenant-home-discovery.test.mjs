@@ -8,13 +8,10 @@ const ARABIC = /[\u0600-\u06FF]/;
 test('public role-first entry splits existing tenants from home seekers', async () => {
   const start = await read('src/pages/public/SimpleStartPage.tsx');
 
-  assert.match(start, /Tenant & Home Search/);
-  assert.match(start, /I Already Rent With BIN/);
-  assert.match(start, /I’m Looking for a Home/);
+  assert.match(start, /Looking for a home/);
+  assert.match(start, /path: '\/homes'/);
+  assert.match(start, /Already renting with us\?/);
   assert.match(start, /path: '\/login\?intendedRole=tenant'/);
-  assert.match(start, /secondaryPath: '\/homes'/);
-  assert.match(start, /Find rooms & homes/);
-  assert.match(start, /Viewings & applications/);
   assert.match(start, ARABIC);
 });
 

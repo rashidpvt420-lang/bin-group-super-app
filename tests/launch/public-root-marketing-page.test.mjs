@@ -49,16 +49,34 @@ test('light public surfaces use AA-readable gold text instead of brand-fill gold
   assert.match(page, /border: `1px solid \${alpha\(gold, 0\.35\)}`,\s*color: goldText,\s*bgcolor: '#fff'/s);
   assert.match(page, /bgcolor: alpha\(binThemeTokens\.gold, 0\.15\), color: goldText/);
   assert.match(page, /borderColor: alpha\(gold, 0\.5\), color: goldText/);
+  const bodyMatch = page.match(/const body = '(#[0-9A-Fa-f]{6})'/);
+  assert.ok(bodyMatch && contrastOnWhite(bodyMatch[1]) >= 7, 'landing body text is darkened well past AA');
   assert.match(page, /<MapPin size=\{14\} color=\{goldText\} \/>/);
 });
 
 test('public app and contact copy stays honest and operationally routed', async () => {
   const page = await read('src/pages/public/SimpleStartPage.tsx');
-  assert.match(page, /BIN GROUP works in your web browser today\. For help with the BIN GROUP mobile app, contact us\./);
-  assert.doesNotMatch(page, /coming soon|There is no public Play Store link/i, 'no stale store-listing claims');
+  assert.match(page, /BIN-GROUPS works in your web browser today\. For help with the BIN-GROUPS mobile app, contact us\./);
+  // The only allowed "coming soon" is the text-only UAE PASS notice; no store-listing claims.
+  const withoutUaePass = page.split('\n').filter((l) => !/UAE PASS/.test(l)).join('\n');
+  assert.doesNotMatch(withoutUaePass, /coming soon|There is no public Play Store link/i, 'no stale store-listing claims');
   assert.doesNotMatch(page, /play\.google\.com\/store|apps\.apple\.com/, 'no invented store URL');
   assert.match(page, /https:\/\/wa\.me\/\$\{whatsappDigits\}/);
   assert.match(page, /mailto:\$\{CONTACT\.email\}/);
-  assert.match(page, /Proof before payment/);
-  assert.match(page, /Photo proof/);
+  assert.match(page, /Before and after photo proof on every job/);
+  assert.match(page, /photo proof on every job/);
+});
+
+test('landing redesign: why BIN-GROUPS, honest trust strip, text-only UAE PASS notice', async () => {
+  const page = await read('src/pages/public/SimpleStartPage.tsx');
+  assert.equal((page.match(/component="h1"/g) || []).length, 1, 'exactly one h1');
+  assert.match(page, /Property maintenance & management across the UAE/);
+  assert.match(page, /Licensed in Abu Dhabi/);
+  assert.doesNotMatch(page, /licensed (for|in) property management/i, 'no property-management licence claim');
+  for (const t of ['No surprises', 'You see everything', 'Fast response', 'Protected payments']) assert.ok(page.includes(t), t);
+  assert.match(page, /UAE PASS — coming soon/);
+  assert.match(page, /الهوية الرقمية UAE PASS — قريباً/);
+  assert.match(page, /data-testid="uae-pass-coming-soon" aria-label=\{c\.uaePassAria\} aria-disabled="true"/);
+  assert.doesNotMatch(page, /uaepass\.ae|uae-pass.*\.(png|svg)/i, 'no UAE PASS artwork or live link');
+  assert.doesNotMatch(page, /pointsEn|pointsAr/, 'role cards no longer carry bullet chips');
 });
