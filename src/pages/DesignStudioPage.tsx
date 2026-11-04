@@ -20,14 +20,14 @@ import { useNavigate } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { calculateDesignStudioQuote, type DesignScope } from '../utils/DesignStudioPricingEngine';
+import { type DesignScope } from '../utils/DesignStudioPricingEngine';
+import { previewDesignQuote } from '../lib/designQuotePreview';
 import {
   DESIGN_OBJECTIVES,
   DESIGN_SPACE_TYPES,
   DESIGN_STYLES,
   buildDesignConcepts,
   buildDesignExecutionDetails,
-  getDepositAmount,
   type DesignConcept,
   type DesignExecutionDetail,
 } from '../utils/aiDesignStudioWorkflow';
@@ -150,15 +150,14 @@ export default function DesignStudioPage() {
   const [serverQuote, setServerQuote] = useState<ServerQuote | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'success' });
 
-  const preliminaryQuote = useMemo(() => calculateDesignStudioQuote({
+  const preliminaryQuote = useMemo(() => previewDesignQuote({
     ...scope,
-    addons: [],
     hasMEP: tenantMode ? false : scope.hasMEP,
     hasStructural: tenantMode ? false : scope.hasStructural,
     isNightWork: tenantMode ? false : scope.isNightWork,
   }), [scope, tenantMode]);
 
-  const preliminaryMobilization = getDepositAmount(preliminaryQuote.finalTotal, 15);
+  const preliminaryMobilization = preliminaryQuote.mobilizationAmount;
   const displayedQuoteTotal = Number(serverQuote?.finalTotal || preliminaryQuote.finalTotal);
   const displayedMobilization = Number(serverQuote?.mobilizationAmount || preliminaryMobilization);
 
