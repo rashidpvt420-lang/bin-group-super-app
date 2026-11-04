@@ -63,7 +63,7 @@ const OwnerNotificationBell = () => {
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isRTL, tx } = useLanguage();
+    const { isRTL, tx, phrase } = useLanguage();
     const label = (key: string, en: string) => tx(key, en);
     const isPhoneHeader = usePhoneHeader();
     const isHome = location.pathname === '/owner' || location.pathname === '/owner/dashboard';
@@ -74,8 +74,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: alpha(binThemeTokens.canvas, 0.94), backdropFilter: 'blur(18px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17,24,39,0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                        {!isHome && <IconButton type="button" data-testid="owner-header-back" aria-label={isRTL ? 'رجوع' : 'Back'} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
-                        <IconButton type="button" data-testid="owner-header-dashboard" aria-label={isRTL ? 'لوحة المالك' : 'Owner dashboard'} onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldText, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
+                        {!isHome && <IconButton type="button" data-testid="owner-header-back" aria-label={phrase('Back', 'رجوع')} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
+                        <IconButton type="button" data-testid="owner-header-dashboard" aria-label={phrase('Owner dashboard', 'لوحة المالك')} onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldText, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{label('portal.owner.title', 'OWNER PORTAL')}</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, fontSize: '0.75rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>

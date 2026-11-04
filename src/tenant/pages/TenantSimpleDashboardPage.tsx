@@ -49,7 +49,7 @@ const DAY = 24 * 60 * 60 * 1000;
 /** Redesigned tenant home (REDESIGN.md R5) wired to real data (feature 8): my home, rent, lease, active request, quick report, building notices. */
 export default function TenantSimpleDashboardPage() {
   const navigate = useNavigate();
-  const { isRTL, tx, lang } = useLanguage();
+  const { isRTL, tx, lang, phrase } = useLanguage();
   const ar = lang === 'ar';
   const t = (key: string, en: string, arText: string) => (ar ? arText : tx(key, en));
   const { user } = useRole();
@@ -108,7 +108,7 @@ export default function TenantSimpleDashboardPage() {
         <UiCard isRTL={isRTL} testId="tenant-home-report" label={t('tenant.home.report', 'Report a problem', 'الإبلاغ عن مشكلة')}>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mt: 1 }}>
             {issueShortcuts.map((item) => (
-              <UiButton key={item.category} tone="outline" aria-label={ar ? item.ar : item.en} onClick={() => navigate(`/tenant/request?category=${item.category}`)} sx={{ fontSize: 14, px: 0.5 }}>{ar ? item.ar : item.en}</UiButton>
+              <UiButton key={item.category} tone="outline" aria-label={phrase(item.en, item.ar)} onClick={() => navigate(`/tenant/request?category=${item.category}`)} sx={{ fontSize: 14, px: 0.5 }}>{phrase(item.en, item.ar)}</UiButton>
             ))}
           </Box>
         </UiCard>
@@ -126,14 +126,14 @@ export default function TenantSimpleDashboardPage() {
 
         <UiCard isRTL={isRTL} label={t('tenant.home.services', 'Book a home service', 'احجز خدمة منزلية')}>
           <Box sx={{ mt: 0.5 }}>
-            {plannedServices.map((s) => <ListRow key={s.route} isRTL={isRTL} title={ar ? s.ar : s.en} onClick={() => navigate(s.route)} />)}
+            {plannedServices.map((s) => <ListRow key={s.route} isRTL={isRTL} title={phrase(s.en, s.ar)} onClick={() => navigate(s.route)} />)}
             <ListRow isRTL={isRTL} title={t('tenant.home.allNotices', 'All building notices', 'كل إشعارات المبنى')} onClick={() => navigate('/tenant/notices')} />
           </Box>
         </UiCard>
 
         <Box component="button" type="button" onClick={() => navigate('/tenant/emergency')} sx={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', minHeight: ui.touchTarget, borderRadius: '14px', bgcolor: ui.badBg, color: ui.badText, px: 2, py: 1.5, textAlign: isRTL ? 'right' : 'left', '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
           <Typography sx={{ ...uiType.body, fontWeight: 800, color: ui.badText }}>{t('tenant.home.emergency', 'Emergency? Get help now', 'طوارئ؟ اطلب المساعدة الآن')}</Typography>
-          <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : `Response within ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes`}</Typography>
+          <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : tx('tenant.home.responseWithin', 'Response within {{minutes}} minutes', { minutes: CANONICAL_SLA_POLICY.EMERGENCY.minutes })}</Typography>
         </Box>
 
         <WhatsAppJobUpdatesCard />
@@ -146,7 +146,7 @@ export default function TenantSimpleDashboardPage() {
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
             {TENANT_MORE_SERVICES.map((svc) => (
               <Button key={svc.path} variant="outlined" onClick={() => navigate(svc.path)} sx={{ minHeight: ui.touchTarget, color: ui.goldText, borderColor: ui.goldText, fontWeight: 700, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                {lang === 'ar' ? svc.ar : svc.en}
+                {phrase(svc.en, svc.ar)}
               </Button>
             ))}
           </Box>

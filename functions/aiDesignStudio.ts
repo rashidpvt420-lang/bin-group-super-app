@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { buildImageEditTool, imageOrchestratorModel } from "./openaiImageModels";
+import { chooseTenantLink, propertyOwnerId } from "./designTenantLink";
+import { IMAGE_PROVIDER_FAILURE_MESSAGES, buildImageEditTool, classifyImageProviderError, imageOrchestratorModel } from "./openaiImageModels";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
@@ -226,6 +227,26 @@ function buildPrompt(payload: any, scope: DesignScope) {
   ].filter(Boolean).join(" ");
 }
 
+// The owner picks from several distinct options (audit 2026-11-04): each option is a separate
+// image-edit call with its own creative direction, run in parallel so the callable stays inside
+// its 180s budget. At least one must succeed; partial failures are dropped, never faked.
+export const DESIGN_OPTION_DIRECTIONS = [
+  { id: "option_1", label: "Option 1 - Balanced", direction: "Balanced take on the requested style with warm, layered lighting." },
+  { id: "option_2", label: "Option 2 - Light and airy", direction: "Lighter palette, brighter natural light, minimal decor." },
+  { id: "option_3", label: "Option 3 - Rich and bold", direction: "Richer materials, deeper accent colours and statement lighting." },
+] as const;
+
+export function buildOptionPrompt(basePrompt: string, optionIndex: number) {
+  const option = DESIGN_OPTION_DIRECTIONS[optionIndex] || DESIGN_OPTION_DIRECTIONS[0];
+  return `${basePrompt} Design direction: ${option.direction}`;
+}
+
+/** Public, owner-safe concept fields. The internal provider prompt never leaves the server. */
+export function publicConcept(concept: any) {
+  const { prompt: _prompt, conceptPrompt: _conceptPrompt, ...rest } = concept || {};
+  return rest;
+}
+
 async function editReferenceImage(apiKey: string, prompt: string, imageBase64: string, mimeType: string) {
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey, timeout: 150_000 });
@@ -279,24 +300,33 @@ async function signedMediaUrl(path: string, kind: ProtectedMediaKind) {
 
 async function resolveTenantContext(uid: string, email: string) {
   const lookups = [
-    db.collection("units").where("tenantId", "==", uid).limit(1),
-    db.collection("units").where("tenantUid", "==", uid).limit(1),
+    db.collection("units").where("tenantId", "==", uid).limit(10),
+    db.collection("units").where("tenantUid", "==", uid).limit(10),
   ];
-  if (email) lookups.push(db.collection("units").where("tenantEmail", "==", email).limit(1));
+  if (email) lookups.push(db.collection("units").where("tenantEmail", "==", email).limit(10));
+  const seen = new Set<string>();
+  const links: Array<{ unit: any; property: any | null }> = [];
   for (const lookup of lookups) {
     const snap = await lookup.get();
-    if (snap.empty) continue;
-    const unitDoc = snap.docs[0];
-    const unit: any = { id: unitDoc.id, ...unitDoc.data() };
-    const propertyId = cleanText(unit.propertyId, "", 160);
-    const propertySnap = propertyId ? await db.collection("properties").doc(propertyId).get() : null;
-    const property: any = propertySnap?.exists ? { id: propertySnap.id, ...propertySnap.data() } : null;
-    if (!property) {
-      throw new HttpsError("failed-precondition", "The tenant unit is not linked to a canonical property.");
+    for (const unitDoc of snap.docs) {
+      if (seen.has(unitDoc.id)) continue;
+      seen.add(unitDoc.id);
+      const unit: any = { id: unitDoc.id, ...unitDoc.data() };
+      const propertyId = cleanText(unit.propertyId, "", 160);
+      const propertySnap = propertyId ? await db.collection("properties").doc(propertyId).get() : null;
+      links.push({ unit, property: propertySnap?.exists ? { id: propertySnap.id, ...propertySnap.data() } : null });
     }
-    return { unit, property };
   }
-  throw new HttpsError("failed-precondition", "A verified tenant unit link is required before submitting a design request.");
+  if (!links.length) {
+    throw new HttpsError("failed-precondition", "Your account is not linked to a unit yet. Ask your property owner or BIN Group to link your unit, then try again.", { reason: "tenant_unit_missing" });
+  }
+  const profile = (await db.collection("users").doc(uid).get()).data() || {};
+  const chosen = chooseTenantLink(links, cleanText(profile.unitId || profile.assignedUnitId, "", 200));
+  if (!chosen) {
+    console.warn("submitAIDesignRequest tenant link unusable", { uid, units: links.map((l) => l.unit.id) });
+    throw new HttpsError("failed-precondition", "Your unit is not linked to an active property with an owner yet, so we can't send designs for approval. Ask your property owner or BIN Group to fix the link.", { reason: "tenant_owner_missing" });
+  }
+  return chosen;
 }
 
 function canReadRequest(auth: any, data: any) {
@@ -356,7 +386,7 @@ export const submitAIDesignRequest = onCall({
       renderStatus: existingData.renderStatus || "AI_RENDER_COMPLETE",
       quote: existingData.quote || null,
       concepts: (Array.isArray(existingData.concepts) ? existingData.concepts : []).map((concept: any, index: number) => ({
-        ...concept,
+        ...publicConcept(concept),
         beforeImageUrl: media.referenceImages[0] || "",
         afterImageUrl: media.generatedImages[index] || media.generatedImages[0] || "",
       })),
@@ -380,9 +410,7 @@ export const submitAIDesignRequest = onCall({
     : { unit: null, property: null };
   const unit: any = tenantContext.unit || {};
   const property: any = tenantContext.property || {};
-  const ownerId = role === "tenant"
-    ? cleanText(property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid, "", 160)
-    : uid;
+  const ownerId = role === "tenant" ? propertyOwnerId(property, unit) : uid;
   if (!ownerId) throw new HttpsError("failed-precondition", "The canonical property owner could not be resolved.");
   const quota = await reserveAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
   const ownerEmail = role === "tenant"
@@ -390,7 +418,21 @@ export const submitAIDesignRequest = onCall({
     : email || null;
 
   try {
-    const rendered = await editReferenceImage(apiKey, prompt, reference.base64, mimeType);
+    const settled = await Promise.allSettled(DESIGN_OPTION_DIRECTIONS.map((_option, index) =>
+      editReferenceImage(apiKey, buildOptionPrompt(prompt, index), reference.base64, mimeType)));
+    const renders = settled.flatMap((result, index) => result.status === "fulfilled"
+      ? [{ ...result.value, option: DESIGN_OPTION_DIRECTIONS[index] }]
+      : []);
+    if (renders.length === 0) {
+      // Every option failed: surface the real provider error, never "concept ready".
+      throw (settled.find((result) => result.status === "rejected") as PromiseRejectedResult).reason;
+    }
+    settled.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.warn("submitAIDesignRequest option failed", { requestId, option: DESIGN_OPTION_DIRECTIONS[index].id, reason: classifyImageProviderError(result.reason) });
+      }
+    });
+    const rendered = renders[0];
     const generatedImageSha256 = createHash("sha256").update(rendered.buffer).digest("hex");
     const referencePath = await writePrivateMedia(
       `design_requests/${uid}/${requestId}/reference.${extensionForMimeType(mimeType)}`,
@@ -398,23 +440,26 @@ export const submitAIDesignRequest = onCall({
       mimeType,
       { ownerUid: uid, requestId, kind: "reference", sha256: reference.sha256 },
     );
-    const generatedPath = await writePrivateMedia(
-      `ai_design_renders/${uid}/${requestId}/primary.jpg`,
-      rendered.buffer,
-      rendered.mimeType,
-      { ownerUid: uid, requestId, kind: "generated", providerRequestId: rendered.providerRequestId || "", sha256: generatedImageSha256 },
-    );
+    const generatedOptions = await Promise.all(renders.map(async (render, index) => {
+      const sha256 = createHash("sha256").update(render.buffer).digest("hex");
+      const fileName = index === 0 ? "primary" : render.option.id;
+      const path = await writePrivateMedia(
+        `ai_design_renders/${uid}/${requestId}/${fileName}.jpg`,
+        render.buffer,
+        render.mimeType,
+        { ownerUid: uid, requestId, kind: "generated", providerRequestId: render.providerRequestId || "", sha256 },
+      );
+      return { path, sha256, render };
+    }));
+    const generatedPaths = generatedOptions.map((option) => option.path);
     const media = await resolveMedia({
       referenceImagePaths: [referencePath],
-      generatedImagePaths: [generatedPath],
+      generatedImagePaths: generatedPaths,
     });
     const status = role === "tenant" ? "AWAITING_OWNER_APPROVAL" : role === "broker" ? "BROKER_CONCEPT_READY" : "AI_CONCEPT_READY";
     const approvalStatus = role === "tenant" ? "PENDING_OWNER_APPROVAL" : role === "broker" ? "BROKER_MARKETING_CONCEPT" : "OWNER_CREATED";
-    const concept = {
-      id: "primary",
-      title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} concept`,
+    const conceptBase = {
       beforeImageStoragePath: referencePath,
-      afterImageStoragePath: generatedPath,
       renderStatus: "AI_RENDER_COMPLETE",
       generationStatus: "AI_RENDER_COMPLETE",
       renderEngineRequired: false,
@@ -423,8 +468,17 @@ export const submitAIDesignRequest = onCall({
       finishTier: scope.finishTier,
       quoteTotal: quote.finalTotal,
       mobilizationAmount: quote.mobilizationAmount,
-      prompt,
     };
+    const concepts = generatedOptions.map((option, index) => ({
+      ...conceptBase,
+      id: index === 0 ? "primary" : option.render.option.id,
+      optionLabel: option.render.option.label,
+      title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} - ${option.render.option.label}`,
+      afterImageStoragePath: option.path,
+      generatedImageSha256: option.sha256,
+      providerRequestId: option.render.providerRequestId || null,
+      prompt: buildOptionPrompt(prompt, DESIGN_OPTION_DIRECTIONS.findIndex((d) => d.id === option.render.option.id)),
+    }));
     const now = admin.firestore.FieldValue.serverTimestamp();
     const requestPayload = {
       id: requestId,
@@ -447,11 +501,13 @@ export const submitAIDesignRequest = onCall({
       designObjective: cleanText(payload.designObjective, "refresh", 120),
       scope: { ...scope, referenceImagePaths: [referencePath], imageCount: 1 },
       quote,
-      concepts: [concept],
+      concepts,
+      conceptCount: concepts.length,
+      selectedConceptId: null,
       conceptPrompt: prompt,
       executionDetails,
       referenceImagePaths: [referencePath],
-      generatedImagePaths: [generatedPath],
+      generatedImagePaths: generatedPaths,
       renderStatus: "AI_RENDER_COMPLETE",
       aiProvider: "openai",
       providerRequestId: rendered.providerRequestId || null,
@@ -484,14 +540,16 @@ export const submitAIDesignRequest = onCall({
         createdAt: now,
         updatedAt: now,
       });
-      transaction.create(db.collection("design_concepts").doc(`${requestId}_primary`), {
-        requestId,
-        userId: uid,
-        ownerId,
-        tenantId: role === "tenant" ? uid : null,
-        ...concept,
-        createdAt: now,
-      });
+      for (const option of concepts) {
+        transaction.create(db.collection("design_concepts").doc(`${requestId}_${option.id}`), {
+          requestId,
+          userId: uid,
+          ownerId,
+          tenantId: role === "tenant" ? uid : null,
+          ...option,
+          createdAt: now,
+        });
+      }
       if (role === "tenant") {
         transaction.create(db.collection("design_approvals").doc(`${requestId}_owner`), {
           requestId,
@@ -535,11 +593,11 @@ export const submitAIDesignRequest = onCall({
       renderStatus: "AI_RENDER_COMPLETE",
       aiProvider: "openai",
       quote,
-      concepts: [{
-        ...concept,
+      concepts: concepts.map((option, index) => ({
+        ...publicConcept(option),
         beforeImageUrl: media.referenceImages[0],
-        afterImageUrl: media.generatedImages[0],
-      }],
+        afterImageUrl: media.generatedImages[index] || "",
+      })),
       ...media,
     };
   } catch (error: any) {
@@ -558,12 +616,18 @@ export const submitAIDesignRequest = onCall({
       role,
       status: "FAILED",
       errorCode: error instanceof HttpsError ? error.code : "unavailable",
+      providerReason: error instanceof HttpsError ? null : classifyImageProviderError(error),
       message: cleanText(error?.message, "AI image provider did not complete the request.", 300),
       quotaRefunded: true,
       failedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true }).catch(() => undefined);
     if (error instanceof HttpsError) throw error;
-    throw new HttpsError("unavailable", "AI image rendering is temporarily unavailable. No design workflow record was created.");
+    const reason = classifyImageProviderError(error);
+    console.warn("submitAIDesignRequest provider failure", { requestId, reason, status: Number(error?.status || 0) || null });
+    // Access/verification/credential/model problems will not fix themselves on retry, so they
+    // surface as failed-precondition with a specific reason instead of a generic "unavailable".
+    const code = reason === "provider_timeout" ? "deadline-exceeded" : reason === "provider_other" ? "unavailable" : "failed-precondition";
+    throw new HttpsError(code, IMAGE_PROVIDER_FAILURE_MESSAGES[reason], { reason });
   }
 });
 

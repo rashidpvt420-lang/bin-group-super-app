@@ -9,6 +9,7 @@
  * tenantReviewTicketCompletion callable with its full tenant-authority checks.
  */
 import * as crypto from "node:crypto";
+import { withRejectionReasonLog } from "./callableRejectionLog";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -35,7 +36,7 @@ export function linkState(link: any, nowMs = Date.now()) {
   return "ACTIVE";
 }
 
-export const createTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+export const createTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, withRejectionReasonLog("createTenantJobLink", async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in required. / يلزم تسجيل الدخول.");
   if (request.auth?.token?.suspended === true) throw new HttpsError("permission-denied", "Account suspended. / الحساب موقوف.");
@@ -77,11 +78,11 @@ export const createTenantJobLink = onCall({ cors: true, region: "europe-west3", 
   });
   await batch.commit();
   return { linkPath, expiresAt: expiresAt.toDate().toISOString(), revokedPrevious: open.size };
-});
+}));
 
-export const resolveTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+export const resolveTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, withRejectionReasonLog("resolveTenantJobLink", async (request) => {
   return useLinkCounted(request, text(request.data?.token, 128));
-});
+}));
 
 async function useLinkCounted(request: any, raw: string) {
   const db = admin.firestore();
@@ -118,7 +119,7 @@ async function useLinkCounted(request: any, raw: string) {
   });
 }
 
-export const reportViaTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+export const reportViaTenantJobLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, withRejectionReasonLog("reportViaTenantJobLink", async (request) => {
   const db = admin.firestore();
   const raw = text(request.data?.token, 128);
   const note = text(request.data?.note, 1000);
@@ -139,4 +140,4 @@ export const reportViaTenantJobLink = onCall({ cors: true, region: "europe-west3
     });
     return { status: "REPORTED", reportsLeft: JOB_LINK_MAX_REPORTS - reports - 1 };
   });
-});
+}));

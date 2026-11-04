@@ -46,3 +46,20 @@ export function staleLocationLabel(updatedAt?: any) {
   if (diffMin <= 1) return 'Updated now';
   return `Updated ${diffMin} min ago`;
 }
+
+/** Arrival estimates are hidden once the technician location is older than this. */
+export const ETA_MAX_LOCATION_AGE_MINUTES = 5;
+
+export function locationAgeMinutes(updatedAt?: any, nowMs = Date.now()) {
+  if (!updatedAt) return null;
+  const ms = updatedAt?.seconds ? updatedAt.seconds * 1000 : typeof updatedAt?.toMillis === 'function' ? updatedAt.toMillis() : Date.parse(String(updatedAt));
+  if (!Number.isFinite(ms)) return null;
+  return Math.max(0, (nowMs - ms) / 60000);
+}
+
+/** Straight-line estimate, or null when the location is missing, undated or older than 5 minutes. */
+export function freshEtaMinutes(a?: GeoPointLike | null, b?: GeoPointLike | null, updatedAt?: any, nowMs = Date.now()) {
+  const age = locationAgeMinutes(updatedAt, nowMs);
+  if (age === null || age > ETA_MAX_LOCATION_AGE_MINUTES) return null;
+  return etaMinutes(a, b);
+}

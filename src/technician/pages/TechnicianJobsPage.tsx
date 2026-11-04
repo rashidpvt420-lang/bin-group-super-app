@@ -18,7 +18,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
-import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { estimateTicketArrivalMinutes, getTechnicianLocation } from '../../utils/liveTracking';
 import { arabicStatusLabel, formatStatusLabel } from '../../theme/statusColors';
 import TechnicianSlaCountdown from '../components/TechnicianSlaCountdown';
 import Bi from '../../components/Bi';
@@ -153,9 +153,7 @@ export default function TechnicianJobsPage() {
         const statusColor = STATUS_COLOR[String(job.status)] || JOBS_READABLE.muted;
         const isLive = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'].includes(String(job.status));
         const techLoc = getTechnicianLocation(job);
-        const jobLoc = getTicketJobLocation(job);
-        const dist = calculateDistanceKm(techLoc, jobLoc);
-        const eta = calculateEtaMinutes(dist);
+        const eta = estimateTicketArrivalMinutes(job, techLoc);
         const receipt = assignmentReceipts[String(job.id)];
         const deliveryState = receipt?.pushDeliveryState || 'PENDING_TRIGGER';
         const deliverySucceeded = ['SUCCESS', 'PARTIAL'].includes(deliveryState) && (receipt?.pushSuccessCount || 0) > 0;
@@ -185,7 +183,7 @@ export default function TechnicianJobsPage() {
                             data-delivery-state={deliveryState}
                             size="small"
                             icon={<BellRing size={11} />}
-                            label={`${tx('tech.jobs.dispatch_alert', 'Dispatch alert')}: ${formatStatusLabel(deliveryState, lang)}`}
+                            label={`${tx('tech.jobs.dispatch_alert', 'Dispatch alert')}: ${formatStatusLabel(deliveryState, lang === 'ar' ? 'ar' : 'en')}`}
                             sx={{
                                 fontSize: '0.62rem',
                                 fontWeight: 950,
@@ -199,7 +197,7 @@ export default function TechnicianJobsPage() {
                             <Chip
                                 size="small"
                                 icon={<Clock size={11} />}
-                                label={`~${eta} min rough estimate`}
+                                label={`~${eta} min (estimate)`}
                                 sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(JOBS_READABLE.gold, 0.1), color: JOBS_READABLE.gold, height: 22, '& .MuiChip-icon': { color: JOBS_READABLE.gold } }}
                             />
                         )}
