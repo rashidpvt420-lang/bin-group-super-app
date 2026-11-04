@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { withRejectionReasonLog } from "./callableRejectionLog";
 import * as admin from "firebase-admin";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -152,7 +153,7 @@ export const askPublicAppAssistant = onCall({
   enforceAppCheck: true,
   timeoutSeconds: 20,
   secrets: [geminiApiKey],
-}, async (request) => {
+}, withRejectionReasonLog("askPublicAppAssistant", async (request) => {
   const question = redactSensitiveText(request.data?.text, 500).text.trim();
   if (question.length < 2) throw new HttpsError("invalid-argument", "Please type a question.");
   await consumePublicAiQuota(rateIdentity(request));
@@ -168,4 +169,4 @@ export const askPublicAppAssistant = onCall({
     }
   }
   return { text: grounded.answer, live: false, provider: "public-facts", topics: grounded.topics, publicOnly: true, readOnly: true };
-});
+}));
