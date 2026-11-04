@@ -556,7 +556,7 @@ const LoginPage: React.FC = () => {
                                 </Button>
                                 {!isNativeApp() && (
                                     <>
-                                <Divider sx={{ my: 0.5 }}><Typography variant="caption" sx={{ color: palette.muted, px: 2, fontWeight: 900 }}>OR INSTITUTIONAL SSO</Typography></Divider>
+                                <Divider sx={{ my: 0.5 }}><Typography variant="caption" sx={{ color: palette.muted, px: 2, fontWeight: 900 }}>{lang === 'ar' ? 'أو' : 'OR'}</Typography></Divider>
                                 <Button fullWidth variant="outlined" onClick={handleGoogleLogin} disabled={localLoading} startIcon={renderSafeIcon(UserCircle, { size: 20 })} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
                                     {t('login.google')}
                                 </Button>
