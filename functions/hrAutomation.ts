@@ -5,6 +5,7 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
+import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
 if (!admin.apps.length) {
@@ -180,6 +181,51 @@ async function usersByRoles(roles: string[]) {
     return Array.from(users.values());
 }
 
+function millisOf(value: unknown): number | null {
+    if (!value) return null;
+    const v: any = value;
+    if (typeof v.toMillis === "function") return v.toMillis();
+    if (v instanceof Date) return v.getTime();
+    const n = typeof v === "number" ? v : Date.parse(String(v));
+    return Number.isFinite(n) ? n : null;
+}
+
+function dubaiDateOf(ms: number) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+}
+
+/**
+ * Server-side monthly overtime: clock evidence (staff_shifts) bounded by approved
+ * overtime claims (staff_request_trackers). Nothing is paid without both.
+ */
+export async function computeMonthlyOvertime(staffId: string, month: string, basicMonthly: number): Promise<{ days: DayHours[]; pay: OvertimePay }> {
+    const dates = monthDates(month);
+    const shiftSnaps = await db.getAll(...dates.map((d) => db.collection("staff_shifts").doc(`SHIFT_${staffId}_${d}`)));
+    const days: DayHours[] = [];
+    for (const snap of shiftSnaps) {
+        if (!snap.exists) continue;
+        const data = snap.data() || {};
+        const clockInMs = millisOf(data.clockInTime);
+        const clockOutMs = millisOf(data.clockOutTime);
+        if (clockInMs === null || clockOutMs === null) continue;
+        days.push(computeShiftHours({ shiftDate: safeText(data.shiftDate), clockInMs, clockOutMs }));
+    }
+    const trackers = await db.collection("staff_request_trackers").where("staffId", "==", staffId).limit(200).get();
+    const approvedByDate: Record<string, number> = {};
+    for (const doc of trackers.docs) {
+        const t = doc.data() || {};
+        if (safeText(t.requestType).toUpperCase() !== "OVERTIME_CLAIM") continue;
+        if (!["APPROVED", "PAYROLL_INCLUDED", "PAID"].includes(safeText(t.status).toUpperCase())) continue;
+        const createdMs = millisOf(t.createdAt);
+        const date = safeText(t.shiftDate) || (createdMs !== null ? dubaiDateOf(createdMs) : "");
+        if (!date.startsWith(month)) continue;
+        const minutes = Number(t.approvedMinutes);
+        if (Number.isFinite(minutes) && minutes > 0) approvedByDate[date] = (approvedByDate[date] || 0) + Math.round(minutes);
+    }
+    const payable = payableDays(days, approvedByDate);
+    return { days: payable, pay: overtimePayFor(payable, basicMonthly) };
+}
+
 export const adminGeneratePayrollBatch = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {
@@ -205,6 +251,13 @@ export const adminGeneratePayrollBatch = onCall(
         let processed = 0;
         const batch = db.batch();
         const now = serverTimestamp();
+        const overtimeByTech = new Map<string, OvertimePay>();
+        for (const tech of candidates) {
+            if (existingIds.has(`${tech.id}_${month}`)) continue;
+            const base = exactPositivePayrollAmount((tech as any).baseSalary);
+            if (base === null) continue;
+            overtimeByTech.set(tech.id, (await computeMonthlyOvertime(tech.id, month, base)).pay);
+        }
         candidates.forEach((tech) => {
             const payrollId = `${tech.id}_${month}`;
             const rawSalary = (tech as any).baseSalary;
@@ -214,19 +267,34 @@ export const adminGeneratePayrollBatch = onCall(
                 skipped.push(safeText((tech as any).displayName || (tech as any).email || tech.id));
                 return;
             }
-            const amount = exactPositivePayrollAmount(rawSalary);
-            if (amount === null) {
+            const baseSalary = exactPositivePayrollAmount(rawSalary);
+            if (baseSalary === null) {
                 const techName = safeText((tech as any).displayName || (tech as any).email || tech.id);
                 skipped.push(techName);
                 rejected.push({ techId: tech.id, techName, reason: "BASE_SALARY_NOT_EXACT_TO_THE_FILS" });
                 return;
             }
+            const overtime = overtimeByTech.get(tech.id);
+            const overtimePay = overtime?.overtimePay || 0;
+            const amount = Math.round((baseSalary + overtimePay) * 100) / 100;
             batch.create(db.collection("payroll").doc(payrollId), {
                 payrollId,
                 techId: tech.id,
                 techName: safeText((tech as any).displayName || (tech as any).email || tech.id),
                 email: safeText((tech as any).email).toLowerCase() || null,
                 amount,
+                baseSalary,
+                overtimePay,
+                overtimeBreakdown: overtime ? {
+                    ordinaryMinutes: overtime.ordinaryMinutes,
+                    nightMinutes: overtime.nightMinutes,
+                    restDayMinutes: overtime.restDayMinutes,
+                    hourlyRate: overtime.hourlyRate,
+                    ordinaryPay: overtime.ordinaryPay,
+                    nightPay: overtime.nightPay,
+                    restDayPay: overtime.restDayPay,
+                    source: "SERVER_HOURS_ENGINE",
+                } : null,
                 currency: "AED",
                 month,
                 status: "pending",
@@ -314,6 +382,8 @@ export const adminSettlePayrollRecord = onCall(
             throw new HttpsError("failed-precondition", "Payroll record is incomplete or its amount is not an exact AED amount to the fils.");
         }
 
+        const rawOvertime = Number(payroll.overtimePay || 0);
+        const payrollOvertime = Number.isFinite(rawOvertime) && rawOvertime > 0 ? Math.round(rawOvertime * 100) / 100 : 0;
         let pdfUrl = "";
         let payslipPdfSha256 = "";
         let payslipStoragePath = "";
@@ -325,9 +395,9 @@ export const adminSettlePayrollRecord = onCall(
                 staffName: techName,
                 payPeriod: month,
                 paymentDate: new Date().toISOString().slice(0, 10),
-                basicSalary: amount,
+                basicSalary: exactPositivePayrollAmount(payroll.baseSalary) ?? Math.round((amount - payrollOvertime) * 100) / 100,
                 allowances: 0,
-                overtime: 0,
+                overtime: payrollOvertime,
                 deductions: 0,
                 netSalary: amount,
             });
