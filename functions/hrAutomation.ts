@@ -5,7 +5,7 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
-import { inclusiveDays, leaveSummary, splitSickDays, type LeaveRecord } from "./hrLeaveEngine";
+import { inclusiveDays, leaveSummary, splitSickDays, validateLeaveForm, type LeaveFormResult, type LeaveRecord } from "./hrLeaveEngine";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
@@ -561,7 +561,14 @@ export const createStaffHrCase = onCall(
         const message = limitedText(request.data?.message || request.data?.text, 2000);
         if (message.length < 3) throw new HttpsError("invalid-argument", "HR case message is required.");
 
-        const result = classifyHrIntent(message);
+        const classified = classifyHrIntent(message);
+        let leaveForm: Extract<LeaveFormResult, { ok: true }> | null = null;
+        if (request.data?.leave) {
+            const checked = validateLeaveForm(request.data.leave, uid, dubaiDateOf(Date.now()));
+            if (!checked.ok) throw new HttpsError("invalid-argument", checked.error);
+            leaveForm = checked;
+        }
+        const result: typeof classified = leaveForm ? { ...classified, requestType: leaveForm.leaveType as typeof classified.requestType, category: "leave" } : classified;
         const caseId = stableCaseId(uid, message, request.data?.idempotencyKey);
         const requestRef = db.collection("staffRequests").doc(caseId);
         const conversationRef = db.collection("hrAiConversations").doc(requestRef.id);
@@ -599,8 +606,14 @@ export const createStaffHrCase = onCall(
             source: "bin_people_ai_server_hr_case",
             paperless: true,
             status: "pending_hr_review",
-            startDate: new Date().toISOString().slice(0, 10),
-            endDate: new Date().toISOString().slice(0, 10),
+            startDate: leaveForm ? leaveForm.startDate : new Date().toISOString().slice(0, 10),
+            endDate: leaveForm ? leaveForm.endDate : new Date().toISOString().slice(0, 10),
+            ...(leaveForm ? {
+                leaveType: leaveForm.leaveType,
+                leaveDays: leaveForm.leaveDays,
+                certificatePath: leaveForm.certificatePath,
+                leaveFormSource: "SERVER_VALIDATED_LEAVE_FORM",
+            } : {}),
             hours: 0,
             createdAt: now,
             updatedAt: now,
