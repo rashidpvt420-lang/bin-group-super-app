@@ -94,20 +94,12 @@ export function calculateEosbEstimate(input: EosbEstimateInput): EosbEstimateRes
   const capAed = basicMonthlySalaryAed * 24;
   const cappedGratuityAed = Math.min(rawGratuityAed, capAed);
 
-  let resignationMultiplier = 1;
-  let note = 'Full gratuity rate applies (employer-initiated termination, contract end, or death/disability).';
-  if (terminationReason === 'resignation') {
-    if (serviceYears < 3) {
-      resignationMultiplier = 1 / 3;
-      note = 'Voluntary resignation between 1 and 3 years of service: statutory reduction to 1/3 of calculated gratuity.';
-    } else if (serviceYears < 5) {
-      resignationMultiplier = 2 / 3;
-      note = 'Voluntary resignation between 3 and 5 years of service: statutory reduction to 2/3 of calculated gratuity.';
-    } else {
-      resignationMultiplier = 1;
-      note = 'Voluntary resignation after 5+ years of service: full calculated gratuity applies.';
-    }
-  }
+  // Federal Decree-Law No. 33 of 2021 (Art. 51) removed the old resignation reductions (1/3, 2/3).
+  // Resignation and termination after 1+ year of service both earn full gratuity.
+  const resignationMultiplier = 1;
+  const note = terminationReason === 'resignation'
+    ? 'Voluntary resignation after 1+ year of service: full calculated gratuity applies (Decree-Law 33/2021, no resignation reduction).'
+    : 'Full gratuity rate applies (termination, contract end, or death/disability).';
 
   const finalEstimateAed = Math.round(cappedGratuityAed * resignationMultiplier);
 
