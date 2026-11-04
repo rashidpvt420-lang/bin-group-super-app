@@ -302,6 +302,8 @@ const roleCases: RoleCase[] = [
       '/onboard-property',
       '/design-studio',
       '/hr',
+      '/hr/payroll-prep',
+      '/my-hr',
       '/audit',
       '/admin/pricing-matrix',
       '/admin/units',

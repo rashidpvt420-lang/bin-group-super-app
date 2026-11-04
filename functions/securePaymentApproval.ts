@@ -1,3 +1,4 @@
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
@@ -15,11 +16,9 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
-const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
-const lower = (value: unknown) => text(value).toLowerCase();
 
 const isRentCollectionPayment = (payment: any) =>
   upper(payment?.recordType) === "OWNER_RENT_PAYMENT" ||
@@ -31,26 +30,8 @@ const isRentCollectionPayment = (payment: any) =>
 const resolvePaymentId = (data: any) => text(data?.paymentId || data?.id);
 
 async function requireMfaFinanceAdmin(auth: any) {
-  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
-  const token = auth.token || {};
-  const role = lower(token.role || token.userRole || token.primaryRole);
-  const authorized =
-    token.admin === true ||
-    token.isAdmin === true ||
-    token.superAdmin === true ||
-    token.super_admin === true ||
-    token.ceo === true ||
-    FINANCE_ADMIN_ROLES.has(role);
-  if (!authorized || token.suspended === true) {
-    throw new HttpsError("permission-denied", "Finance Admin authority is required.");
-  }
-  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
-    throw new HttpsError("permission-denied", "A verified Admin MFA session is required for payment decisions.");
-  }
-  const record = await admin.auth().getUser(auth.uid);
-  if (record.disabled || !record.emailVerified || !record.email) {
-    throw new HttpsError("permission-denied", "The Admin account is not active and verified.");
-  }
+  // Shared gate: Finance Admin role + MFA + active account + LIVE custom claims (stale-token guard).
+  await requireMfaFinanceAdminActor({ auth });
 }
 
 

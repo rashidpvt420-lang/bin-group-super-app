@@ -49,6 +49,7 @@ import PaintingFinanceReviewPage from './pages/ops/PaintingFinanceReviewPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
+import MyHrSelfServicePage from './pages/admin/MyHrSelfServicePage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
@@ -111,7 +112,9 @@ function AppContent() {
                     <Route path="/mfa-recovery" element={<ProtectedRoute adminOnly><AdminMfaRecoveryPage /></ProtectedRoute>} />
                     <Route path="/contracts" element={<ProtectedRoute adminOnly><AdminContractControlPage /></ProtectedRoute>} />
                     <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
-                    <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
+                    <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage mode="settle" /></ProtectedRoute>} />
+                    <Route path="/my-hr" element={<ProtectedRoute><MyHrSelfServicePage /></ProtectedRoute>} />
+                    <Route path="/hr/payroll-prep" element={<ProtectedRoute adminOnly><PayrollManagementPage mode="prepare" /></ProtectedRoute>} />
                     <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/broker-attributions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
