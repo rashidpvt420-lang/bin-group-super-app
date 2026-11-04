@@ -105,6 +105,42 @@ const STAFF_ROLES = new Set([
     'operations_manager',
 ]);
 
+// Full admin (blanket frontend capability) is ONLY admin / super_admin / ceo.
+// Departmental admins get an explicit capability set; server callables remain the authority.
+export const FULL_ADMIN_ROLES = new Set(['admin', 'super_admin', 'ceo']);
+// Money-moving capabilities are never granted by a profile `permissions` flag alone.
+export const MONEY_CAPABILITIES = new Set<SovereignPermission>(['canVerifyPayments', 'canApproveExpenses', 'canManagePayroll']);
+export const ROLE_CAPABILITIES: Record<string, SovereignPermission[]> = {
+    finance_admin: ['canViewPayments', 'canVerifyPayments', 'canViewFinancials', 'canManagePayroll', 'canApproveExpenses', 'canExportReports', 'canViewAuditLogs'],
+    finance_staff: ['canViewPayments', 'canViewFinancials'],
+    hr_admin: ['canViewHR', 'canViewConfidentialHR', 'canManageTechnicians'],
+    hr_manager: ['canViewHR', 'canViewConfidentialHR', 'canExportReports'],
+    hr_staff: ['canViewHR'],
+    operations_admin: ['canManageTechnicians', 'canDispatchJobs', 'canManageFleet', 'canManageInventory', 'canManageProperties'],
+    operations_manager: ['canManageTechnicians', 'canDispatchJobs', 'canExportReports'],
+    dispatcher: ['canDispatchJobs'],
+    support_admin: ['canManageTenants'],
+    account_manager: ['canManageContracts', 'canManageProperties'],
+    manager: ['canExportReports'],
+};
+export const claimsGrantFullAdmin = (claims: Record<string, unknown>): boolean => Boolean(
+    claims.admin === true || claims.isAdmin === true || claims.super_admin === true || claims.superAdmin === true || claims.ceo === true ||
+    FULL_ADMIN_ROLES.has(String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase())
+);
+export const resolvePermission = (
+    role: unknown,
+    fullAdmin: boolean,
+    profilePermissions: Record<string, boolean>,
+    permission: SovereignPermission,
+): boolean => {
+    const r = String(role || '').trim().toLowerCase();
+    if (fullAdmin || FULL_ADMIN_ROLES.has(r)) return true;
+    const granted = (ROLE_CAPABILITIES[r] || []).includes(permission);
+    if (granted) return true;
+    if (MONEY_CAPABILITIES.has(permission)) return false;
+    return profilePermissions[permission] === true;
+};
+
 const normalizeRole = (value: unknown): string => String(value || '').trim().toLowerCase();
 const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
 const roleIsStaff = (value: unknown): boolean => STAFF_ROLES.has(normalizeRole(value));
@@ -117,7 +153,6 @@ const claimsGrantAdmin = (claims: Record<string, unknown>): boolean => {
         claims.admin === true ||
         claims.isAdmin === true ||
         claims.ceo === true ||
-        claims.manager === true ||
         roleIsAdmin(claimRole)
     );
 };
@@ -227,6 +262,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
     const [legalAccepted, setLegalAccepted] = useState(true);
     const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+    const [claimFullAdmin, setClaimFullAdmin] = useState(false);
     const loadingRef = useRef(loading);
     const profileSyncInFlightRef = useRef(0);
     const authObserverSettledRef = useRef(false);
@@ -260,6 +296,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             const claims = tokenResult.claims || {};
             const claimRole = claimRoleFrom(claims);
             const claimIsAdmin = claimsGrantAdmin(claims);
+            setClaimFullAdmin(claimsGrantFullAdmin(claims));
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
 
@@ -280,6 +317,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 }
                 setRole(null);
                 setIsAdmin(false);
+                setClaimFullAdmin(false);
                 setStatus('role_required');
                 setUser({ ...currentUser, status: 'role_required' } as SovereignUser);
                 setError(null);
@@ -297,6 +335,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setRole(null);
                     setStatus('role_required');
                     setIsAdmin(false);
+                    setClaimFullAdmin(false);
                     setPermissions({});
                     setPropertyId(null);
                     setLegalAccepted(true);
@@ -363,6 +402,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setUser({ ...currentUser, ...newProfile } as SovereignUser);
                 setRole(null);
                 setIsAdmin(false);
+                setClaimFullAdmin(false);
                 setStatus('role_required');
                 setPermissions({});
                 setPropertyId(null);
@@ -380,8 +420,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const hasPermission = (permission: SovereignPermission): boolean => {
-        if (isAdmin) return true;
-        return !!permissions[permission];
+        return resolvePermission(role, claimFullAdmin, permissions, permission);
     };
 
     const refreshRole = async () => {
@@ -478,6 +517,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         setRole(null);
                         setStatus(null);
                         setIsAdmin(false);
+                        setClaimFullAdmin(false);
                         setPropertyId(null);
                         setLegalAccepted(true);
                         setError(null);
