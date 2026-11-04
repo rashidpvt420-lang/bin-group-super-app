@@ -136,6 +136,34 @@ type TrackingMapProps = {
     jobMapsUrl: string | null;
 };
 
+// Map markers: a car for the technician and a pin for the property. Built as
+// inline SVG data URLs so no extra map library or paid asset is needed.
+const CAR_MARKER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">' +
+    '<circle cx="22" cy="22" r="20" fill="#0f172a" stroke="#22d3ee" stroke-width="3"/>' +
+    '<path d="M12 25l2.4-6.6A2.5 2.5 0 0 1 16.8 16.7h10.4a2.5 2.5 0 0 1 2.4 1.7L32 25v5.2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V29H16v1.2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1z" fill="#22d3ee"/>' +
+    '<path d="M15.2 24l1.6-4.6h10.4l1.6 4.6z" fill="#0f172a"/>' +
+    '<circle cx="16" cy="26.6" r="1.6" fill="#0f172a"/><circle cx="28" cy="26.6" r="1.6" fill="#0f172a"/></svg>';
+const PROPERTY_PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">' +
+    '<path d="M18 1C8.6 1 1 8.6 1 18c0 12.7 17 29 17 29s17-16.3 17-29C35 8.6 27.4 1 18 1z" fill="#d4a017" stroke="#0f172a" stroke-width="2"/>' +
+    '<path d="M10 19l8-7 8 7v8h-5v-5h-6v5h-5z" fill="#0f172a"/></svg>';
+const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+
+function technicianCarMarkerIcon(google: any) {
+    return {
+        url: svgDataUrl(CAR_MARKER_SVG),
+        scaledSize: new google.maps.Size(44, 44),
+        anchor: new google.maps.Point(22, 22),
+    };
+}
+
+function propertyPinMarkerIcon(google: any) {
+    return {
+        url: svgDataUrl(PROPERTY_PIN_SVG),
+        scaledSize: new google.maps.Size(36, 48),
+        anchor: new google.maps.Point(18, 47),
+    };
+}
+
 function LiveTrackingMap({
     technicianLocation,
     jobLocation,
@@ -173,8 +201,9 @@ function LiveTrackingMap({
             jobMarkerRef.current = new google.maps.Marker({
                 map,
                 position: { lat: jobLocation.lat, lng: jobLocation.lng },
-                title: 'Service location',
-                label: { text: 'JOB', fontWeight: '700' },
+                title: 'Property location',
+                icon: propertyPinMarkerIcon(google),
+                zIndex: 1,
             });
         } else {
             jobMarkerRef.current.setMap(map);
@@ -187,7 +216,8 @@ function LiveTrackingMap({
                     map,
                     position: { lat: technicianLocation.lat, lng: technicianLocation.lng },
                     title: trackingFresh ? 'Live technician position' : 'Last known technician position',
-                    label: { text: 'TECH', fontWeight: '700' },
+                    icon: technicianCarMarkerIcon(google),
+                    zIndex: 2,
                 });
             } else {
                 technicianMarkerRef.current.setMap(map);
