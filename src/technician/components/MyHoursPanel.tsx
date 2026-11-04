@@ -31,6 +31,13 @@ export default function MyHoursPanel() {
     return () => { cancelled = true; };
   }, [month]);
 
+  const [roster, setRoster] = useState<Record<string, { start: string; end: string } | null> | null>(null);
+  useEffect(() => {
+    httpsCallable(functions, 'getMyRoster')({})
+      .then((res: any) => setRoster(res?.data?.weekly || null))
+      .catch(() => setRoster(null));
+  }, []);
+
   const totals = data?.totals || {};
   return (
     <Paper data-testid="my-hours-panel" sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
@@ -41,6 +48,12 @@ export default function MyHoursPanel() {
           {[0, -1, -2].map((o) => <MenuItem key={o} value={dubaiMonth(o)}>{dubaiMonth(o)}</MenuItem>)}
         </TextField>
       </Stack>
+      <Typography data-testid="my-roster" variant="body2" color="rgba(255,255,255,0.7)" sx={{ mb: 2 }}>
+        <Bi en={"My roster (GST): "} ar={"جدول نوباتي: "} />
+        {roster
+          ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => `${d} ${roster[String(i)] ? `${roster[String(i)]!.start}-${roster[String(i)]!.end}` : 'off'}`).join(' · ')
+          : <Bi en={"Not set by HR yet"} ar={"لم يحدده قسم الموارد البشرية بعد"} />}
+      </Typography>
       {error && <Alert severity="error">{error}</Alert>}
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip label={`Worked ${hm(totals.workedMinutes)}`} />
