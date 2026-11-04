@@ -9,6 +9,7 @@ import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssInten
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
 import Bi from '../../components/Bi';
+import MyHoursPanel from '../components/MyHoursPanel';
 
 const quickPrompts = [
   'I need annual leave next week',
@@ -334,6 +335,8 @@ export default function TechnicianHRPageV2() {
           </Paper>
         </Grid>
       </Grid>
+
+      <MyHoursPanel />
 
       <Paper data-testid="leave-request-form" sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Sun color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Leave Request"} ar={"طلب إجازة"} /></Typography></Stack>

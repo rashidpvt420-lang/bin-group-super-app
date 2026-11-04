@@ -1043,6 +1043,85 @@ export const getMyLeaveBalance = onCall(
     },
 );
 
+/**
+ * The caller's own hours for a month: clock-in/out per day, worked and overtime minutes from the
+ * server hours engine, and their overtime claims with the proof copied at submission.
+ * Read-only, own data only.
+ */
+export const getMyHours = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        assertStaffActor(request.auth);
+        const uid = String(request.auth?.uid || "");
+        const month = safeText(request.data?.month) || dubaiDateOf(Date.now()).slice(0, 7);
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpsError("invalid-argument", "Month must be YYYY-MM.");
+        const dates = monthDates(month);
+        const shiftSnaps = await db.getAll(...dates.map((d) => db.collection("staff_shifts").doc(`SHIFT_${uid}_${d}`)));
+        const days: Array<Record<string, unknown>> = [];
+        const engineDays: DayHours[] = [];
+        for (const snap of shiftSnaps) {
+            if (!snap.exists) continue;
+            const data = snap.data() || {};
+            const clockInMs = millisOf(data.clockInTime);
+            const clockOutMs = millisOf(data.clockOutTime);
+            const shiftDate = safeText(data.shiftDate) || snap.id.slice(-10);
+            const row: Record<string, unknown> = {
+                shiftDate,
+                status: safeText(data.status),
+                clockInAt: clockInMs !== null ? new Date(clockInMs).toISOString() : null,
+                clockOutAt: clockOutMs !== null ? new Date(clockOutMs).toISOString() : null,
+                missedClockOut: clockInMs !== null && clockOutMs === null && shiftDate < dubaiDateOf(Date.now()),
+            };
+            if (clockInMs !== null && clockOutMs !== null) {
+                const h = computeShiftHours({ shiftDate, clockInMs, clockOutMs });
+                engineDays.push(h);
+                Object.assign(row, h);
+            }
+            days.push(row);
+        }
+        const trackers = await db.collection("staff_request_trackers").where("staffId", "==", uid).limit(200).get();
+        const claims: Array<Record<string, unknown>> = [];
+        const approvedByDate: Record<string, number> = {};
+        for (const doc of trackers.docs) {
+            const t = doc.data() || {};
+            if (safeText(t.requestType).toUpperCase() !== "OVERTIME_CLAIM") continue;
+            const createdMs = millisOf(t.createdAt);
+            const date = safeText(t.shiftDate) || (createdMs !== null ? dubaiDateOf(createdMs) : "");
+            if (!date.startsWith(month)) continue;
+            const status = safeText(t.status).toUpperCase();
+            const approvedMinutes = Number(t.approvedMinutes) || 0;
+            if (["APPROVED", "PAYROLL_INCLUDED", "PAID"].includes(status) && approvedMinutes > 0) {
+                approvedByDate[date] = (approvedByDate[date] || 0) + Math.round(approvedMinutes);
+            }
+            claims.push({
+                trackerId: doc.id,
+                shiftDate: date,
+                status,
+                jobId: t.jobId || null,
+                estimatedMinutes: Number(t.estimatedMinutes) || 0,
+                approvedMinutes,
+                reviewNote: safeText(t.reviewNote) || null,
+                proof: t.proof || null,
+                proofStrength: t.proofStrength || null,
+            });
+        }
+        const payable = payableDays(engineDays, approvedByDate);
+        const sum = (list: DayHours[], key: keyof DayHours) => list.reduce((acc, d) => acc + (Number(d[key]) || 0), 0);
+        return {
+            month,
+            days: days.sort((a, b) => String(a.shiftDate).localeCompare(String(b.shiftDate))),
+            claims: claims.sort((a, b) => String(a.shiftDate).localeCompare(String(b.shiftDate))),
+            totals: {
+                workedMinutes: sum(engineDays, "workedMinutes"),
+                clockedOvertimeMinutes: sum(engineDays, "overtimeMinutes"),
+                payableOvertimeMinutes: sum(payable, "overtimeMinutes"),
+                payableRestDayMinutes: sum(payable, "restDayMinutes"),
+            },
+            note: "Payable overtime = clocked overtime (max 2h a day) that HR has approved.",
+        };
+    },
+);
+
 export const onStaffRequestReviewed = onDocumentUpdated("staffRequests/{requestId}", async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
