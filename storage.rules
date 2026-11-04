@@ -52,6 +52,13 @@ service firebase.storage {
       return isAdmin() || hasAnyRole(['hr_admin', 'hr_manager', 'hr_staff']);
     }
 
+    // Rashid, 4 Nov 2026: identity/medical staff files are limited to the HR
+    // manager tier (hr_admin / hr_manager, plus full admin with a second factor),
+    // mirroring Firestore staffDocuments. hr_staff and auditors no longer read them.
+    function isHrManagerTier() {
+      return isAdmin() || hasAnyRole(['hr_admin', 'hr_manager']);
+    }
+
     function isAuditor() {
       return hasAnyRole(['AUDITOR', 'auditor', 'compliance_officer']);
     }
@@ -303,9 +310,9 @@ service firebase.storage {
     }
 
     match /staffDocuments/{staffId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == staffId || isHrRole()) && isDocumentUpload(15);
-      allow delete: if isHrRole();
+      allow read: if isAuth() && (request.auth.uid == staffId || isHrManagerTier());
+      allow write: if isAuth() && (request.auth.uid == staffId || isHrManagerTier()) && isDocumentUpload(15);
+      allow delete: if isHrManagerTier();
     }
 
     match /hrDocuments/{staffId}/{allPaths=**} {
