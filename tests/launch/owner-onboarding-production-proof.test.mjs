@@ -127,7 +127,7 @@ for (const token of [
   assert.ok(inspectionCompletion.includes(token), `Evidence-backed visit completion is missing: ${token}`);
 }
 // MFA is enforced via the shared live-claims gate in financeAdminMfa.ts.
-const financeAdminMfa = fs.readFileSync(new URL('../../functions/financeAdminMfa.ts', import.meta.url), 'utf8');
+const financeAdminMfa = fs.readFileSync('functions/financeAdminMfa.ts', 'utf8');
 assert.ok(secureApproval.includes('await requireMfaFinanceAdminActor({ auth })'), 'Secure final approval must delegate to the live-claims MFA gate');
 assert.ok(financeAdminMfa.includes('sign_in_second_factor'), 'Live-claims MFA gate is missing: sign_in_second_factor');
 for (const token of [
