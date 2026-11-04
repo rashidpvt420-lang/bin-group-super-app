@@ -52,7 +52,9 @@ test('raw HR documents and wellbeing check-ins do not leak to Finance', () => {
   const moodBlock = rules.match(/match \/staffMoodCheckins\/\{checkinId\} \{[\s\S]*?\n    \}/)?.[0] || '';
 
   assert.match(staffDocumentsBlock, /Passports, IDs, visas and medical files/);
-  assert.match(staffDocumentsBlock, /allow read: if isHr\(\) \|\| staffCanRead\(resource\.data\);/);
+  // Narrowed 4 Nov 2026: only HR manager tier (hr_admin/hr_manager) or the employee themselves.
+  assert.match(staffDocumentsBlock, /allow read: if isHrManagerTier\(\) \|\| staffCanRead\(resource\.data\);/);
+  assert.doesNotMatch(staffDocumentsBlock, /allow read: if isHr\(\)/);
   assert.doesNotMatch(staffDocumentsBlock, /isFinance\(\)/);
   assert.match(moodBlock, /allow read: if isHrManagerTier\(\) \|\| staffCanRead\(resource\.data\);/);
   assert.doesNotMatch(moodBlock, /allow read: if isHr\(\)/);

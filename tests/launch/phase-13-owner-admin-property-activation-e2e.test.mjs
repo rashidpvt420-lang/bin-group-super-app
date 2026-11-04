@@ -97,8 +97,10 @@ test('Phase 13 preserves activation fail-closed payment and physical evidence au
   for (const token of [
     'Every property visit must be verified before final payment approval',
     'Immutable 15% receipt evidence is required before final approval',
-    'sign_in_second_factor',
+    'await requireMfaFinanceAdminActor({ auth })',
     'payment.inspectionVerified !== true',
     'Immutable 15% receipt evidence is required before final approval',
   ]) assert.ok(approval.includes(token), `Final activation gate missing ${token}`);
+  const financeAdminMfa = await read('functions/financeAdminMfa.ts');
+  assert.ok(financeAdminMfa.includes('sign_in_second_factor'), 'Live-claims MFA gate missing sign_in_second_factor');
 });
