@@ -68,13 +68,14 @@ const Navigation = () => {
         { text: navText('Dispute Queue', 'قائمة النزاعات'), icon: <PendingActionsIcon />, path: '/ops/disputes', color: '#ef4444' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
-        ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr' }] : []),
+        ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr' }, { text: navText('Payroll Prep', 'إعداد الرواتب'), icon: <Users size={20} />, path: '/hr/payroll-prep' }] : []),
     ];
 
     const systemMenu = [
         ...(isRecoveryApprover
             ? [{ text: navText('MFA Recovery', 'استعادة المصادقة'), icon: <SecurityIcon />, path: '/mfa-recovery' }]
             : []),
+        { text: navText('My HR', 'شؤوني الوظيفية'), icon: <Users size={20} />, path: '/my-hr' },
         { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/settings' },
     ];
 

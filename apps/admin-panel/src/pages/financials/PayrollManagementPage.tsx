@@ -28,6 +28,25 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
+import { useAuth } from '../../context/AuthContext';
+
+// Payroll separation of duties (Rashid, 4 Nov 2026): HR prepares, Finance Admin settles.
+// UI only; adminGeneratePayrollBatch / adminSettlePayrollRecord stay the authority server-side.
+export type PayrollScreenMode = 'prepare' | 'settle';
+const SETTLE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
+const PREPARE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'hr_admin', 'hr_manager']);
+export const canSettlePayroll = (user: any, mfaVerified: boolean): boolean => {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || '').trim().toLowerCase();
+  if (claims.suspended === true || mfaVerified !== true) return false;
+  return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || SETTLE_ROLES.has(role));
+};
+export const canPreparePayroll = (user: any, mfaVerified: boolean): boolean => {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || '').trim().toLowerCase();
+  if (claims.suspended === true || mfaVerified !== true) return false;
+  return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || PREPARE_ROLES.has(role));
+};
 
 interface Technician {
   uid: string;
@@ -47,8 +66,11 @@ interface PayrollRecord {
   processedAt: any;
 }
 
-export default function PayrollManagementPage() {
+export default function PayrollManagementPage({ mode = 'settle' }: { mode?: PayrollScreenMode }) {
   const { t, lang, isRTL } = useLanguage();
+  const { user, mfaVerified } = useAuth();
+  const showPrepare = mode === 'prepare' && canPreparePayroll(user, mfaVerified);
+  const showSettle = mode === 'settle' && canSettlePayroll(user, mfaVerified);
   const [techs, setTechs] = useState<Technician[]>([]);
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
   const [openProcess, setOpenAdd] = useState(false);
@@ -155,9 +177,11 @@ export default function PayrollManagementPage() {
         <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>
         </Typography>
-        <Button variant="contained" startIcon={<Wallet />} onClick={() => setOpenAdd(true)} sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}>
+        {showPrepare && (
+        <Button data-testid="payroll-prepare" variant="contained" startIcon={<Wallet />} onClick={() => setOpenAdd(true)} sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}>
           {t('fin.gen_payroll_btn')}
         </Button>
+        )}
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -209,9 +233,9 @@ export default function PayrollManagementPage() {
                   <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{t('common.currency_aed')} {formatAED(record.amount)}</TableCell>
                   <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={record.status} color={record.status === 'paid' ? 'success' : 'warning'} size="small" /></TableCell>
                   <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Button size="small" variant="contained" disabled={processing || record.status === 'paid'} onClick={() => handleSettlePayment(record)} startIcon={processing ? <CircularProgress size={14} color="inherit" /> : <Send size={14} />} sx={{ bgcolor: '#10b981', fontWeight: 900 }}>
+                    {showSettle ? <Button data-testid="payroll-settle" size="small" variant="contained" disabled={processing || record.status === 'paid'} onClick={() => handleSettlePayment(record)} startIcon={processing ? <CircularProgress size={14} color="inherit" /> : <Send size={14} />} sx={{ bgcolor: '#10b981', fontWeight: 900 }}>
                       {t('fin.pay_advise') || 'PAY & ADVISE'}
-                    </Button>
+                    </Button> : <Typography variant="caption" data-testid="payroll-settle-hidden">{mode === 'prepare' ? 'Prepared by HR · settled by Finance Admin' : 'Finance Admin + MFA required to settle'}</Typography>}
                   </TableCell>
                 </TableRow>
               ))}
