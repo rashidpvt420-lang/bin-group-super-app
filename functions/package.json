@@ -20,7 +20,7 @@
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.2.5",
     "google-auth-library": "^9.15.1",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^10.3.1",
     "openai": "^6.34.0",
     "pdfkit": "^0.18.0",
     "qrcode-generator": "^1.5.2",
@@ -32,5 +32,8 @@
   },
   "engines": {
     "node": "22"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
   }
 }
