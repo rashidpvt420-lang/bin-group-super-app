@@ -130,6 +130,8 @@ export const isFullAdminUser = (user: any): boolean => {
     );
 };
 
+export const MY_HR_PATH = '/my-hr';
+
 export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     if (!user) return false;
     if (pathname === '/profile' || pathname.startsWith('/profile?')) return true;
@@ -137,6 +139,11 @@ export const canAccessAdminPath = (user: any, pathname: string): boolean => {
 
     const role = normalizeRole(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole);
     const normalizedPath = String(pathname || '/').split(/[?#]/, 1)[0] || '/';
+    // Staff HR self-service: every approved employee (incl. painting finance) may open their own
+    // records page; the Firestore own-record rules decide what is actually readable.
+    if (normalizedPath === MY_HR_PATH) {
+        return !user?.claims?.suspended && (STAFF_PORTAL_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(role));
+    }
     if (PAINTING_FINANCE_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(normalizeRole(user?.claims?.financeRole))) {
         if (normalizedPath === PAINTING_FINANCE_PATH) return true;
         if (PAINTING_FINANCE_ROLES.has(role)) return false;

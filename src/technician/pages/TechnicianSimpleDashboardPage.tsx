@@ -10,19 +10,23 @@ import { ui, uiType } from '../../theme/uiTokens';
 import { getTicketJobLocation } from '../../utils/liveTracking';
 import TechnicianDutyAvailabilityCard from '../components/TechnicianDutyAvailabilityCard';
 import { useTechnicianHomeJobs } from '../hooks/useTechnicianHomeJobs';
+import TechnicianLanguagePicker from '../components/TechnicianLanguagePicker';
+import { useTechnicianLanguage } from '../i18n/technicianLanguages';
 import { jobAddress, jobPlace, jobTimeMs, jobTitle, navigateUrl, needsAccept, type HomeJob } from '../utils/technicianHomeJobs';
 
 /** Redesigned technician home (REDESIGN.md R3): next job first, then duty, then today's list. */
 export default function TechnicianSimpleDashboardPage() {
   const navigate = useNavigate();
-  const { isRTL, lang, tx } = useLanguage();
+  const { lang: appLang } = useLanguage();
+  const { lang, setLang, tt, isRTL, locale } = useTechnicianLanguage(appLang);
   const { user } = useRole();
   const { loading, error, active, doneToday } = useTechnicianHomeJobs();
-  const t = (key: string, en: string, ar: string) => (lang === 'ar' ? ar : tx(key, en));
+  // Arabic literals kept as the ar fallback; all 7 technician languages come from TECH_STRINGS.
+  const t = (key: string, en: string, _ar: string) => tt(key, en);
   const firstName = String(user?.displayName || '').trim().split(/\s+/)[0] || '';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('tech.home.morning', 'Good morning', 'صباح الخير') : t('tech.home.afternoon', 'Hello', 'مرحباً');
-  const timeLabel = (job: HomeJob) => { const ms = jobTimeMs(job); return ms ? new Date(ms).toLocaleTimeString(lang === 'ar' ? 'ar-AE' : 'en-AE', { hour: 'numeric', minute: '2-digit' }) : ''; };
+  const timeLabel = (job: HomeJob) => { const ms = jobTimeMs(job); return ms ? new Date(ms).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }) : ''; };
   const statusChip = (job: HomeJob) => {
     const s = String(job.status || '').toLowerCase();
     if (needsAccept(job)) return <StatusChip tone="warn" label={t('tech.home.new', 'New', 'جديدة')} />;
@@ -40,6 +44,7 @@ export default function TechnicianSimpleDashboardPage() {
     <Box data-testid="technician-home" sx={{ direction: isRTL ? 'rtl' : 'ltr', mx: { xs: -2, sm: 0 }, mt: { xs: -3.5, md: 0 } }}>
       <AppHeader isRTL={isRTL} eyebrow={greeting} title={firstName || t('tech.home.title', 'Your jobs', 'مهامك')} initials={firstName || undefined} />
       <Stack spacing={1.75} sx={{ p: 2, bgcolor: ui.cream }}>
+        <TechnicianLanguagePicker value={lang} onChange={setLang} label={tt('tech.lang.choose', 'Language')} />
         {loading && <Skeleton variant="rounded" height={190} sx={{ borderRadius: `${ui.radiusCard}px` }} />}
         {!loading && error && <ErrorState isRTL={isRTL} title={t('tech.home.loadError', 'Jobs could not load. Check your connection.', 'تعذر تحميل المهام. تحقق من الاتصال.')} />}
         {!loading && !error && next && (

@@ -28,5 +28,11 @@ export async function requirePaintingFinanceApprover(request: any): Promise<{ ui
   if (record.disabled || !record.emailVerified || !record.email) {
     throw new HttpsError("permission-denied", "The Finance account is not active and verified.");
   }
+  // Stale-token guard: the role must still be held in the LIVE custom claims (roles unchanged).
+  const live = (record.customClaims || {}) as Record<string, unknown>;
+  const liveRole = text(live.role || live.financeRole).toLowerCase();
+  if (!PAINTING_FINANCE_APPROVER_ROLES.has(liveRole) || live.suspended === true) {
+    throw new HttpsError("permission-denied", "Finance Manager / Controller authority is no longer active on this account.");
+  }
   return { uid: auth.uid, email: text(token.email || record.email).toLowerCase(), role };
 }

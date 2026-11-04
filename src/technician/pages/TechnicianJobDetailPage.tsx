@@ -30,6 +30,8 @@ import {
 import { formatStatusLabel } from '../../theme/statusColors';
 import JobEvidenceSteps from '../components/JobEvidenceSteps';
 import Bi from '../../components/Bi';
+import TechnicianQuickNoteInput from '../components/TechnicianQuickNoteInput';
+import { useTechnicianLanguage } from '../i18n/technicianLanguages';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
@@ -172,6 +174,7 @@ export default function TechnicianJobDetailPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [notes, setNotes] = useState('');
+    const { lang: techLang } = useTechnicianLanguage(lang);
     const [materials, setMaterials] = useState('');
     const [gpsError, setGpsError] = useState<string | null>(null);
     // An arrival rejection must survive independent live-tracking recovery.
@@ -645,8 +648,7 @@ export default function TechnicianJobDetailPage() {
                                     </Stack>
                                 </Paper>
                                 {closeBlockers.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.close_blockers', 'Mission cannot close until these proof items are complete:')} {closeBlockers.join(', ')}</Alert>}
-                                <TextField fullWidth multiline rows={3} label={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#111827' }, '& label': { color: '#475569' } }} />
-                                <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#111827' }, '& label': { color: '#475569' } }} />
+                                <TechnicianQuickNoteInput lang={techLang} notes={notes} setNotes={setNotes} materials={materials} setMaterials={setMaterials} notesLabel={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} materialsLabel={tx('tech.job.materials_used', 'Materials used / No parts required')} />
                                 <Alert data-testid="technician-protected-after-work-guidance" severity={hasProtectedAfterProof ? 'success' : 'info'} sx={{ mb: 2 }}>
                                     {hasProtectedAfterProof
                                         ? 'The protected after-work evidence is server-confirmed. Completion can proceed once notes and parts disposition are ready.'
