@@ -5,6 +5,7 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
+import { inclusiveDays, leaveSummary, splitSickDays, type LeaveRecord } from "./hrLeaveEngine";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
@@ -956,6 +957,79 @@ export const onStaffRequestCreated = onDocumentCreated("staffRequests/{requestId
     await writeHrAudit("HR_REQUEST_CREATED", requestId, { priority, requestType: data.requestType || null, source: data.source || "paperless_staff_portal" });
 });
 
+const LEAVE_TYPES_WITH_BALANCE = ["annual_leave", "sick_leave"];
+
+function joinDateKey(profile: FirebaseFirestore.DocumentData | undefined): string {
+    const d = dateFromAny(profile?.joiningDate || profile?.hireDate || profile?.joinedAt || profile?.dateOfJoining);
+    return d ? d.toISOString().slice(0, 10) : "";
+}
+
+function leaveDaysOf(data: FirebaseFirestore.DocumentData): number {
+    const explicit = Number(data.leaveDays);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit * 2) / 2;
+    return inclusiveDays(safeText(data.startDate), safeText(data.endDate));
+}
+
+function approvedLeaveRecords(docs: FirebaseFirestore.QueryDocumentSnapshot[], excludeId = ""): LeaveRecord[] {
+    return docs
+        .filter((d) => d.id !== excludeId)
+        .map((d) => d.data() || {})
+        .filter((r) => isApprovedHrStatus(r.status) && LEAVE_TYPES_WITH_BALANCE.includes(safeText(r.requestType)))
+        .map((r) => ({
+            leaveType: safeText(r.requestType),
+            days: Number(r.leaveDeduction?.days ?? leaveDaysOf(r)) || 0,
+            startDate: safeText(r.startDate),
+        }));
+}
+
+async function staffLeaveState(uid: string, excludeId = "") {
+    const [profileSnap, requestsSnap] = await Promise.all([
+        db.collection("users").doc(uid).get(),
+        db.collection("staffRequests").where("uid", "==", uid).limit(500).get(),
+    ]);
+    const joinDate = joinDateKey(profileSnap.data());
+    const approved = approvedLeaveRecords(requestsSnap.docs, excludeId);
+    return { joinDate, approved };
+}
+
+/** Writes the leave deduction onto an approved annual/sick leave request (idempotent). */
+async function recordLeaveDeduction(requestId: string, data: FirebaseFirestore.DocumentData) {
+    const leaveType = safeText(data.requestType);
+    if (!LEAVE_TYPES_WITH_BALANCE.includes(leaveType) || data.leaveDeduction) return;
+    const uid = safeText(data.uid || data.userId || data.technicianId);
+    const days = leaveDaysOf(data);
+    if (!uid || days <= 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { joinDate, approved } = await staffLeaveState(uid, requestId);
+    const base: Record<string, unknown> = { leaveType, days, computedAt: serverTimestamp(), source: "SERVER_LEAVE_ENGINE" };
+    if (!joinDate) {
+        base.joinDateMissing = true;
+    } else {
+        const before = leaveSummary(joinDate, today, approved);
+        if (leaveType === "annual_leave") {
+            base.balanceBefore = before.annual.balance;
+            base.balanceAfter = before.annual.balance - days;
+            base.exceedsBalance = days > before.annual.balance;
+        } else {
+            Object.assign(base, splitSickDays(before.sick.used, days), { sickUsedBefore: before.sick.used, inProbation: before.inProbation });
+        }
+    }
+    await db.collection("staffRequests").doc(requestId).set({ leaveDeduction: base }, { merge: true });
+    await writeHrAudit("HR_LEAVE_DEDUCTED", requestId, { uid, leaveType, days });
+}
+
+/** Caller's own leave balances, computed server-side from join date and approved requests. */
+export const getMyLeaveBalance = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        assertStaffActor(request.auth);
+        const uid = String(request.auth?.uid || "");
+        const { joinDate, approved } = await staffLeaveState(uid);
+        if (!joinDate) return { joinDateMissing: true, message: "Your joining date is not set. Ask HR to add it." };
+        return { joinDateMissing: false, joinDate, ...leaveSummary(joinDate, new Date().toISOString().slice(0, 10), approved) };
+    },
+);
+
 export const onStaffRequestReviewed = onDocumentUpdated("staffRequests/{requestId}", async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -965,6 +1039,10 @@ export const onStaffRequestReviewed = onDocumentUpdated("staffRequests/{requestI
     const nextStatus = safeText(after.status, "updated").replace(/_/g, " ").toUpperCase();
     const staffUid = safeText(after.uid || after.userId || after.technicianId);
     const reviewer = safeText(after.reviewedBy, "HR Command");
+
+    if (isApprovedHrStatus(after.status) && !isApprovedHrStatus(before.status)) {
+        await recordLeaveDeduction(requestId, after);
+    }
 
     if (["approved", "rejected", "closed", "escalated"].includes(safeText(after.status).toLowerCase()) && staffUid) {
         await queueUserNotification(staffUid, `HR request ${nextStatus}`, `${requestLabel(after)} was updated by ${reviewer}.`, {

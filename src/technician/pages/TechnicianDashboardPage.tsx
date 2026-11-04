@@ -225,6 +225,20 @@ export default function TechnicianDashboardPage() {
     const [stats, setStats] = useState({ assigned: 0, emergency: 0, inProgress: 0, completedToday: 0, completedMonth: 0, slaRisk: 0, quality: 0 });
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
     const [earnings, setEarnings] = useState(0);
+    const [leaveBalanceDays, setLeaveBalanceDays] = useState<string>('Loading');
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        let cancelled = false;
+        httpsCallable(functions, 'getMyLeaveBalance')({})
+            .then((res: any) => {
+                if (cancelled) return;
+                const data = res?.data || {};
+                setLeaveBalanceDays(data.joinDateMissing ? 'Ask HR (joining date not set)' : `${data.annual?.balance ?? 0} days`);
+            })
+            .catch(() => { if (!cancelled) setLeaveBalanceDays('Not available'); });
+        return () => { cancelled = true; };
+    }, [user?.uid]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -332,7 +346,8 @@ export default function TechnicianDashboardPage() {
     const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Not issued';
     const ppeLabel = profile.ppeIssued ? 'Issued' : 'Not issued';
     const certificationLabel = formatDocumentStatus(profile.certificationsStatus);
-    const leaveBalance = readable(raw.leaveBalance, raw.annualLeaveBalance, raw.staffAgreement?.leaveBalance, '30');
+    // Leave balance is computed server-side (getMyLeaveBalance); never a fixed default.
+    const leaveBalance = leaveBalanceDays;
     const rosterStatus = readable(raw.rosterStatus, raw.attendanceStatus, raw.status, 'Active');
 
     const handleDutyToggle = async (newStatus: string) => {
@@ -429,7 +444,7 @@ export default function TechnicianDashboardPage() {
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={dutyDisplay} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={dutyDisplay} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={leaveBalance} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 
