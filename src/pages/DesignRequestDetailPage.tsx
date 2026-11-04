@@ -19,6 +19,11 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
+import { designStatusLabel, honestDesignStatus } from '../lib/designStatusLabels';
+
+// High-contrast text on the dark cards (>= 4.5:1, WCAG AA). Theme textSecondary is too dark here.
+const LABEL_TEXT = '#D1D5DB';
+const BODY_TEXT = '#F3F4F6';
 
 const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
 const PRIVATE_MEDIA_REFRESH_MS = 10 * 60 * 1000;
@@ -86,7 +91,9 @@ export default function DesignRequestDetailPage() {
 function DesignRequestDetailContent() {
     const { id } = useParams();
     const { user, role } = useRole();
-    const { tx } = useLanguage();
+    const { tx, isRTL } = useLanguage() as any;
+    const lang: 'en' | 'ar' = isRTL ? 'ar' : 'en';
+    const [selectedOption, setSelectedOption] = useState(0);
     const navigate = useNavigate();
     const [request, setRequest] = useState<any>(null);
     const [protectedMedia, setProtectedMedia] = useState<ProtectedMedia>({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
@@ -242,12 +249,17 @@ function DesignRequestDetailContent() {
     const canAdminHandoff = isAdmin && request.paymentVerified === true && request.status === 'PAID';
     const referenceImages = protectedMedia.referenceImages;
     const generatedImages = protectedMedia.generatedImages;
-    const primaryVisual = generatedImages[0] || referenceImages[0] || '';
+    const conceptOptions: any[] = Array.isArray(request.concepts) ? request.concepts : [];
+    const optionIndex = Math.min(selectedOption, Math.max(generatedImages.length - 1, 0));
+    const primaryVisual = generatedImages[optionIndex] || '';
+    const shownStatus = honestDesignStatus(request.status, generatedImages.length);
+    // No fake readiness: without generated images the owner cannot move to payment.
+    const canPayForDesign = canCreatePayment && (shownStatus !== 'IMAGES_NOT_READY' || mediaLoading);
     const executionScope = request.executionScope || buildExecutionScope(request);
 
     return (
         <Container maxWidth="xl" sx={{ py: 6, pr: { xs: 9, md: 3 }, pb: { xs: 14, md: 8 } }}>
-            <Button startIcon={<ArrowLeft />} onClick={() => navigate(`${basePrefix}/design-studio`)} sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, fontWeight: 900 }}>
+            <Button startIcon={<ArrowLeft />} onClick={() => navigate(`${basePrefix}/design-studio`)} sx={{ color: LABEL_TEXT, mb: 4, fontWeight: 900 }}>
                 BACK TO STUDIO
             </Button>
             {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
@@ -258,39 +270,61 @@ function DesignRequestDetailContent() {
                 <Grid item xs={12} lg={7}>
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden', minWidth: 0 }}>
                         <Box sx={{ p: 4, borderBottom: '1px solid rgba(255,255,255,0.05)', bgcolor: alpha(binThemeTokens.gold, 0.05) }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>AI CONCEPT PREVIEW</Typography>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{generatedImages.length > 1 ? `PICK YOUR DESIGN - ${generatedImages.length} OPTIONS` : 'AI DESIGN'}</Typography>
                             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', overflowWrap: 'anywhere' }}>{text(scope.zoneType, 'DESIGN').toUpperCase()}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
-                                {isTenantRequest ? 'Tenant request requires owner NOC before payment and execution.' : 'Owner request can proceed directly to payment and admin execution.'}
+                            <Typography variant="body2" sx={{ color: LABEL_TEXT, mt: 1 }}>
+                                {isTenantRequest ? 'Tenant request requires owner NOC before payment and execution.' : 'Pick the option you like, then approve the quote to pay the deposit. Nothing is charged until you approve.'}
                             </Typography>
                         </Box>
 
                         <Box sx={{ p: 0, minHeight: 360, bgcolor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                             {primaryVisual ? (
-                                <Box component="img" alt="Design concept" src={primaryVisual} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.9 }} />
+                                <Box component="img" alt={text(conceptOptions[optionIndex]?.optionLabel, `Design option ${optionIndex + 1}`)} src={primaryVisual} sx={{ width: '100%', height: 420, objectFit: 'cover' }} />
                             ) : (
                                 <Box sx={{ width: '100%', minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.72)' }}>
                                     <Stack spacing={2} alignItems="center">
                                         <ImageIcon size={48} color="rgba(255,255,255,0.35)" />
-                                        <Typography variant="h6" fontWeight={950} sx={{ color: 'rgba(255,255,255,0.78)' }}>PROTECTED VISUAL UNAVAILABLE</Typography>
-                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.48)', maxWidth: 420 }}>A fresh authorised media URL is required. No public, demo or stock image is substituted.</Typography>
+                                        <Typography variant="h6" fontWeight={950} sx={{ color: BODY_TEXT }}>DESIGN IMAGES NOT READY</Typography>
+                                        <Typography variant="body2" sx={{ color: LABEL_TEXT, maxWidth: 420 }}>{mediaLoading ? 'Loading your design images…' : 'No generated design image is available for this request. Nothing is charged. Please create a new design request.'}</Typography>
                                     </Stack>
                                 </Box>
                             )}
-                            <Box sx={{ position: 'absolute', bottom: 20, left: 20, right: 20, p: 2, bgcolor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontStyle: 'italic', overflowWrap: 'anywhere' }}>
-                                    "{request.conceptPrompt || quote.conceptDesignResult || `Concept generated for ${text(scope.zoneType, 'requested zone')}.`}"
-                                </Typography>
-                            </Box>
+                            {primaryVisual && (
+                                <Chip label={text(conceptOptions[optionIndex]?.optionLabel, `Option ${optionIndex + 1}`)} sx={{ position: 'absolute', top: 16, left: 16, bgcolor: 'rgba(0,0,0,0.75)', color: '#FFF', fontWeight: 900 }} />
+                            )}
                         </Box>
+
+                        {generatedImages.length > 0 && (
+                            <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.08)' }} data-testid="design-option-picker">
+                                <Typography variant="subtitle2" sx={{ color: BODY_TEXT, fontWeight: 900, mb: 1.5 }}>
+                                    {generatedImages.length > 1 ? 'Tap an option to compare it with your photo' : 'Only one design option could be created this time'}
+                                </Typography>
+                                <Grid container spacing={1.5}>
+                                    {referenceImages[0] && (
+                                        <Grid item xs={6} sm={3}>
+                                            <Box component="img" alt="Before - your photo" src={referenceImages[0]} sx={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.2)' }} />
+                                            <Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>Before (your photo)</Typography>
+                                        </Grid>
+                                    )}
+                                    {generatedImages.map((url, index) => (
+                                        <Grid item xs={6} sm={3} key={url}>
+                                            <Box component="button" type="button" onClick={() => setSelectedOption(index)} aria-pressed={index === optionIndex} aria-label={`Show ${text(conceptOptions[index]?.optionLabel, `option ${index + 1}`)}`} sx={{ p: 0, width: '100%', bgcolor: 'transparent', cursor: 'pointer', borderRadius: 2, border: index === optionIndex ? `3px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+                                                <Box component="img" alt={text(conceptOptions[index]?.optionLabel, `Option ${index + 1}`)} src={url} sx={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }} />
+                                            </Box>
+                                            <Typography variant="caption" sx={{ color: index === optionIndex ? binThemeTokens.gold : LABEL_TEXT, fontWeight: 800 }}>{text(conceptOptions[index]?.optionLabel, `Option ${index + 1}`)}</Typography>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+                            </Box>
+                        )}
 
                         <Box sx={{ p: 4 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 3 }}>EXECUTION SCOPE FOR ADMIN / ENGINEER</Typography>
                             <Grid container spacing={3}>
-                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">UNIT</Typography><Typography variant="body1" fontWeight="900">{executionScope.unitNumber}</Typography></Grid>
-                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">FLOOR</Typography><Typography variant="body1" fontWeight="900">{executionScope.floorLevel}</Typography></Grid>
-                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">DIMENSIONS</Typography><Typography variant="body1" fontWeight="900">{executionScope.dimensions} SQ FT</Typography></Grid>
-                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">FINISH TIER</Typography><Typography variant="body1" fontWeight="900">{executionScope.finishTier.toUpperCase()}</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>UNIT</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.unitNumber}</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>FLOOR</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.floorLevel}</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>DIMENSIONS</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.dimensions} SQ FT</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>FINISH TIER</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.finishTier.toUpperCase()}</Typography></Grid>
                             </Grid>
 
                             <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -340,15 +374,15 @@ function DesignRequestDetailContent() {
                                         15% Upfront Deposit Required: {formatAED(Number(quote.mobilizationAmount ?? Math.round(Number(quote.finalTotal || 0) * 0.15 * 100) / 100))}
                                     </Typography>
                                 </Box>
-                                <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, maxWidth: 220 }} />
+                                <Chip label={designStatusLabel(shownStatus, lang)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, maxWidth: 220 }} />
                             </Box>
 
                             <Stack spacing={2} sx={{ mb: 4 }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" color="textSecondary">Materials Estimate</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.materialsEstimate || 0)}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" color="textSecondary">Labor & Technical Execution</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.laborEstimate || 0)}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" color="textSecondary">Approvals & Logistics</Typography><Typography variant="body2" fontWeight="900">{formatAED((quote.approvalsAllowance || 0) + (quote.logisticsAllowance || 0))}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" color="textSecondary">Contingency</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.contingency || 0)}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" color="textSecondary">BIN Group Management Margin</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.binMargin || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" sx={{ color: LABEL_TEXT }}>Materials Estimate</Typography><Typography variant="body2" fontWeight="900" sx={{ color: BODY_TEXT }}>{formatAED(quote.materialsEstimate || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" sx={{ color: LABEL_TEXT }}>Labor & Technical Execution</Typography><Typography variant="body2" fontWeight="900" sx={{ color: BODY_TEXT }}>{formatAED(quote.laborEstimate || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" sx={{ color: LABEL_TEXT }}>Approvals & Logistics</Typography><Typography variant="body2" fontWeight="900" sx={{ color: BODY_TEXT }}>{formatAED((quote.approvalsAllowance || 0) + (quote.logisticsAllowance || 0))}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" sx={{ color: LABEL_TEXT }}>Contingency</Typography><Typography variant="body2" fontWeight="900" sx={{ color: BODY_TEXT }}>{formatAED(quote.contingency || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="body2" sx={{ color: LABEL_TEXT }}>BIN Group Management Margin</Typography><Typography variant="body2" fontWeight="900" sx={{ color: BODY_TEXT }}>{formatAED(quote.binMargin || 0)}</Typography></Box>
                             </Stack>
 
                             <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#60A5FA', mb: 4, '& .MuiAlert-message': { fontSize: '0.75rem', lineHeight: 1.4 } }}>
@@ -371,7 +405,7 @@ function DesignRequestDetailContent() {
                                 </Stack>
                             )}
 
-                            {canCreatePayment && (
+                            {canPayForDesign && (
                                 <Stack spacing={2}>
                                     <Button variant="outlined" fullWidth onClick={handleLoadPaymentInstructions} disabled={processing}>
                                         {paymentInstructions ? 'REFRESH' : 'VIEW'} CASH / CHEQUE INSTRUCTIONS
@@ -390,7 +424,7 @@ function DesignRequestDetailContent() {
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
                                     <CreditCard size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
                                     <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>ADMIN PAYMENT VERIFICATION PENDING</Typography>
-                                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Payment ID: {text(request.paymentId)}</Typography>
+                                    <Typography variant="body2" sx={{ color: LABEL_TEXT, mb: 2 }}>Payment ID: {text(request.paymentId)}</Typography>
                                     <Alert severity="warning" sx={{ mb: 2 }}>Admin must verify the official Cash/Cheque receipt and exact deposit before engineer handoff. Card and bank-transfer payments are disabled.</Alert>
                                     {request.paymentReviewNote && <Alert severity="info">{request.paymentReviewNote}</Alert>}
                                 </Box>
@@ -402,10 +436,10 @@ function DesignRequestDetailContent() {
                                 <ClipboardList color={binThemeTokens.gold} /> ADMIN / ENGINEER HANDOFF
                             </Typography>
                             <Stack spacing={2}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Building2 size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>Property: {executionScope.propertyName}</Typography></Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><UserCheck size={18} color={binThemeTokens.gold} /><Typography variant="body2">Payer: {text(request.payerRole || (isTenantRequest ? 'tenant' : 'owner')).toUpperCase()}</Typography></Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Clock size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>Engineer Status: {text(request.engineerHandoffStatus || 'WAITING_PAYMENT')}</Typography></Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>Admin Status: {text(request.adminHandoffStatus || 'REQUEST_CREATED')}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Building2 size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: BODY_TEXT, overflowWrap: 'anywhere' }}>Property: {executionScope.propertyName}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><UserCheck size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: BODY_TEXT }}>Payer: {text(request.payerRole || (isTenantRequest ? 'tenant' : 'owner')).toUpperCase()}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Clock size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: BODY_TEXT, overflowWrap: 'anywhere' }}>Engineer: {designStatusLabel(request.engineerHandoffStatus || 'WAITING_PAYMENT', lang)}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: BODY_TEXT, overflowWrap: 'anywhere' }}>Admin: {designStatusLabel(request.adminHandoffStatus || 'REQUEST_CREATED', lang)}</Typography></Box>
                             </Stack>
 
                             {canAdminHandoff && (

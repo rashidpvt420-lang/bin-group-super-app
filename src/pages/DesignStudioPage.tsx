@@ -33,7 +33,8 @@ import {
 } from '../utils/aiDesignStudioWorkflow';
 import { functions, httpsCallable } from '../lib/firebase';
 import { DESIGN_SUBMIT_TIMEOUT_MS, designErrorMessage } from '../lib/designStudioErrors';
-import { STATUS_TONES, formatStatusLabel } from '../theme/statusColors';
+import { STATUS_TONES } from '../theme/statusColors';
+import { designStatusLabel } from '../lib/designStatusLabels';
 
 type PreviewImage = {
   previewUrl: string;
@@ -137,6 +138,7 @@ export default function DesignStudioPage() {
   const navigate = useNavigate();
   const normalizedRole = String(role || '').toLowerCase();
   const tenantMode = normalizedRole === 'tenant';
+  const [submitError, setSubmitError] = useState('');
   const brokerMode = normalizedRole === 'broker';
 
   const [scope, setScope] = useState<DesignScope>(defaultScope);
@@ -188,7 +190,9 @@ export default function DesignStudioPage() {
   const labels = {
     eyebrow: tx('design.eyebrow', 'AI PROPERTY DESIGN'),
     title: tx('design.title', 'AI Design Studio'),
-    subtitle: tx('design.subtitle', 'Upload one real property image. The protected backend edits that image, resolves property authority, calculates the quote and creates the approval workflow.'),
+    subtitle: tenantMode
+      ? "Upload a photo of your room. We'll create design ideas and a price, then send them to your owner for approval."
+      : "Upload a photo of your room. We'll create 3 design ideas and a price for you to choose from.",
     objective: tx('design.objective', 'Redesign objective'),
     objectivePlaceholder: tx('design.objective_placeholder', 'Describe what you want to improve, repair, redesign, or upgrade...'),
     zone: tx('design.zone', 'Design zone'),
@@ -197,7 +201,7 @@ export default function DesignStudioPage() {
     estimate: tx('design.estimate', serverQuote ? 'Server-calculated execution quote' : 'Preliminary execution estimate'),
     mobilization: tx('design.mobilization', '15% mobilization'),
     protected: tx('design.protected', 'Protected BIN GROUP design workflow'),
-    protectedDesc: tx('design.protected_desc', 'The reference and generated property images remain private. Authoritative quote, ownership, approval and workflow records are created only by the App Check-protected callable.'),
+    protectedDesc: 'Your photo and the design images stay private. Only you, the property owner and BIN Group can see them.',
   };
 
   const handleImageFiles = async (files: File[]) => {
@@ -243,6 +247,7 @@ export default function DesignStudioPage() {
     }
 
     setSubmitting(true);
+    setSubmitError('');
     setRenderStatus('AI_RENDER_IN_PROGRESS');
     try {
       const requestId = createDesignRequestId();
@@ -268,7 +273,7 @@ export default function DesignStudioPage() {
       setSnackbar({
         open: true,
         message: tenantMode
-          ? 'Private design request submitted for the canonical property owner approval.'
+          ? 'Sent to your owner for approval. You will see their decision in your design requests.'
           : 'Private design concept and server quote created.',
         severity: 'success',
       });
@@ -279,6 +284,7 @@ export default function DesignStudioPage() {
       }
     } catch (error) {
       setRenderStatus('AI_RENDER_FAILED');
+      setSubmitError(designErrorMessage(error));
       setSnackbar({ open: true, message: designErrorMessage(error), severity: 'error' });
     } finally {
       setSubmitting(false);
@@ -293,9 +299,12 @@ export default function DesignStudioPage() {
           <Typography variant="h3" fontWeight={950} color={binThemeTokens.adaptiveText} sx={{ mt: 1 }}>{labels.title}</Typography>
           <Typography sx={{ mt: 2, color: binThemeTokens.adaptiveTextMuted, maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2, gap: 1 }}>
-            <Chip icon={<Sparkles size={16} />} label={`Design status: ${formatStatusLabel(renderStatus)}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? STATUS_TONES.success.text : STATUS_TONES.warning.text, fontWeight: 900 }} />
-            <Chip label={tenantMode ? 'Tenant-to-owner approval flow' : 'Owner private quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
+            <Chip icon={<Sparkles size={16} />} label={`Design status: ${designStatusLabel(renderStatus, isRTL ? 'ar' : 'en')}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? STATUS_TONES.success.text : STATUS_TONES.warning.text, fontWeight: 900 }} />
+            <Chip label={tenantMode ? 'Your owner approves this' : 'Private to you'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
+          {renderStatus === 'AI_RENDER_FAILED' && submitError && (
+            <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error">{submitError}</Alert>
+          )}
         </Box>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.1fr 1fr 0.85fr' }, gap: 4 }}>
@@ -352,7 +361,7 @@ export default function DesignStudioPage() {
               <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{labels.estimate}</Typography>
               <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>AED {displayedQuoteTotal.toLocaleString()}</Typography>
               <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>{labels.mobilization}: AED {displayedMobilization.toLocaleString()}</Typography>
-              {!serverQuote && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.52)', mt: 1 }}>The protected backend recalculates and locks the final quote.</Typography>}
+              {!serverQuote && <Typography variant="caption" sx={{ display: 'block', color: '#D1D5DB', mt: 1 }}>This is an estimate. The final price is confirmed when your design is created.</Typography>}
               <Typography variant="caption" data-testid="design-estimate-label" sx={{ display: 'block', color: 'rgba(255,255,255,0.72)', mt: 1 }}>{(serverQuote as any)?.estimateLabel || "Indicative estimate from BIN's price list. Not a supplier quote; final price is confirmed after site verification."}</Typography>
               <Button variant="contained" fullWidth onClick={handleCreateConcept} disabled={submitting || !referenceImages.length} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? 'Creating private render...' : labels.action}</Button>
               <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" fullWidth startIcon={<MessageCircle size={17} />} sx={{ mt: 1.5, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>WhatsApp BIN GROUP</Button>
@@ -392,7 +401,7 @@ export default function DesignStudioPage() {
         </Paper>
 
         <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-          The server creates the request, canonical owner/property binding, quote, approval record, audit log and private media paths. Current design status: {formatStatusLabel(renderStatus)}.
+          {tenantMode ? 'Your owner will see the design ideas and price and decide. Nothing is charged until it is approved.' : 'Nothing is charged until you approve a quote.'} Status: {designStatusLabel(renderStatus, isRTL ? 'ar' : 'en')}.
         </Alert>
       </Stack>
 
