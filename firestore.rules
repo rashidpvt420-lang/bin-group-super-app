@@ -1486,17 +1486,18 @@ service cloud.firestore {
     match /staffDocuments/{documentId} {
       // Passports, IDs, visas and medical files are not a general Finance data source.
       // Finance consumes payroll-safe records from staffPayslips/payroll instead.
-      allow read: if isHr() || staffCanRead(resource.data);
+      // Reads: hr_admin / hr_manager (and full admin) plus the employee's own record only.
+      allow read: if isHrManagerTier() || staffCanRead(resource.data);
       allow create: if isHr() || staffRequestCreate(request.resource.data);
       allow update: if isHr();
       allow delete: if isHr();
     }
 
     match /staffPayslips/{payslipId} {
-      allow read: if isHr() || isPayrollFinance() || staffCanRead(resource.data);
-      allow create: if isHr() || isPayrollFinance();
-      allow update: if isHr() || isPayrollFinance();
-      allow delete: if isHr() || isPayrollFinance();
+      // Payroll records: HR manager tier + payroll Finance read; employee reads own.
+      // Writes are server-only (HR prepares / Finance Admin settles via MFA callables).
+      allow read: if isHrManagerTier() || isPayrollFinance() || staffCanRead(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /hrProfiles/{profileId} {
@@ -1560,10 +1561,9 @@ service cloud.firestore {
     }
 
     match /salaryHistory/{historyId} {
-      allow read: if isHr() || isPayrollFinance();
-      allow create: if isHr() || isPayrollFinance();
-      allow update: if isHr() || isPayrollFinance();
-      allow delete: if isHr() || isPayrollFinance();
+      // Salary history is server-written only; employee may read own record.
+      allow read: if isHrManagerTier() || isPayrollFinance() || staffCanRead(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /staffComplianceAlerts/{alertId} {
