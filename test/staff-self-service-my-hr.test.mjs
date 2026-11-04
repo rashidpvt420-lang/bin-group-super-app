@@ -7,7 +7,7 @@ const app = readFileSync('apps/admin-panel/src/App.tsx', 'utf8');
 const nav = readFileSync('apps/admin-panel/src/components/Navigation.tsx', 'utf8');
 
 test('My HR reads only own payslips, documents and requests by uid', () => {
-  for (const c of ['staffPayslips', 'staffDocuments', 'staffRequests']) assert.match(page, new RegExp(`'${c}'`));
+  for (const c of ['staffPayslips', 'staffDocuments', 'staffRequests']) assert.ok(page.includes(`'${c}'`), c);
   assert.match(page, /where\('uid', '==', uid\)/);
   assert.doesNotMatch(page, /\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch)\b/, 'no client writes');
   assert.match(page, /httpsCallable\(functions, 'createStaffHrCase'\)/);
