@@ -8,7 +8,6 @@ import {
     CircularProgress,
     Container,
     Divider,
-    Grid,
     IconButton,
     InputAdornment,
     Stack,
@@ -31,7 +30,7 @@ import {
     signInWithPopup,
     signInWithRedirect,
 } from 'firebase/auth';
-import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Key, Mail, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import { OWNER_LOCKED_STATUSES } from '../owner/activationPolicy';
 import { isNativeApp } from '../lib/nativePlatform';
@@ -568,11 +567,6 @@ const LoginPage: React.FC = () => {
                     </CardContent>
                 </Card>
 
-                <Grid container spacing={2.5} sx={{ mt: 4 }}>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Shield} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>ISO 27001</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={TrendingUp} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>INST-GRADE</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Building} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>UAE-SOV</Typography></Box></Grid>
-                </Grid>
                 <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap sx={{ mt: 4 }}>
                     <Button variant="text" size="small" onClick={() => navigate('/security')} sx={{ color: palette.muted, fontWeight: 700, letterSpacing: 0.8 }}>
                         {lang === 'ar' ? 'أمن المنصة' : 'Platform Security'}
