@@ -1,9 +1,10 @@
 import React from 'react';
-import { Button, IconButton, Stack, Tooltip, alpha, useTheme, useMediaQuery } from '@mui/material';
+import { Button, IconButton, Menu, MenuItem, Stack, Tooltip, alpha, useTheme, useMediaQuery } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Globe, LogOut, UserX } from 'lucide-react';
+import { Globe, Languages, LogOut, UserX } from 'lucide-react';
 import { signOut } from 'firebase/auth';
-import { useLanguage } from '../context/LanguageContext';
+import { SUPPORTED_LANGUAGES, useLanguage } from '../context/LanguageContext';
+import { LANGUAGE_NATIVE_NAMES } from '../i18n/communityLanguages';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
 import { prepareTechnicianTrackingLogout } from '../utils/liveTracking';
@@ -29,9 +30,9 @@ const clearSessionAndPreserveLanguage = async () => {
 
 /** Shared language + logout behaviour, used by the header buttons and the phone overflow menu. */
 export function usePortalSession(role: PortalRole, logoutRedirect?: string) {
-  const { lang, setLang } = useLanguage();
+  const { lang, setLang, phrase } = useLanguage();
   const nextLang: typeof lang = lang === 'en' ? 'ar' : 'en';
-  const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
+  const logoutLabel = phrase('Logout', 'تسجيل الخروج');
   const languageSwitchLabel = lang === 'ar' ? 'English' : 'العربية';
   const handleLogout = async () => {
     const technicianUid = role === 'technician' ? auth.currentUser?.uid || '' : '';
@@ -79,18 +80,20 @@ export default function PortalSessionControls({
   logoutRedirect,
   compact = false,
 }: PortalSessionControlsProps) {
-  const { lang, setLang, isRTL } = useLanguage();
+  const { lang, setLang, isRTL, phrase } = useLanguage();
+  const [languageAnchor, setLanguageAnchor] = React.useState<HTMLElement | null>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const nextLang = lang === 'en' ? 'ar' : 'en';
   const languageLabel = nextLang.toUpperCase();
-  const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
+  const logoutLabel = phrase('Logout', 'تسجيل الخروج');
+  const languagePickerLabel = phrase('Language', 'اللغة');
   const softBackground = dark ? alpha('#FFFFFF', 0.08) : '#FFFFFF';
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
 
   const { handleLogout } = usePortalSession(role, logoutRedirect);
   const navigate = useNavigate();
-  const deleteAccountLabel = lang === 'ar' ? 'طلب حذف الحساب' : 'Request account deletion';
+  const deleteAccountLabel = phrase('Request account deletion', 'طلب حذف الحساب');
 
   return (
     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
@@ -120,6 +123,34 @@ export default function PortalSessionControls({
       >
         {languageLabel}
       </Button>
+
+      <Tooltip title={languagePickerLabel}>
+        <IconButton
+          type="button"
+          data-testid={`${role}-language-picker`}
+          aria-label={languagePickerLabel}
+          aria-haspopup="menu"
+          aria-expanded={languageAnchor ? 'true' : 'false'}
+          onClick={(event) => setLanguageAnchor(event.currentTarget)}
+          sx={{ color: accent, bgcolor: softBackground, border: `1px solid ${borderColor}`, borderRadius: 3, width: 42, height: 42 }}
+        >
+          <SafeIcon icon={Languages} size={18} />
+        </IconButton>
+      </Tooltip>
+      <Menu anchorEl={languageAnchor} open={Boolean(languageAnchor)} onClose={() => setLanguageAnchor(null)}>
+        {SUPPORTED_LANGUAGES.map((code) => (
+          <MenuItem
+            key={code}
+            lang={code}
+            data-testid={`${role}-language-option-${code}`}
+            selected={code === lang}
+            onClick={() => { setLang(code); setLanguageAnchor(null); }}
+            sx={{ minHeight: 44, fontWeight: 800 }}
+          >
+            {LANGUAGE_NATIVE_NAMES[code]}
+          </MenuItem>
+        ))}
+      </Menu>
 
       {!isMobile && role !== 'admin' && (
         <Tooltip title={deleteAccountLabel}>

@@ -7,7 +7,11 @@ import React, {
   type ReactNode,
 } from "react";
 
-type Language = "en" | "ar";
+import { COMMUNITY_LANGUAGES, COMMUNITY_TRANSLATIONS, type CommunityLanguage } from "../i18n/communityLanguages";
+
+export type Language = "en" | "ar" | CommunityLanguage;
+export const SUPPORTED_LANGUAGES: Language[] = ["en", "ar", ...COMMUNITY_LANGUAGES];
+const isCommunityLanguage = (value: string): value is CommunityLanguage => (COMMUNITY_LANGUAGES as readonly string[]).includes(value);
 
 interface LanguageContextType {
   lang: Language;
@@ -16,12 +20,14 @@ interface LanguageContextType {
   toggleLanguage: () => void;
   t: (key: string, variables?: Record<string, any>) => string;
   tx: (key: string, fallback: string, variables?: Record<string, any>) => string;
+  /** English/Arabic pair for inline copy; other languages look the English phrase up, else show English. */
+  phrase: (en: string, ar: string) => string;
   isRTL: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-const translations: Record<Language, Record<string, string>> = {
+const translations: Record<"en" | "ar", Record<string, string>> = {
     en: {
         // ── Owner /financials page (FinancialDashboardPage) ────────────────
         'fin.kpi.sovereign_payout': 'Net payout to you',
@@ -2214,7 +2220,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Language>(() => {
     if (typeof window === "undefined") return "en";
     const stored = localStorage.getItem("bin_language");
-    return stored === "ar" ? "ar" : "en";
+    return stored && (SUPPORTED_LANGUAGES as string[]).includes(stored) ? (stored as Language) : "en";
   });
 
   const setLang = (nextLang: Language) => {
@@ -2231,15 +2237,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   const value = useMemo<LanguageContextType>(() => {
+    const community = isCommunityLanguage(lang) ? COMMUNITY_TRANSLATIONS[lang] : null;
+    const lookup = (key: string) => (community ? community[key] : translations[lang as "en" | "ar"]?.[key]);
     const t = (key: string, variables?: Record<string, any>): string => {
-      const raw = translations[lang]?.[key] ?? translations.en?.[key];
+      const raw = lookup(key) ?? translations.en?.[key];
       return interpolateTranslation(coerceTranslationString(raw, key), variables);
     };
 
     const tx = (key: string, fallback: string, variables?: Record<string, any>): string => {
-      const raw = translations[lang]?.[key] ?? translations.en?.[key] ?? fallback;
+      const raw = lookup(key) ?? (community && fallback ? community[fallback] : undefined) ?? translations.en?.[key] ?? fallback;
       return interpolateTranslation(coerceTranslationString(raw, fallback || key), variables);
     };
+
+    const phrase = (en: string, ar: string): string => (lang === "ar" ? ar : community?.[en] ?? en);
 
     return {
       lang,
@@ -2248,6 +2258,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       toggleLanguage,
       t,
       tx,
+      phrase,
       isRTL: lang === "ar",
     };
   }, [lang]);
