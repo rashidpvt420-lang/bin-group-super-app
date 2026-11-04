@@ -168,10 +168,10 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
 
   test('root role CTAs navigate to the correct entry flows', async ({ page }, testInfo) => {
     const cases: Array<[string, RegExp]> = [
-      ['I Already Rent With BIN', /\/login\?intendedRole=tenant$/],
-      ['I’m Looking for a Home', /\/homes$/],
+      ['Open Tenant Portal', /\/login\?intendedRole=tenant$/],
+      ['Find a home', /\/homes$/],
       ['Open Owner Portal', /\/login\?intendedRole=owner$/],
-      ['Add New Property & Start Contract', /\/onboarding(?:[/?#]|$)/],
+      ['Partner With Us / Onboard Property', /\/onboarding(?:[/?#]|$)/],
       ['Open Broker Portal', /\/login\?intendedRole=broker$/],
       ['Open Technician Portal', /\/login\?intendedRole=technician$/],
     ];
