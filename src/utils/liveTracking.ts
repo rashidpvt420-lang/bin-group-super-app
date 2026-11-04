@@ -245,6 +245,29 @@ export function calculateEtaMinutes(distanceKm: number | null, averageSpeedKmh =
     return Math.max(1, Math.round((distanceKm / Math.max(averageSpeedKmh, 1)) * 60));
 }
 
+/** An arrival estimate is only shown when the technician GPS point is at most this old. */
+export const ETA_MAX_LOCATION_AGE_MINUTES = 5;
+
+export function getTechnicianLocationUpdatedAt(ticket: any, techLocation: any = getTechnicianLocation(ticket)): any {
+    return ticket?.technicianLocationUpdatedAt ||
+        techLocation?.serverUpdatedAt ||
+        techLocation?.updatedAt ||
+        techLocation?.timestamp ||
+        null;
+}
+
+/**
+ * Straight-line arrival estimate for a ticket, or null when either point is
+ * missing or the technician location is older than five minutes (or has no
+ * timestamp). No paid routing API is configured, so this is never a road ETA
+ * and callers must label it as an estimate.
+ */
+export function estimateTicketArrivalMinutes(ticket: any, techLocation: any = getTechnicianLocation(ticket)): number | null {
+    if (!techLocation) return null;
+    if (isLocationStale(getTechnicianLocationUpdatedAt(ticket, techLocation), ETA_MAX_LOCATION_AGE_MINUTES)) return null;
+    return calculateEtaMinutes(calculateDistanceKm(techLocation, getTicketJobLocation(ticket)));
+}
+
 export function getTicketJobLocation(ticket: any): { lat: number; lng: number; latitude: number; longitude: number } | null {
     if (!ticket) return null;
     return (

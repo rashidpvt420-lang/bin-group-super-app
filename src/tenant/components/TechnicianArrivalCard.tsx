@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Box, Chip, LinearProgress, Paper, Stack, Typography, alpha } from '@mui/material';
 import { MapPin, Navigation, UserRound } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { etaMinutes, staleLocationLabel } from '../../utils/eta';
+import { freshEtaMinutes, staleLocationLabel } from '../../utils/eta';
 import Bi from '../../components/Bi';
 
 type Props = {
@@ -20,9 +20,10 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
 
   const techLocation = ticket?.technicianLocation || technician?.lastLocation || technician?.currentLocation;
   const jobLocation = ticket?.location || ticket?.propertyLocation || ticket?.tenantLocation;
-  const eta = etaMinutes(techLocation, jobLocation);
+  const locationUpdatedAt = ticket?.technicianLocationUpdatedAt || technician?.lastSeenAt || technician?.updatedAt;
+  const eta = freshEtaMinutes(techLocation, jobLocation, locationUpdatedAt);
   const techName = ticket?.technicianName || technician?.displayName || technician?.name || 'Assigned technician';
-  const locationLabel = staleLocationLabel(ticket?.technicianLocationUpdatedAt || technician?.lastSeenAt || technician?.updatedAt);
+  const locationLabel = staleLocationLabel(locationUpdatedAt);
 
   return (
     <Paper sx={{ p: 3, borderRadius: 5, bgcolor: 'rgba(15,23,42,0.62)', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
@@ -45,11 +46,11 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
 
         {eta ? (
           <Alert severity="success" sx={{ bgcolor: alpha('#10b981', 0.08), color: '#f8fafc', border: `1px solid ${alpha('#10b981', 0.22)}` }}>
-            <Bi en={"Estimated arrival: approximately"} ar={"الوصول المتوقع: تقريباً"} /> {eta} <Bi en={"minutes."} ar={"دقيقة."} />
+            <Bi en={"Estimate only: about"} ar={"تقدير فقط: حوالي"} /> {eta} <Bi en={"minutes (straight-line distance, not road traffic)."} ar={"دقيقة (مسافة مباشرة، لا تشمل حركة المرور)."} />
           </Alert>
         ) : (
           <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-            <Bi en={"Technician has been assigned. A rough arrival estimate appears once foreground location sharing starts."} ar={"تم إسناد فني. سيظهر تقدير تقريبي للوصول عند بدء مشاركة الموقع."} />
+            <Bi en={"Technician has been assigned. A rough arrival estimate appears while the technician location is less than 5 minutes old."} ar={"تم إسناد فني. يظهر تقدير تقريبي للوصول عندما يكون موقع الفني أحدث من 5 دقائق."} />
           </Alert>
         )}
 
