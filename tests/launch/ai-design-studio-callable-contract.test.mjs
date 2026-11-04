@@ -42,8 +42,10 @@ test('AI Design Studio Admin compatibility callable stays fail-closed and refere
   assert.match(source, /inputImageSha256/);
   assert.match(source, /type: "input_image"/);
   assert.match(source, /type: "image_generation"/);
-  assert.match(source, /action: "edit"/);
-  assert.match(source, /input_fidelity: "high"/);
+  assert.match(source, /tools: \[buildImageEditTool\(\)\]/);
+  const models = await read('functions/openaiImageModels.ts');
+  assert.match(models, /action: "edit"/);
+  assert.match(models, /input_fidelity: "high"/);
   assert.doesNotMatch(source, /generatedImage = imageBase64/);
   assert.doesNotMatch(source, /provider = "fallback"/);
   assert.doesNotMatch(source, /\.slice\(0, 8_000_000\)/);
@@ -89,7 +91,8 @@ test('Owner and Tenant AI Design Studio is server-authoritative, one-image bound
   assert.match(callable, /protectedMediaUrl/);
   assert.match(await read('functions/aiDesignMedia.ts'), /getSignedUrl/);
   assert.match(callable, /type: "input_image"/);
-  assert.match(callable, /action: "edit"/);
+  assert.match(callable, /tools: \[buildImageEditTool\(\)\]/);
+  assert.match(await read('functions/openaiImageModels.ts'), /action: "edit"/);
   assert.doesNotMatch(callable, /makePublic\(/);
   assert.doesNotMatch(callable, /export const generateAIDesignConceptImages/);
 

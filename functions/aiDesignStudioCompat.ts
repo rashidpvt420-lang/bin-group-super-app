@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { buildImageEditTool, imageOrchestratorModel } from "./openaiImageModels";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
@@ -105,7 +106,7 @@ async function editImageWithOpenAI(
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey, timeout: 150_000 });
   const response: any = await client.responses.create({
-    model: process.env.OPENAI_IMAGE_ORCHESTRATOR_MODEL || "gpt-5",
+    model: imageOrchestratorModel(),
     input: [{
       role: "user",
       content: [
@@ -113,17 +114,8 @@ async function editImageWithOpenAI(
         { type: "input_image", image_url: `data:${mimeType};base64,${imageBase64}`, detail: "high" },
       ],
     }],
-    tools: [{
-      type: "image_generation",
-      action: "edit",
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-      input_fidelity: "high",
-      output_format: "jpeg",
-      output_compression: 85,
-      quality: "medium",
-      size: "1024x1024",
-    }],
-    tool_choice: "required",
+    tools: [buildImageEditTool()],
+    tool_choice: { type: "image_generation" },
   } as any);
 
   const imageCall = Array.isArray(response.output)
