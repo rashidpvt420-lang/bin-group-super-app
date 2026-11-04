@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, setDoc } from 'firebase/firestore';
-import { getBytes, ref, uploadString } from 'firebase/storage';
+import { deleteObject, getBytes, ref, uploadString } from 'firebase/storage';
 
 let testEnv;
 // N-05: Admin-tier Storage authority needs an ID token minted with a second factor.
@@ -403,6 +403,28 @@ describe('Storage Security Rules', () => {
       await assertSucceeds(uploadString(ref(storage, 'hrDocuments/staff_mfa/hr_new.pdf'), 'x', 'raw', pdf));
       await assertFails(getBytes(ref(storage, 'contracts/c_mfa/contract.pdf')));
       await assertFails(getBytes(ref(storage, 'marketing/banner.pdf')));
+    });
+
+    it('staffDocuments are limited to hr_admin, hr_manager and the employee (hr_staff and auditors denied)', async () => {
+      await seedFiles();
+      const pdf = { contentType: 'application/pdf' };
+      const path = 'staffDocuments/staff_mfa/id.pdf';
+      for (const role of ['hr_admin', 'hr_manager']) {
+        const storage = testEnv.authenticatedContext(`${role}_u`, { role }).storage();
+        await assertSucceeds(getBytes(ref(storage, path)));
+        await assertSucceeds(uploadString(ref(storage, `staffDocuments/staff_mfa/${role}.pdf`), 'x', 'raw', pdf));
+      }
+      for (const role of ['hr_staff', 'auditor', 'AUDITOR', 'compliance_officer', 'finance', 'technician']) {
+        const storage = testEnv.authenticatedContext(`${role}_u`, { role }).storage();
+        await assertFails(getBytes(ref(storage, path)));
+        await assertFails(uploadString(ref(storage, `staffDocuments/staff_mfa/${role}.pdf`), 'x', 'raw', pdf));
+        await assertFails(deleteObject(ref(storage, path)));
+      }
+      const own = testEnv.authenticatedContext('staff_mfa', { role: 'hr_staff' }).storage();
+      await assertSucceeds(getBytes(ref(own, path)));
+      await assertSucceeds(uploadString(ref(own, 'staffDocuments/staff_mfa/own.pdf'), 'x', 'raw', pdf));
+      const other = testEnv.authenticatedContext('staff_other', { role: 'staff' }).storage();
+      await assertFails(getBytes(ref(other, path)));
     });
 
     it('owners keep access to their own contract, invoice and payment reference without any second factor', async () => {
