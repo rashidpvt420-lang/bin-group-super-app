@@ -154,7 +154,7 @@ test('tenant payments, owner approvals and technician history surface load error
   const appr = await read('src/owner/pages/OwnerApprovalCenterPage.tsx');
   assert.match(appr, /owner-approvals-load-error/);
   assert.match(appr, /owner-signoffs-load-error/);
-  assert.match(appr, /items\.length === 0 && !requestsError/);
+  assert.match(appr, /visibleItems\.length === 0 && !requestsError/); // #1947 renders the deduplicated visible list
   const hist = await read('src/technician/pages/TechnicianHistoryPage.tsx');
   assert.match(hist, /setLoadError\(/);
   assert.match(hist, /if \(loadError\) return <Alert severity="error">/);

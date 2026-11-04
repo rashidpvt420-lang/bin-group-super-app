@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Box, Button, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ExternalLink, MapPin, Navigation, AlertTriangle } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../Bi';
 
 type UaePropertyMapProps = {
   title?: string;
@@ -119,7 +120,7 @@ export default function UaePropertyMap({
           </Box>
         </Stack>
         <Button href={finalGoogleMapsUrl} target="_blank" rel="noreferrer" size="small" endIcon={<ExternalLink size={14} />} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>
-          Open
+          <Bi en={"Open"} ar={"فتح"} />
         </Button>
       </Stack>
 
@@ -136,7 +137,7 @@ export default function UaePropertyMap({
               '& .MuiAlert-icon': { color: '#f59e0b' }
             }}
           >
-            Exact GPS pin is not saved yet. This map is using address-level lookup only.
+            <Bi en={"Exact GPS pin is not saved yet. This map is using address-level lookup only."} ar={"لم يتم حفظ الموقع الدقيق بعد. تستخدم الخريطة العنوان فقط."} />
           </Alert>
 
           {requireExactPin && (
@@ -153,7 +154,7 @@ export default function UaePropertyMap({
               }}
             >
               <Typography variant="body2" sx={{ color: '#fca5a5', fontWeight: 900 }}>
-                Exact dispatch location required
+                <Bi en={"Exact dispatch location required"} ar={"يلزم موقع إرسال دقيق"} />
               </Typography>
               <Button 
                 variant="contained" 
@@ -167,7 +168,7 @@ export default function UaePropertyMap({
                   '&:hover': { bgcolor: '#dc2626' } 
                 }}
               >
-                Update Exact GPS Pin
+                <Bi en={"Update Exact GPS Pin"} ar={"تحديث الموقع الدقيق"} />
               </Button>
             </Stack>
           )}
@@ -180,9 +181,9 @@ export default function UaePropertyMap({
         <Box sx={{ height, display: 'grid', placeItems: 'center', p: 3, background: 'linear-gradient(135deg, rgba(198,167,94,0.12), rgba(15,23,42,0.6))' }}>
           <Stack spacing={2} alignItems="center" textAlign="center" maxWidth={560}>
             <Navigation size={36} color={binThemeTokens.gold} />
-            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Location unavailable</Typography>
+            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}><Bi en={"Location unavailable"} ar={"الموقع غير متاح"} /></Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>
-              A valid non-zero location or UAE address is required before this map can be shown.
+              <Bi en={"A valid non-zero location or UAE address is required before this map can be shown."} ar={"يلزم موقع صالح أو عنوان في الإمارات لعرض هذه الخريطة."} />
             </Typography>
           </Stack>
         </Box>

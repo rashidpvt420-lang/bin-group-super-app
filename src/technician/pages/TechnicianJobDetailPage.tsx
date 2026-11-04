@@ -29,6 +29,7 @@ import {
 } from '../utils/technicianInstallationBinding';
 import { formatStatusLabel } from '../../theme/statusColors';
 import JobEvidenceSteps from '../components/JobEvidenceSteps';
+import Bi from '../../components/Bi';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
@@ -535,7 +536,7 @@ export default function TechnicianJobDetailPage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {message && <Alert severity="success" onClose={() => setMessage(null)} sx={{ mb: 2, borderRadius: 3 }}>{message}</Alert>}
-            {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: lifecycle actions and evidence can be saved locally. Completion remains locked until the protected evidence upload is server-verified and synchronization succeeds.</Alert>}
+            {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}><Bi en={"Offline mode: lifecycle actions and evidence can be saved locally. Completion remains locked until the protected evidence upload is server-verified and synchronization succeeds."} ar={"وضع عدم الاتصال: يمكن حفظ الإجراءات والإثباتات محلياً. يبقى الإكمال مقفلاً حتى يتحقق الخادم من رفع الإثبات وتنجح المزامنة."} /></Alert>}
             {arrivalError && <Alert data-testid="technician-arrival-error" severity="warning" onClose={() => setArrivalError(null)} sx={{ mb: 2, borderRadius: 3 }}>{arrivalError}</Alert>}
             {!arrivalError && gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
 
@@ -567,7 +568,7 @@ export default function TechnicianJobDetailPage() {
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
                                 <Typography variant="h6" fontWeight="900" color={JOB_READABLE.ink}>{ticket.propertyName || 'Property'}</Typography>
-                                <Typography variant="body2" color="textSecondary">Unit {ticket.unitNumber || ticket.unitLabel || 'N/A'} · Floor {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
+                                <Typography variant="body2" color="textSecondary"><Bi en={"Unit"} ar={"الوحدة"} /> {ticket.unitNumber || ticket.unitLabel || 'N/A'} <Bi en={"· Floor"} ar={"· الطابق"} /> {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
                             </Grid>
                             <Grid item xs={12}>
                                 <Paper sx={{ p: 2.25, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 3 }}>

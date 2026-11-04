@@ -45,6 +45,7 @@ import {
   resolveTenantResidenceIntelligence,
   type TruthStatus,
 } from '../utils/propertyIntelligenceEngine';
+import Bi from './Bi';
 
 type SupportedRole = 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -183,7 +184,7 @@ function OwnerIntelligence({ properties, contracts, tickets }: { properties: any
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>DIGITAL PROPERTY TWIN</Typography>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>Portfolio → Building → Floor → Unit → Space → Asset</Typography>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"Portfolio → Building → Floor → Unit → Space → Asset"} ar={"المحفظة ← المبنى ← الطابق ← الوحدة ← المساحة ← الأصل"} /></Typography>
               </Box>
               <Home size={26} color={binThemeTokens.gold} />
             </Stack>
@@ -212,7 +213,7 @@ function OwnerIntelligence({ properties, contracts, tickets }: { properties: any
           <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,.58)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 4 }}>
             <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 2 }}>
               <AlertTriangle size={20} color="#f59e0b" />
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>Owner Decision Center</Typography>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"Owner Decision Center"} ar={"مركز قرارات المالك"} /></Typography>
             </Stack>
             {decisions.length ? (
               <Stack spacing={1.4}>
@@ -230,7 +231,7 @@ function OwnerIntelligence({ properties, contracts, tickets }: { properties: any
                 })}
               </Stack>
             ) : (
-              <Alert severity="success">No immediate owner decisions detected from the records currently available.</Alert>
+              <Alert severity="success"><Bi en={"No immediate owner decisions detected from the records currently available."} ar={"لا توجد قرارات عاجلة للمالك وفق السجلات المتاحة حالياً."} /></Alert>
             )}
             <Button onClick={() => navigate('/owner/approvals')} sx={{ mt: 2, color: binThemeTokens.gold, fontWeight: 950 }}>OPEN APPROVALS</Button>
           </Paper>
@@ -239,17 +240,17 @@ function OwnerIntelligence({ properties, contracts, tickets }: { properties: any
           <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,.58)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 4 }}>
             <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 2 }}>
               <Sparkles size={20} color={binThemeTokens.gold} />
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>Predictive Maintenance</Typography>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"Predictive Maintenance"} ar={"الصيانة التنبؤية"} /></Typography>
             </Stack>
             {predictive.length ? predictive.slice(0, 3).map((item) => (
               <Box key={item.category} sx={{ mb: 1.5, p: 1.7, bgcolor: 'rgba(255,255,255,.03)', borderRadius: 2.5 }}>
-                <Typography sx={{ color: '#fff', fontWeight: 900 }}>{item.category} · {item.count} recorded issues</Typography>
+                <Typography sx={{ color: '#fff', fontWeight: 900 }}>{item.category} · {item.count} <Bi en={"recorded issues"} ar={"مشكلات مسجلة"} /></Typography>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{item.recommendation}</Typography>
               </Box>
             )) : (
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.6)' }}>No recurring 3+ issue pattern is visible yet. BIN will surface a recommendation when the recorded history supports one.</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.6)' }}><Bi en={"No recurring 3+ issue pattern is visible yet. BIN will surface a recommendation when the recorded history supports one."} ar={"لا يوجد نمط متكرر (3 مشكلات أو أكثر) بعد. ستقدم BIN توصية عندما يدعمها السجل."} /></Typography>
             )}
-            <Alert icon={<ShieldCheck size={18} />} severity="info" sx={{ mt: 2 }}>Recommendations are explainable heuristics from recorded history, not guaranteed failure predictions.</Alert>
+            <Alert icon={<ShieldCheck size={18} />} severity="info" sx={{ mt: 2 }}><Bi en={"Recommendations are explainable heuristics from recorded history, not guaranteed failure predictions."} ar={"التوصيات تقديرات مبنية على السجل وليست تنبؤات مؤكدة بالأعطال."} /></Alert>
           </Paper>
         </Grid>
       </Grid>
@@ -258,8 +259,8 @@ function OwnerIntelligence({ properties, contracts, tickets }: { properties: any
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
           <Box>
             <Typography variant="overline" sx={{ color: '#38bdf8', fontWeight: 950, letterSpacing: 2 }}>TRUST + MARKET INTELLIGENCE</Typography>
-            <Typography sx={{ color: '#fff', fontWeight: 900 }}>Every financial number carries its source quality.</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .5 }}>Stored market values/rents are labelled ESTIMATED. Contract/property records are VERIFIED. Collection and ticket activity can be LIVE. Missing market data is never invented.</Typography>
+            <Typography sx={{ color: '#fff', fontWeight: 900 }}><Bi en={"Every financial number carries its source quality."} ar={"كل رقم مالي يوضح جودة مصدره."} /></Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .5 }}><Bi en={"Stored market values/rents are labelled ESTIMATED. Contract/property records are VERIFIED. Collection and ticket activity can be LIVE. Missing market data is never invented."} ar={"قيم السوق والإيجارات المخزنة \"تقديرية\". سجلات العقود والعقارات \"موثقة\". التحصيل والطلبات قد تكون \"مباشرة\". لا يتم اختلاق بيانات السوق المفقودة."} /></Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {(['LIVE', 'VERIFIED', 'ESTIMATED', 'FORECAST', 'MISSING'] as TruthStatus[]).map((status) => <TruthChip key={status} status={status} />)}
@@ -298,7 +299,7 @@ function TenantIntelligence({ unit, contract, tickets }: { unit: any; contract: 
               </Box>
               <Home color={healthTone} />
             </Stack>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 1 }}>Lease, payments, maintenance, technician proof, notices, documents and move-out actions stay connected to the same residence record.</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 1 }}><Bi en={"Lease, payments, maintenance, technician proof, notices, documents and move-out actions stay connected to the same residence record."} ar={"الإيجار والمدفوعات والصيانة وإثبات الفني والإشعارات والمستندات وإجراءات الخروج مرتبطة بسجل السكن نفسه."} /></Typography>
             <Grid container spacing={1.5} sx={{ mt: 1 }}>
               {[
                 ['Lease / payments', '/tenant/payments', <Wallet size={17} />],
@@ -315,12 +316,12 @@ function TenantIntelligence({ unit, contract, tickets }: { unit: any; contract: 
         </Grid>
         <Grid item xs={12} lg={5}>
           <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,.58)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 4 }}>
-            <Stack direction="row" spacing={1.2} alignItems="center"><ShieldCheck size={20} color="#22c55e" /><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>Maintenance Guarantee</Typography></Stack>
+            <Stack direction="row" spacing={1.2} alignItems="center"><ShieldCheck size={20} color="#22c55e" /><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"Maintenance Guarantee"} ar={"ضمان الصيانة"} /></Typography></Stack>
             <Stack spacing={1.2} sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}>• Live request and status visibility</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}>• Technician identity/status when recorded</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}>• Before/after proof tied to the ticket</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}>• Approve, dispute or request revisit through the existing ticket workflow</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}><Bi en={"• Live request and status visibility"} ar={"• متابعة مباشرة للطلب والحالة"} /></Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}><Bi en={"• Technician identity/status when recorded"} ar={"• هوية الفني وحالته عند تسجيلها"} /></Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}><Bi en={"• Before/after proof tied to the ticket"} ar={"• إثبات قبل/بعد مرتبط بالطلب"} /></Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.64)' }}><Bi en={"• Approve, dispute or request revisit through the existing ticket workflow"} ar={"• الموافقة أو الاعتراض أو طلب زيارة أخرى عبر الطلب"} /></Typography>
             </Stack>
             <Button variant="contained" onClick={() => navigate('/tenant/emergency')} startIcon={<AlertTriangle size={17} />} sx={{ mt: 2.5, bgcolor: '#ef4444', color: '#fff', fontWeight: 950 }}>EMERGENCY CENTER</Button>
           </Paper>
@@ -330,22 +331,22 @@ function TenantIntelligence({ unit, contract, tickets }: { unit: any; contract: 
       <Grid container spacing={2}>
         <Grid item xs={12} lg={6}>
           <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,.58)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 4 }}>
-            <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Unit Health + Prevention</Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}><Bi en={"Unit Health + Prevention"} ar={"صحة الوحدة والوقاية"} /></Typography>
             {residence.predictive.length ? residence.predictive.slice(0, 3).map((item) => (
-              <Box key={item.category} sx={{ mt: 1.5, p: 1.7, bgcolor: 'rgba(255,255,255,.03)', borderRadius: 2.5 }}><Typography sx={{ color: '#fff', fontWeight: 900 }}>{item.category}: {item.count} recorded issues</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{item.recommendation}</Typography></Box>
-            )) : <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 1.5 }}>No recurring issue pattern is currently visible.</Typography>}
+              <Box key={item.category} sx={{ mt: 1.5, p: 1.7, bgcolor: 'rgba(255,255,255,.03)', borderRadius: 2.5 }}><Typography sx={{ color: '#fff', fontWeight: 900 }}>{item.category}: {item.count} <Bi en={"recorded issues"} ar={"مشكلات مسجلة"} /></Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{item.recommendation}</Typography></Box>
+            )) : <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 1.5 }}><Bi en={"No recurring issue pattern is currently visible."} ar={"لا يوجد نمط مشكلات متكرر حالياً."} /></Typography>}
           </Paper>
         </Grid>
         <Grid item xs={12} lg={6}>
           <Paper sx={{ p: 3, height: '100%', bgcolor: alpha('#a78bfa', .035), border: `1px solid ${alpha('#a78bfa', .17)}`, borderRadius: 4 }}>
-            <Stack direction="row" spacing={1.2} alignItems="center"><Bot size={20} color="#a78bfa" /><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>BIN AI Residence Assistant</Typography></Stack>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.6)', mt: 1.5 }}>Ask about your lease expiry, payments, maintenance history, move-out requirements or where your technician is. Answers must stay inside your authorized residence data.</Typography>
+            <Stack direction="row" spacing={1.2} alignItems="center"><Bot size={20} color="#a78bfa" /><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}><Bi en={"BIN AI Residence Assistant"} ar={"مساعد BIN الذكي للسكن"} /></Typography></Stack>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.6)', mt: 1.5 }}><Bi en={"Ask about your lease expiry, payments, maintenance history, move-out requirements or where your technician is. Answers must stay inside your authorized residence data."} ar={"اسأل عن انتهاء إيجارك أو مدفوعاتك أو سجل الصيانة أو متطلبات الخروج أو موقع الفني. الإجابات تقتصر على بيانات سكنك المصرح بها."} /></Typography>
             <Button onClick={() => navigate('/tenant/ai-concierge')} sx={{ mt: 2, color: '#c4b5fd', fontWeight: 950 }}>OPEN AI CONCIERGE</Button>
           </Paper>
         </Grid>
       </Grid>
 
-      <Alert icon={<MapPin size={18} />} severity="info">BIN labels residence information by source quality. Estimated or forecast values must never be presented as verified live facts.</Alert>
+      <Alert icon={<MapPin size={18} />} severity="info"><Bi en={"BIN labels residence information by source quality. Estimated or forecast values must never be presented as verified live facts."} ar={"تصنف BIN معلومات السكن حسب جودة المصدر. لا تُعرض القيم التقديرية كحقائق موثقة."} /></Alert>
     </Stack>
   );
 }

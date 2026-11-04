@@ -32,6 +32,7 @@ import TechnicianInstallationRegistration from './components/TechnicianInstallat
 import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
+import Bi from '../components/Bi';
 
 // HR is an implemented operational module and is available by default. The flag
 // is now an explicit emergency kill switch instead of a hidden launch dependency.
@@ -39,8 +40,8 @@ const ENABLE_HR_MODULE = import.meta.env.VITE_ENABLE_HR_MODULE !== 'false';
 
 const HrComingSoon = () => (
     <Box sx={{ p: 4, textAlign: 'center', mt: 4 }}>
-        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, mb: 2 }}>HR Module Temporarily Disabled</Typography>
-        <Typography variant="body1" sx={{ color: '#667085' }}>The HR & Requests module has been disabled by the production emergency switch. Please contact your supervisor directly for HR matters.</Typography>
+        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, mb: 2 }}><Bi en={"HR Module Temporarily Disabled"} ar={"وحدة الموارد البشرية معطلة مؤقتاً"} /></Typography>
+        <Typography variant="body1" sx={{ color: '#667085' }}><Bi en={"The HR & Requests module has been disabled by the production emergency switch. Please contact your supervisor directly for HR matters."} ar={"تم تعطيل وحدة الموارد البشرية والطلبات بمفتاح الطوارئ. يرجى التواصل مع مشرفك مباشرة لشؤون الموارد البشرية."} /></Typography>
     </Box>
 );
 const shell = { ink: '#111827', muted: '#667085', canvas: '#FFFFFF', soft: '#F8F9FB', border: '#E5E7EB', gold: binThemeTokens.gold };

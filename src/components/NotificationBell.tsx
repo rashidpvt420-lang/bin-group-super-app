@@ -8,6 +8,7 @@ import { Bell, BellRing, CheckCheck, Zap, Wrench, MessageSquare, AlertTriangle, 
 import { useRole } from '../context/RoleContext';
 import { subscribeToNotifications, markNotificationRead, type BinNotification } from '../services/notificationService';
 import SafeIcon from './SafeIcon';
+import Bi from './Bi';
 
 type NotificationTypeConfig = { icon: React.ElementType; color: string };
 
@@ -201,7 +202,7 @@ export function NotificationBell({ formatText }: NotificationBellProps = {}) {
                     ) : notifications.length === 0 ? (
                         <Box sx={{ p: 4, textAlign: 'center' }}>
                             <SafeIcon icon={Bell} size={32} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 8px auto' }} />
-                            <Typography variant="body2" color="textSecondary">No notifications yet</Typography>
+                            <Typography variant="body2" color="textSecondary"><Bi en={"No notifications yet"} ar={"لا توجد إشعارات بعد"} /></Typography>
                         </Box>
                     ) : (
                         notifications.map((notif, idx) => {

@@ -15,6 +15,7 @@ import {
   replayOfflineJobAction,
 } from '../utils/offlineJobActions';
 import { parseFieldEvent, syncOfflineFieldEvents } from '../utils/offlineFieldEvents';
+import Bi from '../../components/Bi';
 
 function typeLabel(type: OfflineQueueItem['type']) {
   const map: Record<OfflineQueueItem['type'], string> = {
@@ -136,9 +137,9 @@ export default function TechnicianOfflinePage() {
   return (
     <Box>
       <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>FIELD RESILIENCE · SYNC QUEUE</Typography>
-      <Typography variant="h3" fontWeight="950" color="#111827" sx={{ mb: 1 }}>Offline Sync Queue</Typography>
+      <Typography variant="h3" fontWeight="950" color="#111827" sx={{ mb: 1 }}><Bi en={"Offline Sync Queue"} ar={"قائمة المزامنة دون اتصال"} /></Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 760 }}>
-        Safe accept, on-the-way, start-work, and fully bound Android arrival actions replay through protected Firebase callables when connectivity returns. The server re-reads the Technician registration and rechecks identity, GPS accuracy, capture age, and geofence. Completion stays foreground-only because it requires live evidence upload.
+        <Bi en={"Safe accept, on-the-way, start-work, and fully bound Android arrival actions replay through protected Firebase callables when connectivity returns. The server re-reads the Technician registration and rechecks identity, GPS accuracy, capture age, and geofence. Completion stays foreground-only because it requires live evidence upload."} ar={"تُعاد إجراءات القبول و\"في الطريق\" وبدء العمل والوصول عبر الخادم المحمي عند عودة الاتصال. يعيد الخادم التحقق من تسجيل الفني والهوية ودقة الموقع وعمر الالتقاط والنطاق الجغرافي. يبقى الإكمال متاحاً فقط والتطبيق مفتوح لأنه يتطلب رفع إثبات مباشر."} />
       </Typography>
 
       <Paper sx={{ p: 3, mb: 3, borderRadius: 4, bgcolor: online ? alpha('#10b981', 0.08) : alpha('#ef4444', 0.08), border: `1px solid ${online ? '#10b981' : '#ef4444'}` }}>
@@ -165,8 +166,8 @@ export default function TechnicianOfflinePage() {
       {queue.length === 0 ? (
         <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 4, border: '1px solid #E5E7EB' }}>
           <CheckCircle2 size={56} color="#10b981" style={{ margin: '0 auto 16px' }} />
-          <Typography variant="h6" fontWeight="950" color="#111827">Queue is empty</Typography>
-          <Typography color="text.secondary">No local Technician actions are waiting for replay.</Typography>
+          <Typography variant="h6" fontWeight="950" color="#111827"><Bi en={"Queue is empty"} ar={"القائمة فارغة"} /></Typography>
+          <Typography color="text.secondary"><Bi en={"No local Technician actions are waiting for replay."} ar={"لا توجد إجراءات محلية بانتظار الإرسال."} /></Typography>
         </Paper>
       ) : (
         <Paper sx={{ borderRadius: 4, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
@@ -190,7 +191,7 @@ export default function TechnicianOfflinePage() {
                         </Stack>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.7 }}>{item.detail}</Typography>
                         {reason && <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 0.8 }}>{reason}</Typography>}
-                        <Typography variant="caption" color="text.disabled">Queued {new Date(item.createdAt).toLocaleString()} · Attempts {item.attempts}/3</Typography>
+                        <Typography variant="caption" color="text.disabled"><Bi en={"Queued"} ar={"في الانتظار"} /> {new Date(item.createdAt).toLocaleString()} <Bi en={"· Attempts"} ar={"· المحاولات"} /> {item.attempts}/3</Typography>
                       </Box>
                     </Stack>
                     <Stack direction="row" spacing={1}>

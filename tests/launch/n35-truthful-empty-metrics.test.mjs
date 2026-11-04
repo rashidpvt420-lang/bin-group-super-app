@@ -50,7 +50,8 @@ test('jobs without any SLA evidence do not render a fabricated SLA percentage', 
 
 test('TechnicianHistoryPage renders through the truthful helper', () => {
   const page = readFileSync('src/technician/pages/TechnicianHistoryPage.tsx', 'utf8');
-  assert.match(page, /computeTechnicianHistoryStats\(docs\)/);
+  // #1947: stats cover the full loaded history (live page plus older pages), not only the first snapshot.
+  assert.match(page, /setStats\(computeTechnicianHistoryStats\(history\)\), \[history\]/);
   assert.match(page, /formatPercentOrNoData\(stats\.success\)/);
   assert.match(page, /formatPercentOrNoData\(stats\.slaCompliance\)/);
   assert.doesNotMatch(page, /:\s*100,/);

@@ -36,6 +36,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { logAuditAction } from '../../utils/auditLogger';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const clean = (value: unknown) => String(value || '').trim();
@@ -363,10 +364,10 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                                 <Grid item xs={12} sm={6}><TextField fullWidth type="email" inputProps={{ inputMode: 'email', autoComplete: 'email', 'data-testid': 'broker-lead-email' }} label={isRTL ? 'البريد الإلكتروني' : 'Email address'} value={email} onChange={(event) => setEmail(event.target.value)} error={showErrors && Boolean(fieldErrors.email)} helperText={showErrors ? fieldErrors.email : undefined} /></Grid>
                             </Grid>
                             <TextField select fullWidth label="Lead Category" value={leadType} onChange={(event) => setLeadType(event.target.value)}>
-                                <MenuItem value="owner">Property Owner</MenuItem>
-                                <MenuItem value="tenant">Tenant</MenuItem>
-                                <MenuItem value="property">Property Asset</MenuItem>
-                                <MenuItem value="company">Corporate / Holding</MenuItem>
+                                <MenuItem value="owner"><Bi en={"Property Owner"} ar={"مالك العقار"} /></MenuItem>
+                                <MenuItem value="tenant"><Bi en={"Tenant"} ar={"مستأجر"} /></MenuItem>
+                                <MenuItem value="property"><Bi en={"Property Asset"} ar={"أصل عقاري"} /></MenuItem>
+                                <MenuItem value="company"><Bi en={"Corporate / Holding"} ar={"شركة / قابضة"} /></MenuItem>
                             </TextField>
                             <TextField inputProps={{ 'data-testid': 'broker-lead-property-interest' }} fullWidth label="Property Interest / Requirement" value={propertyInterest} onChange={(event) => setPropertyInterest(event.target.value)} />
                             <Grid container spacing={2}>

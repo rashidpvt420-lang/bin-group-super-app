@@ -42,6 +42,7 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import AdminSuggestionsPage from './AdminSuggestionsPage';
 import AdminPaymentCollectionPage from './AdminPaymentCollectionPage';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
+import Bi from '../components/Bi';
 
 const ADMIN_OPERATIONS_CONSOLE_URL = 'https://bin-group-admin-panel.web.app';
 const RELEASE_SHA = normalizeCommitSha(import.meta.env.VITE_RELEASE_COMMIT_SHA);
@@ -246,7 +247,7 @@ export default function AdminTerminal() {
                 <Chip label={`${auth.currentUser ? multiFactor(auth.currentUser).enrolledFactors.length : 0} MFA factor(s) enrolled`} color={auth.currentUser && multiFactor(auth.currentUser).enrolledFactors.length > 0 ? 'success' : 'warning'} sx={{ fontWeight: 900 }} />
               </Stack>
             </Stack>
-            <Alert severity="info" sx={{ mt: 3 }}>Daily command access belongs to this signed-in Admin. Emergency account recovery remains a protected two-person approval process.</Alert>
+            <Alert severity="info" sx={{ mt: 3 }}><Bi en={"Daily command access belongs to this signed-in Admin. Emergency account recovery remains a protected two-person approval process."} ar={"صلاحية التحكم اليومية لهذا المسؤول المسجل. يبقى استرداد الحساب الطارئ عملية محمية تتطلب موافقة شخصين."} /></Alert>
           </CardContent>
         </Card>
       ) : (
@@ -287,7 +288,7 @@ export default function AdminTerminal() {
         </AccordionSummary>
         <AccordionDetails>
           <Alert severity={RELEASE_SHA ? 'info' : 'warning'} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#1E40AF', border: '1px solid rgba(59,130,246,0.30)' }}>
-        Operational dashboard only. Release SHA: <strong>{RELEASE_SHA || 'UNAVAILABLE'}</strong>. Public launch decisions are calculated only in the dedicated Launch Command Center from exact-SHA, evidence-layer-qualified records.
+        <Bi en={"Operational dashboard only. Release SHA:"} ar={"لوحة تشغيلية فقط. رمز الإصدار:"} /> <strong>{RELEASE_SHA || 'UNAVAILABLE'}</strong><Bi en={". Public launch decisions are calculated only in the dedicated Launch Command Center from exact-SHA, evidence-layer-qualified records."} ar={". تُحسب قرارات الإطلاق العام فقط في مركز قيادة الإطلاق المخصص من سجلات موثقة مطابقة للإصدار."} />
       </Alert>
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         {metrics.map((metric) => (
@@ -311,7 +312,7 @@ export default function AdminTerminal() {
       <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
         <CardContent>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
-            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}>Canonical Admin Coverage</Typography><Typography variant="body2" sx={{ color: '#4B5563', mt: 0.5 }}>Operational truth here; release truth is delegated to the exact-SHA Launch Command Center.</Typography></Box>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}><Bi en={"Canonical Admin Coverage"} ar={"التغطية الإدارية المعتمدة"} /></Typography><Typography variant="body2" sx={{ color: '#4B5563', mt: 0.5 }}><Bi en={"Operational truth here; release truth is delegated to the exact-SHA Launch Command Center."} ar={"الحقيقة التشغيلية هنا؛ وحقيقة الإصدار في مركز قيادة الإطلاق."} /></Typography></Box>
             <Chip label={label('admin.coverage.chip', 'Single command center')} sx={{ bgcolor: 'rgba(201,166,70,0.14)', color: '#7A5C12', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
           </Stack>
           <Grid container spacing={2}>
@@ -333,12 +334,12 @@ export default function AdminTerminal() {
         <Grid item xs={12} md={7}>
           <Card sx={{ height: '100%', bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}>Public Launch Authority</Typography><Chip label={label('admin.launch.handoffChip', 'Handled in Launch Command Center')} sx={{ bgcolor: 'rgba(245,158,11,0.14)', color: '#92400E', fontWeight: 950 }} /></Stack>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}><Bi en={"Public Launch Authority"} ar={"صلاحية الإطلاق العام"} /></Typography><Chip label={label('admin.launch.handoffChip', 'Handled in Launch Command Center')} sx={{ bgcolor: 'rgba(245,158,11,0.14)', color: '#92400E', fontWeight: 950 }} /></Stack>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                This operational dashboard intentionally does not calculate or cache a public-launch PASS/NO-GO result. Open the protected Launch Command Center, which requires PASSED evidence, exact release SHA matching, and the required hosted/physical-device evidence layer. Waivers do not count as hard-public-launch passes.
+                <Bi en={"This operational dashboard intentionally does not calculate or cache a public-launch PASS/NO-GO result. Open the protected Launch Command Center, which requires PASSED evidence, exact release SHA matching, and the required hosted/physical-device evidence layer. Waivers do not count as hard-public-launch passes."} ar={"هذه اللوحة التشغيلية لا تحسب نتيجة الإطلاق العام عمداً. افتح مركز قيادة الإطلاق المحمي الذي يتطلب أدلة ناجحة ومطابقة رمز الإصدار وأدلة الأجهزة المطلوبة. الاستثناءات لا تُحتسب نجاحاً للإطلاق العام."} />
               </Alert>
-              <Button fullWidth variant="contained" onClick={() => openOperationsTool('/ops/public-launch-command')} startIcon={renderSafeIcon(ShieldCheck, { size: 18 })} sx={{ bgcolor: '#C9A646', color: '#111827', fontWeight: 950, mb: 2 }}>Open exact-SHA Launch Command Center</Button>
-              <Typography variant="body2" sx={{ color: '#4B5563' }}>Phase 1 payment authority: <strong>{PHASE1_PAYMENT_POLICY.approvedMethods.join(' + ')}</strong>. Bank Transfer and Stripe/Card are disabled.</Typography>
+              <Button fullWidth variant="contained" onClick={() => openOperationsTool('/ops/public-launch-command')} startIcon={renderSafeIcon(ShieldCheck, { size: 18 })} sx={{ bgcolor: '#C9A646', color: '#111827', fontWeight: 950, mb: 2 }}><Bi en={"Open exact-SHA Launch Command Center"} ar={"فتح مركز قيادة الإطلاق"} /></Button>
+              <Typography variant="body2" sx={{ color: '#4B5563' }}><Bi en={"Phase 1 payment authority:"} ar={"صلاحية الدفع في المرحلة 1:"} /> <strong>{PHASE1_PAYMENT_POLICY.approvedMethods.join(' + ')}</strong><Bi en={". Bank Transfer and Stripe/Card are disabled."} ar={". التحويل البنكي والبطاقات معطلة."} /></Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -346,15 +347,15 @@ export default function AdminTerminal() {
         <Grid item xs={12} md={5}>
           <Stack spacing={2.5}>
             <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Verification Runbook</Typography><Stack spacing={1.25}>{operationalRunbook.map((item) => <Box key={item.command} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 900 }}>{item.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontFamily: 'monospace', fontWeight: 900 }}>{item.command}</Typography></Box>)}</Stack></CardContent>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}><Bi en={"Verification Runbook"} ar={"دليل التحقق"} /></Typography><Stack spacing={1.25}>{operationalRunbook.map((item) => <Box key={item.command} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 900 }}>{item.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontFamily: 'monospace', fontWeight: 900 }}>{item.command}</Typography></Box>)}</Stack></CardContent>
             </Card>
 
             <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Canonical SLA Policy</Typography><Stack spacing={1}>{Object.entries(CANONICAL_SLA_POLICY).map(([priority, policy]) => <Box key={priority} sx={{ p: 1.25, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 950 }}>{policy.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontWeight: 950 }}>{policy.minutes}m</Typography></Stack><Typography variant="caption" sx={{ color: '#4B5563' }}>{policy.adminEscalationCopy}</Typography></Box>)}</Stack></CardContent>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}><Bi en={"Canonical SLA Policy"} ar={"سياسة مستوى الخدمة المعتمدة"} /></Typography><Stack spacing={1}>{Object.entries(CANONICAL_SLA_POLICY).map(([priority, policy]) => <Box key={priority} sx={{ p: 1.25, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 950 }}>{policy.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontWeight: 950 }}>{policy.minutes}m</Typography></Stack><Typography variant="caption" sx={{ color: '#4B5563' }}>{policy.adminEscalationCopy}</Typography></Box>)}</Stack></CardContent>
             </Card>
 
             <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Recent Audit Trail</Typography>{events.length === 0 ? <Typography variant="body2" sx={{ color: '#4B5563' }}>No audit preview loaded. This may mean no audit documents exist yet, or Firestore denied the preview query.</Typography> : <Stack spacing={1}>{events.map((event) => <Box key={event.id} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB' }}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 900 }}>{event.action || 'AUDIT_EVENT'}</Typography><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 700 }}>{event.actorRole || 'actor'} · {event.targetType || 'target'} · {formatDate(event.createdAt)}</Typography></Box>)}</Stack>}{lastLoadedAt && <Typography variant="caption" sx={{ display: 'block', mt: 2, color: '#6B7280', fontWeight: 800 }}>Last synced: {lastLoadedAt}</Typography>}</CardContent>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}><Bi en={"Recent Audit Trail"} ar={"سجل التدقيق الأخير"} /></Typography>{events.length === 0 ? <Typography variant="body2" sx={{ color: '#4B5563' }}><Bi en={"No audit preview loaded. This may mean no audit documents exist yet, or Firestore denied the preview query."} ar={"لم يتم تحميل معاينة التدقيق. قد لا توجد سجلات بعد أو تم رفض الاستعلام."} /></Typography> : <Stack spacing={1}>{events.map((event) => <Box key={event.id} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB' }}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 900 }}>{event.action || 'AUDIT_EVENT'}</Typography><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 700 }}>{event.actorRole || 'actor'} · {event.targetType || 'target'} · {formatDate(event.createdAt)}</Typography></Box>)}</Stack>}{lastLoadedAt && <Typography variant="caption" sx={{ display: 'block', mt: 2, color: '#6B7280', fontWeight: 800 }}><Bi en={"Last synced:"} ar={"آخر مزامنة:"} /> {lastLoadedAt}</Typography>}</CardContent>
             </Card>
           </Stack>
         </Grid>
@@ -364,12 +365,12 @@ export default function AdminTerminal() {
       </Accordion>
 
       <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} sx={{ mt: 3 }}>
-        <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}>Reporting</Button>
-        <Button href="/notifications" startIcon={renderSafeIcon(Bell, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Notifications</Button>
-        <Button href="/verify" startIcon={renderSafeIcon(FileCheck2, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Public Verification</Button>
-        <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Trust & Security</Button>
-        <Button onClick={() => navigate('/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}>Admin Profile & Security</Button>
-        <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#B91C1C', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>Reset session</Button>
+        <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}><Bi en={"Reporting"} ar={"التقارير"} /></Button>
+        <Button href="/notifications" startIcon={renderSafeIcon(Bell, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}><Bi en={"Notifications"} ar={"الإشعارات"} /></Button>
+        <Button href="/verify" startIcon={renderSafeIcon(FileCheck2, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}><Bi en={"Public Verification"} ar={"التحقق العام"} /></Button>
+        <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}><Bi en={"Trust & Security"} ar={"الثقة والأمان"} /></Button>
+        <Button onClick={() => navigate('/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}><Bi en={"Admin Profile & Security"} ar={"ملف المسؤول والأمان"} /></Button>
+        <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#B91C1C', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}><Bi en={"Reset session"} ar={"إعادة تعيين الجلسة"} /></Button>
       </Stack>
 
       <Typography variant="caption" sx={{ display: 'block', mt: 4, color: '#6B7280', fontWeight: 800, textAlign: 'center' }}>{lang === 'ar' ? 'مركز التحكم الداخلي' : 'In-app admin command center'} · /admin/dashboard</Typography>

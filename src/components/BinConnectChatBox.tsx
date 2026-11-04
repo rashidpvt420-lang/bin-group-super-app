@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, functions, httpsCallable } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useUnifiedFab } from './ui/unifiedFab';
+import Bi from './Bi';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'staff';
 
@@ -182,13 +183,13 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
           <Stack spacing={2} sx={{ p: 2.4 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
-                <Typography fontWeight={950}>BIN Connect</Typography>
-                <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 800 }}>In-app chat, feedback, CEO/admin support, Majlis staff channel</Typography>
+                <Typography fontWeight={950}><Bi en={"BIN Connect"} ar={"BIN Connect"} /></Typography>
+                <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 800 }}><Bi en={"In-app chat, feedback, CEO/admin support, Majlis staff channel"} ar={"محادثة داخل التطبيق، ملاحظات، دعم الإدارة، قناة فريق المجلس"} /></Typography>
               </Box>
               <Button size="small" onClick={() => setOpen(false)} sx={{ minWidth: 0, color: binThemeTokens.goldHover }}><X size={18} /></Button>
             </Stack>
             {draftCurrent && notice && <Alert severity={notice.includes('sent') ? 'success' : 'warning'}>{notice}</Alert>}
-            <Button onClick={openInbox} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 950 }}>Open full inbox / replies</Button>
+            <Button onClick={openInbox} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 950 }}><Bi en={"Open full inbox / replies"} ar={"فتح صندوق الوارد / الردود"} /></Button>
             <TextField select label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)} size="small" fullWidth>{CHANNELS.map((item) => <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>)}</TextField>
             <TextField label="Subject" value={draftCurrent ? title : ''} onChange={(e) => setTitle(e.target.value)} size="small" fullWidth placeholder="Example: Majlis AC issue, dashboard idea, payment question" />
             <TextField label="Recipient hint" value={draftCurrent ? recipient : ''} onChange={(e) => setRecipient(e.target.value)} size="small" fullWidth placeholder="Optional: tenant name, technician, CEO, unit, email, Majlis staff" />
@@ -201,8 +202,8 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
             <TextField label="Message" value={draftCurrent ? message : ''} onChange={(e) => setMessage(e.target.value)} fullWidth multiline minRows={3} placeholder="Write like WhatsApp: ask for help, send suggestion, report issue, request update..." />
             <Button onClick={send} disabled={draftCurrent && busy} variant="contained" endIcon={<Send size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{draftCurrent && busy ? 'Sending...' : 'Send Message'}</Button>
             <Divider />
-            <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 900 }}>Recent BIN Connect threads</Typography>
-            <Stack spacing={1}>{threads.length === 0 ? <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.45)' : binThemeTokens.textSecondary }}>No recent threads yet.</Typography> : threads.slice(0, 4).map((thread) => <Box key={thread.id} onClick={openInbox} sx={{ p: 1.2, borderRadius: 2, cursor: 'pointer', bgcolor: dark ? 'rgba(255,255,255,.05)' : alpha(binThemeTokens.gold, .06) }}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={thread.channel || 'chat'} /><Typography variant="body2" fontWeight={900}>{thread.title || 'BIN Connect'}</Typography></Stack><Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open thread'}</Typography></Box>)}</Stack>
+            <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 900 }}><Bi en={"Recent BIN Connect threads"} ar={"أحدث محادثات BIN Connect"} /></Typography>
+            <Stack spacing={1}>{threads.length === 0 ? <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.45)' : binThemeTokens.textSecondary }}><Bi en={"No recent threads yet."} ar={"لا توجد محادثات حديثة بعد."} /></Typography> : threads.slice(0, 4).map((thread) => <Box key={thread.id} onClick={openInbox} sx={{ p: 1.2, borderRadius: 2, cursor: 'pointer', bgcolor: dark ? 'rgba(255,255,255,.05)' : alpha(binThemeTokens.gold, .06) }}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={thread.channel || 'chat'} /><Typography variant="body2" fontWeight={900}>{thread.title || 'BIN Connect'}</Typography></Stack><Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open thread'}</Typography></Box>)}</Stack>
           </Stack>
         </Paper>
       )}

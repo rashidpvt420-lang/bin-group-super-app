@@ -9,6 +9,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 import { chipTextColor } from '../../theme/statusColors';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
@@ -123,7 +124,7 @@ export default function TenantTicketsPage() {
             <Box sx={{ mb: 5, textAlign: isRTL ? 'right' : 'left' }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('dash.residency_ops') || 'RESIDENCY OPERATIONS'}</Typography>
                 <Typography variant="h4" fontWeight="950" color="#FFF" sx={{ mt: 1 }}>{t('nav.tickets') || 'Requests & Service History'}</Typography>
-                <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}>Repairs, emergencies, cleaning, pest control, vacation care and moving services appear in one timeline.</Typography>
+                <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}><Bi en={"Repairs, emergencies, cleaning, pest control, vacation care and moving services appear in one timeline."} ar={"تظهر الإصلاحات والطوارئ والتنظيف ومكافحة الآفات ورعاية الإجازة وخدمات النقل في جدول واحد."} /></Typography>
             </Box>
 
             {warning && <Alert severity="warning" sx={{ mb: 3 }}>{warning}</Alert>}
@@ -172,7 +173,7 @@ export default function TenantTicketsPage() {
                                                 <Chip size="small" label={`Quote: ${label(ticket.quoteStatus || 'PENDING')}`} sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#92400E' }} />
                                                 {ticket.recurrenceFrequency && ticket.recurrenceFrequency !== 'one-time' && <Chip size="small" icon={<Repeat2 size={12} />} label={`${label(ticket.recurrenceFrequency)} · ${ticket.recurrenceSequence || 1}/${ticket.recurrenceOccurrences || 1}`} sx={{ bgcolor: alpha('#8b5cf6', 0.12), color: '#c4b5fd', '& .MuiChip-icon': { color: '#c4b5fd' } }} />}
                                             </Stack>
-                                            <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>Access: {label(ticket.accessMethod || 'TENANT PRESENT')} · Security: {label(ticket.securityAccessStatus || 'PENDING')}</Typography>
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Access:"} ar={"الدخول:"} /> {label(ticket.accessMethod || 'TENANT PRESENT')} <Bi en={"· Security:"} ar={"· الأمان:"} /> {label(ticket.securityAccessStatus || 'PENDING')}</Typography>
                                         </Stack>
                                     )}
 

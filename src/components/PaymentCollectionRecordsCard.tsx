@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
 import { auth, collection, db, doc, getDoc, getDocs, getDownloadURL, query, ref, storage, where } from '../lib/firebase';
+import Bi from './Bi';
 
 export type CollectionRecordRow = {
   id: string;
@@ -63,7 +64,7 @@ export default function PaymentCollectionRecordsCard() {
   return (
     <Card sx={{ mb: 2, borderRadius: 3 }}>
       <CardContent>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>Payments collected by finance</Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}><Bi en={"Payments collected by finance"} ar={"مدفوعات حصّلتها المالية"} /></Typography>
         {error && <Alert severity="warning" sx={{ mb: 1 }}>{error}</Alert>}
         <Stack spacing={1.5}>
           {rows.map((r) => (
@@ -74,8 +75,8 @@ export default function PaymentCollectionRecordsCard() {
                 <Typography variant="body2">{r.method === 'cheque' ? `Cheque${r.chequeNumber ? ` #${r.chequeNumber}` : ''}` : 'Cash'}</Typography>
                 <Typography variant="body2">{r.collectedOn}</Typography>
               </Stack>
-              {r.voidReason && <Typography variant="caption" display="block">Reason: {r.voidReason}</Typography>}
-              {r.proofPath && <Button size="small" sx={{ mt: 0.5 }} onClick={() => void openProof(r.proofPath)}>View proof</Button>}
+              {r.voidReason && <Typography variant="caption" display="block"><Bi en={"Reason:"} ar={"السبب:"} /> {r.voidReason}</Typography>}
+              {r.proofPath && <Button size="small" sx={{ mt: 0.5 }} onClick={() => void openProof(r.proofPath)}><Bi en={"View proof"} ar={"عرض الإثبات"} /></Button>}
             </Box>
           ))}
         </Stack>

@@ -56,6 +56,7 @@ function harness(file) {
       if (name === '../lib/firebase') return firebase;
       if (name === '../theme/binGroupTheme') return { binThemeTokens: { gold: '#aa8800' } };
       if (name === './ui/unifiedFab') return { useUnifiedFab: () => false };
+      if (/(^|\/)components\/Bi$|^\.\/Bi$/.test(name)) return { default: ({ en }) => en };
       throw new Error(`Unexpected import ${name}`);
     },
   }, { filename: file });

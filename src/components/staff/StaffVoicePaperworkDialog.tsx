@@ -23,6 +23,7 @@ import {
   Preview as PreviewIcon,
 } from "@mui/icons-material";
 import { functions, httpsCallable } from "../../lib/firebase";
+import Bi from '../Bi';
 
 interface StaffVoicePaperworkDialogProps {
   open: boolean;
@@ -183,13 +184,13 @@ export const StaffVoicePaperworkDialog: React.FC<StaffVoicePaperworkDialogProps>
       PaperProps={{ sx: { bgcolor: "#0f172a", color: "#fff", border: "1px solid #334155", borderRadius: 3 } }}
     >
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>Voice / Text Work Report</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}><Bi en={"Voice / Text Work Report"} ar={"تقرير العمل صوتياً / كتابياً"} /></Typography>
         <IconButton onClick={closeAndReset} sx={{ color: "#94a3b8" }}><CloseIcon /></IconButton>
       </DialogTitle>
 
       <DialogContent>
         <Typography variant="body2" sx={{ color: "#94a3b8", mb: 2 }}>
-          Describe the work performed for <strong>#{jobId}</strong>. The server verifies assignment and job state before preparing or confirming completion.
+          <Bi en={"Describe the work performed for"} ar={"صف العمل المنجز لـ"} /> <strong>#{jobId}</strong><Bi en={". The server verifies assignment and job state before preparing or confirming completion."} ar={". يتحقق الخادم من الإسناد وحالة المهمة قبل إعداد الإكمال أو تأكيده."} />
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -244,17 +245,17 @@ export const StaffVoicePaperworkDialog: React.FC<StaffVoicePaperworkDialogProps>
         {report && (
           <Card sx={{ bgcolor: "#1e293b", color: "#fff", border: "1px solid #38bdf8", mt: 2 }}>
             <CardContent>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#38bdf8", mb: 1 }}>Server-Verified Preview</Typography>
-              <Typography variant="body2"><strong>Summary:</strong> {report.summary || text}</Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}><strong>Current work-order state:</strong> {report.workOrderStatus || "Verified by server"}</Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}><strong>Assignment:</strong> {report.assignmentVerified ? "Verified" : "Verification required"}</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#38bdf8", mb: 1 }}><Bi en={"Server-Verified Preview"} ar={"معاينة موثقة من الخادم"} /></Typography>
+              <Typography variant="body2"><strong><Bi en={"Summary:"} ar={"الملخص:"} /></strong> {report.summary || text}</Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}><strong><Bi en={"Current work-order state:"} ar={"حالة أمر العمل الحالية:"} /></strong> {report.workOrderStatus || "Verified by server"}</Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}><strong><Bi en={"Assignment:"} ar={"الإسناد:"} /></strong> {report.assignmentVerified ? "Verified" : "Verification required"}</Typography>
               {Array.isArray(report.proposedMaterials) && report.proposedMaterials.length > 0 && (
                 <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 0.5, mt: 1.5 }}>
                   {report.proposedMaterials.map((material) => <Chip key={material} label={`Proposed: ${material}`} size="small" />)}
                 </Stack>
               )}
               <Alert severity="info" sx={{ mt: 2 }}>
-                Confirming completes the work order only. Proposed materials do not change inventory until the separate stock-confirmation workflow succeeds.
+                <Bi en={"Confirming completes the work order only. Proposed materials do not change inventory until the separate stock-confirmation workflow succeeds."} ar={"التأكيد يُكمل أمر العمل فقط. لا تتغير المخزونات بالمواد المقترحة حتى ينجح تأكيد المخزون المنفصل."} />
               </Alert>
             </CardContent>
           </Card>
@@ -262,10 +263,10 @@ export const StaffVoicePaperworkDialog: React.FC<StaffVoicePaperworkDialogProps>
       </DialogContent>
 
       <DialogActions sx={{ p: 2.5 }}>
-        <Button onClick={closeAndReset}>Cancel</Button>
+        <Button onClick={closeAndReset}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
         {report && (
           <>
-            <Button onClick={() => setReport(null)} disabled={confirming}>Edit</Button>
+            <Button onClick={() => setReport(null)} disabled={confirming}><Bi en={"Edit"} ar={"تعديل"} /></Button>
             <Button
               variant="contained"
               color="success"

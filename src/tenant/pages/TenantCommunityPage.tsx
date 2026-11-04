@@ -6,6 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { db, collection, query, where, getDocs, limit, addDoc, onSnapshot, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import Bi from '../../components/Bi';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 
@@ -236,7 +237,7 @@ export default function TenantCommunityPage() {
               <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                   <Typography variant="h6" color="#FFF" fontWeight="950">
-                    Comments: {selectedPostForComments.title}
+                    <Bi en={"Comments:"} ar={"التعليقات:"} /> {selectedPostForComments.title}
                   </Typography>
                   <Button size="small" onClick={() => setSelectedPostForComments(null)} sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 900 }}>CLOSE</Button>
                 </Stack>
@@ -255,7 +256,7 @@ export default function TenantCommunityPage() {
                   ))}
                   {activePostComments.length === 0 && (
                     <Typography variant="caption" color="textSecondary" align="center" display="block" sx={{ py: 3 }}>
-                      No comments yet. Write the first comment!
+                      <Bi en={"No comments yet. Write the first comment!"} ar={"لا توجد تعليقات بعد. اكتب أول تعليق!"} />
                     </Typography>
                   )}
                 </Stack>
@@ -284,22 +285,22 @@ export default function TenantCommunityPage() {
 
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', minWidth: { xs: '90%', sm: 480 } } }}>
         <form onSubmit={handleCreatePost}>
-          <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}>Create Community Post</DialogTitle>
+          <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}><Bi en={"Create Community Post"} ar={"إنشاء منشور للمجتمع"} /></DialogTitle>
           <DialogContent sx={{ p: 4 }}>
             <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}>
-              Create a new building post. All posts are held in review and will appear to other residents once moderated.
+              <Bi en={"Create a new building post. All posts are held in review and will appear to other residents once moderated."} ar={"أنشئ منشوراً للمبنى. تخضع جميع المنشورات للمراجعة وتظهر للسكان بعد الموافقة."} />
             </Typography>
             <Stack spacing={3}>
               <TextField fullWidth label="Title *" required value={title} onChange={e => setTitle(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
               <TextField fullWidth multiline rows={4} label="Message *" required value={body} onChange={e => setBody(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
               <FormControl fullWidth variant="filled">
-                <InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}>Category</InputLabel>
+                <InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Category"} ar={"الفئة"} /></InputLabel>
                 <Select value={category} onChange={e => setCategory(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}>
-                  <MenuItem value="general">General</MenuItem>
-                  <MenuItem value="event">Event</MenuItem>
-                  <MenuItem value="notice">Notice</MenuItem>
-                  <MenuItem value="rule">Rule Query</MenuItem>
-                  <MenuItem value="recommendation">Recommendation</MenuItem>
+                  <MenuItem value="general"><Bi en={"General"} ar={"عام"} /></MenuItem>
+                  <MenuItem value="event"><Bi en={"Event"} ar={"فعالية"} /></MenuItem>
+                  <MenuItem value="notice"><Bi en={"Notice"} ar={"إشعار"} /></MenuItem>
+                  <MenuItem value="rule"><Bi en={"Rule Query"} ar={"استفسار عن القواعد"} /></MenuItem>
+                  <MenuItem value="recommendation"><Bi en={"Recommendation"} ar={"توصية"} /></MenuItem>
                 </Select>
               </FormControl>
             </Stack>

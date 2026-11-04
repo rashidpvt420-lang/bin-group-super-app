@@ -132,6 +132,7 @@ test('command strip surfaces openTickets (not silent high-risk zero) and keeps h
   assert.match(stripSrc, /high-risk of/);
   // 2026-10-21 redesign: the owner home shows open repairs as a tile and urgent ones in "Needs you today".
   assert.match(simpleSrc, /const openMaintenance = commandCounts\.openTickets;/);
-  assert.match(simpleSrc, /openRepairs=\{loading \|\| failedSources\.includes\('tickets'\) \? null : openMaintenance\}/);
+  // #1947: a ticket query that hit its limit is also not a trustworthy total, so the tile must show unknown.
+  assert.match(simpleSrc, /openRepairs=\{loading \|\| failedSources\.includes\('tickets'\) \|\| truncatedSources\.includes\('tickets'\) \? null : openMaintenance\}/);
   assert.match(simpleSrc, /count: commandCounts\.highRiskTickets/);
 });

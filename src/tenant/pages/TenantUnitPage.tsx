@@ -5,6 +5,7 @@ import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, query, 
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+import Bi from '../../components/Bi';
 
 type UnitDoc = {
   id: string;
@@ -179,14 +180,14 @@ export default function TenantUnitPage() {
               <Box sx={{ width: 64, height: 64, display: 'grid', placeItems: 'center', borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}><Home size={32} /></Box>
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>MY UNIT</Typography>
-                <Typography variant="h4" sx={{ color: '#FFF', fontWeight: 950 }}>Unit {unit.unitNumber || '—'}</Typography>
-                <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'} · Floor {unit.floor || '—'}</Typography>
+                <Typography variant="h4" sx={{ color: '#FFF', fontWeight: 950 }}><Bi en={"Unit"} ar={"الوحدة"} /> {unit.unitNumber || '—'}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'} <Bi en={"· Floor"} ar={"· الطابق"} /> {unit.floor || '—'}</Typography>
               </Box>
             </Stack>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="flex-start" justifyContent="flex-end">
               <Chip icon={<ShieldCheck size={14} />} label="TENANT ISOLATED VIEW" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#166534', fontWeight: 950 }} />
               <Button startIcon={<ClipboardCheck size={16} />} variant="contained" onClick={() => setHandoverOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                Submit Handover
+                <Bi en={"Submit Handover"} ar={"إرسال التسليم"} />
               </Button>
             </Stack>
           </Stack>
@@ -195,21 +196,21 @@ export default function TenantUnitPage() {
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
           <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
+          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}><Bi en={"Submit requests from the tenant dashboard."} ar={"أرسل الطلبات من لوحة المستأجر."} /></Typography></Paper></Grid>
         </Grid>
 
         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-          This page only loads the unit assigned to your tenant profile by tenant ID or tenant email. Other building units are not shown here.
+          <Bi en={"This page only loads the unit assigned to your tenant profile by tenant ID or tenant email. Other building units are not shown here."} ar={"تعرض هذه الصفحة فقط الوحدة المسندة إلى ملفك كمستأجر. لا تظهر وحدات المبنى الأخرى."} />
         </Alert>
       </Stack>
 
       <Dialog open={handoverOpen} onClose={() => setHandoverOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Submit move-in / move-out handover</DialogTitle>
+        <DialogTitle><Bi en={"Submit move-in / move-out handover"} ar={"إرسال تسليم الدخول / الخروج"} /></DialogTitle>
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 1 }}>
             <TextField select label="Inspection type" value={handoverForm.inspectionType} onChange={(event) => setHandoverForm((current) => ({ ...current, inspectionType: event.target.value as InspectionForm['inspectionType'] }))} fullWidth>
-              <MenuItem value="MOVE_IN">Move-in</MenuItem>
-              <MenuItem value="MOVE_OUT">Move-out</MenuItem>
+              <MenuItem value="MOVE_IN"><Bi en={"Move-in"} ar={"الدخول"} /></MenuItem>
+              <MenuItem value="MOVE_OUT"><Bi en={"Move-out"} ar={"الخروج"} /></MenuItem>
             </TextField>
             <TextField label="Summary" value={handoverForm.summary} onChange={(event) => setHandoverForm((current) => ({ ...current, summary: event.target.value }))} fullWidth required />
             <TextField label="Notes" value={handoverForm.notes} onChange={(event) => setHandoverForm((current) => ({ ...current, notes: event.target.value }))} fullWidth multiline minRows={3} />
@@ -222,7 +223,7 @@ export default function TenantUnitPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHandoverOpen(false)}>Cancel</Button>
+          <Button onClick={() => setHandoverOpen(false)}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
           <Button disabled={handoverSaving || !handoverForm.summary.trim()} onClick={submitHandoverInspection} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
             {handoverSaving ? 'Submitting...' : 'Submit handover'}
           </Button>

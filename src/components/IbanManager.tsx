@@ -4,6 +4,7 @@ import { Shield, CheckCircle2, AlertCircle } from 'lucide-react';
 import { db, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import Bi from './Bi';
 
 export const IbanManager: React.FC = () => {
     const { user } = useRole();
@@ -106,7 +107,7 @@ export const IbanManager: React.FC = () => {
             ) : (
                 <Box>
                     <Typography variant="body2" sx={{ color: '#475467', mb: 3 }}>
-                        Add your bank IBAN so BIN GROUP can pay your rent out to you.
+                        <Bi en={"Add your bank IBAN so BIN GROUP can pay your rent out to you."} ar={"أضف رقم IBAN الخاص بك لتتمكن BIN GROUP من تحويل الإيجار إليك."} />
                     </Typography>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                         <TextField

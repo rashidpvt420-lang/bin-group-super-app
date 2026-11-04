@@ -6,6 +6,7 @@ import { collection, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
+import Bi from '../../components/Bi';
 
 type JobRow = { id: string; [key: string]: any };
 // Text tones readable on white (>= 4.5:1). Brand gold (#C9A646, 2.3:1) is kept for borders/bars only.
@@ -62,16 +63,16 @@ export default function TechnicianProofReadinessPage() {
       <Stack spacing={3}>
         <Box>
           <Typography variant="overline" sx={{ color: ui.goldText, fontWeight: 950, letterSpacing: 3 }}>TECHNICIAN PROOF COMMAND</Typography>
-          <Typography variant="h3" sx={{ color: ui.ink, fontWeight: 950, mt: 1 }}>Proof Readiness</Typography>
-          <Typography sx={{ color: ui.muted, mt: 1, fontWeight: 700 }}>Every active job must have before evidence, after proof, resolution notes, and parts/materials disposition before close.</Typography>
+          <Typography variant="h3" sx={{ color: ui.ink, fontWeight: 950, mt: 1 }}><Bi en={"Proof Readiness"} ar={"جاهزية الإثبات"} /></Typography>
+          <Typography sx={{ color: ui.muted, mt: 1, fontWeight: 700 }}><Bi en={"Every active job must have before evidence, after proof, resolution notes, and parts/materials disposition before close."} ar={"يجب أن تحتوي كل مهمة نشطة على صور قبل وبعد وملاحظات الحل وبيان القطع/المواد قبل الإغلاق."} /></Typography>
         </Box>
         {warning && <Alert severity="warning">{warning}</Alert>}
 
         <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${alpha(blocked ? ui.gold : ui.green, 0.28)}`, bgcolor: alpha(blocked ? ui.gold : ui.green, 0.06) }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
             <Box>
-              <Typography variant="h4" sx={{ color: ui.ink, fontWeight: 950 }}>{ratio}% ready</Typography>
-              <Typography sx={{ color: ui.muted, fontWeight: 800 }}>{ready}/{rows.length} active jobs have complete close proof</Typography>
+              <Typography variant="h4" sx={{ color: ui.ink, fontWeight: 950 }}>{ratio}<Bi en={"% ready"} ar={"% جاهز"} /></Typography>
+              <Typography sx={{ color: ui.muted, fontWeight: 800 }}>{ready}/{rows.length} <Bi en={"active jobs have complete close proof"} ar={"مهام نشطة لديها إثبات إغلاق كامل"} /></Typography>
             </Box>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip label={`Blocked: ${blocked}`} sx={{ bgcolor: '#fff', color: blocked ? ui.red : ui.green, fontWeight: 950 }} />
@@ -101,8 +102,8 @@ export default function TechnicianProofReadinessPage() {
                     return <Chip key={item} size="small" label={`${ok ? '✓' : '•'} ${item}`} sx={{ bgcolor: alpha(ok ? ui.green : ui.gold, 0.1), color: ok ? ui.green : ui.goldText, fontWeight: 900 }} />;
                   })}
                 </Stack>
-                {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}>Missing: {proof.missing.join(', ')}</Typography>}
-                <Button data-testid="technician-proof-open-job" endIcon={<ArrowRight size={14} />} onClick={(event) => { event.stopPropagation(); navigate(`/technician/job/${job.id}`); }} sx={{ mt: 1.5, color: ui.goldText, fontWeight: 950 }}>Open job</Button>
+                {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}><Bi en={"Missing:"} ar={"ناقص:"} /> {proof.missing.join(', ')}</Typography>}
+                <Button data-testid="technician-proof-open-job" endIcon={<ArrowRight size={14} />} onClick={(event) => { event.stopPropagation(); navigate(`/technician/job/${job.id}`); }} sx={{ mt: 1.5, color: ui.goldText, fontWeight: 950 }}><Bi en={"Open job"} ar={"فتح المهمة"} /></Button>
               </Paper>
             </Grid>
           ))}
@@ -110,8 +111,8 @@ export default function TechnicianProofReadinessPage() {
             <Grid item xs={12}>
               <Paper sx={{ p: 6, borderRadius: 4, textAlign: 'center', border: `1px dashed ${alpha(ui.gold, 0.25)}` }}>
                 <ShieldCheck size={44} color={ui.gold} style={{ margin: '0 auto 12px' }} />
-                <Typography sx={{ color: ui.ink, fontWeight: 950 }}>No active jobs assigned</Typography>
-                <Typography sx={{ color: ui.muted, mt: 1 }}>Proof readiness will appear when jobs are assigned or accepted.</Typography>
+                <Typography sx={{ color: ui.ink, fontWeight: 950 }}><Bi en={"No active jobs assigned"} ar={"لا توجد مهام نشطة مسندة"} /></Typography>
+                <Typography sx={{ color: ui.muted, mt: 1 }}><Bi en={"Proof readiness will appear when jobs are assigned or accepted."} ar={"ستظهر جاهزية الإثبات عند إسناد المهام أو قبولها."} /></Typography>
               </Paper>
             </Grid>
           )}
