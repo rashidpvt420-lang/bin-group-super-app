@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Smartphone, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Building2, Camera, Clock, FileText, Globe, Home, Mail, MapPin, MessageSquare, Phone, Receipt, Search, ShieldCheck, Smartphone, Sparkles, UserRound, Wrench } from 'lucide-react';
 import { emitFabEvent } from '../../components/ui/unifiedFab';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -8,176 +8,173 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'ceo@bin-groups.com' };
+const BRAND = 'BIN-GROUPS';
 const gold = binThemeTokens.gold;
 const goldText = '#7A5C12';
 const ink = '#111827';
 const line = '#E8E3D7';
-const muted = '#667085';
+// Body text darkened from #667085 for stronger AA contrast on white and the pale gold hero.
+const body = '#374151';
 
 const serviceAreasEn = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
 const serviceAreasAr = ['العين', 'أبوظبي', 'دبي', 'الشارقة', 'عجمان', 'رأس الخيمة', 'الفجيرة', 'أم القيوين'];
 
-type CompanyContent = {
-  stats: [string, string][];
-  whyUsTitle: string;
-  whyUsSubtitle: string;
-  whyUs: [string, string][];
-  proofTitle: string;
-  proofItems: string[];
-  flowTitle: string;
-  flow: string[];
-  sections: { trust: string; coverage: string; contact: string; services: string };
-  services: [string, string][];
+type PageContent = {
+  badge: string;
+  heading: string;
+  subline: string;
+  getStarted: string;
+  whatsappUs: string;
+  trustLabel: string;
+  trust: string[];
+  uaePass: string;
+  uaePassAria: string;
+  whyTitle: string;
+  why: [string, string][];
+  rolesTitle: string;
+  rolesSubtitle: string;
+  coverage: string;
+  appBadge: string;
+  appTitle: string;
+  appBody: string;
+  appCta: string;
+  contactTitle: string;
   contactText: string;
   ctaStart: string;
   ctaWhatsApp: string;
   ctaEmail: string;
   location: string;
-  appTitle: string;
-  appBody: string;
-  appCta: string;
-  appBadge: string;
+  askAi: string;
+  askAiAria: string;
 };
 
-const companyContent: Record<'en' | 'ar', CompanyContent> = {
+const content: Record<'en' | 'ar', PageContent> = {
   en: {
-    stats: [['1 min', 'To understand'], ['5', 'Connected profiles'], ['7', 'UAE emirates'], ['Proof', 'Photos · GPS · Time']],
-    whyUsTitle: 'Why owners and tenants choose BIN GROUP',
-    whyUsSubtitle: 'Not a call centre. Not a stack of WhatsApp threads. One licensed company that gives you direct access to your own property.',
-    whyUs: [
-      ['Full access, no middleman', 'Owners get a live login to their own property — costs, contracts, tickets, and history — instead of waiting on a manager to report back.'],
-      ['Dispatch, not dispatch-and-pray', 'Maintenance jobs go to a technician with GPS-tracked job status, so owners and tenants both see exactly where the job stands.'],
-      ['Proof before payment', 'Technicians upload before/after photos on every job. Owners and tenants see the same evidence before any cost is approved.'],
-      ['Built bilingual from day one', 'Every owner, tenant, technician, and broker screen works in English and Arabic — not translated after the fact.'],
+    badge: 'BIN-GROUPS · Property Maintenance & Management',
+    heading: 'Property maintenance & management across the UAE',
+    subline: 'Licensed, verified technicians. Fixed prices, photo proof on every job, and you can track it all in one app.',
+    getStarted: 'Get started',
+    whatsappUs: 'WhatsApp us',
+    trustLabel: 'Why you can trust us',
+    trust: ['Licensed in Abu Dhabi', 'CASH and CHEQUE only, receipt every time', 'Response targets from 1 hour', 'Arabic & English'],
+    uaePass: 'UAE PASS — coming soon',
+    uaePassAria: 'UAE PASS sign-in is coming soon and is not available yet',
+    whyTitle: 'Why BIN-GROUPS',
+    why: [
+      ['No surprises', 'A written contract with a clear scope. Any job above AED 1,000 needs the owner’s approval first.'],
+      ['You see everything', 'Before and after photo proof on every job, and live job status in the app.'],
+      ['Fast response', 'Emergency response target of 1 hour.'],
+      ['Protected payments', 'Every payment is verified and receipted.'],
     ],
-    proofTitle: 'Why people trust it fast',
-    proofItems: ['Licensed UAE company', 'Clear service flow', 'Operations verification', 'Photos for proof', 'GPS/location context', 'Time-stamped records', 'Tenant approval or dispute', 'Owner cost visibility', 'Broker attribution', 'English and Arabic support'],
-    flowTitle: 'The simple operating flow',
-    flow: ['Onboard', 'Verify', 'Report', 'Resolve', 'Approve'],
-    sections: { trust: 'Trust Proof', coverage: 'Service Areas', contact: 'Start With BIN GROUP', services: 'What We Do' },
-    services: [
-      ['Maintenance', 'Service requests become tracked tickets instead of lost phone calls — every job assigned, dispatched, and closed with photo proof.'],
-      ['Property Management', 'Owners see property status, costs, reports, tenant records, and service history clearly, from one login, on demand.'],
-      ['Technician Work', 'Field work is connected to job status, GPS location context, and before/after proof on every visit.'],
-      ['Broker Growth', 'Property leads, attribution, contracts, and commission progress stay visible and organized, from first lead to verified deal.'],
-      ['Operations Control', 'Approvals, payment verification, SLA breach control, documents, and audit logs stay controlled behind the scenes.'],
-      ['AI Concierge & Design Studio', 'Residents describe the issue and the app helps classify the request; an AI design studio turns a room photo into renovation concepts.'],
-      ['Property Passport', 'Each property keeps its contracts, tickets, evidence, invoices, inspections, and history together — built for the day you sell, renew, or hand it over.'],
-    ],
-    contactText: 'Start with one property, one tenant request, one broker lead, or one maintenance contract. BIN GROUP keeps the process clear from the first click.',
+    rolesTitle: 'Choose how you use BIN-GROUPS',
+    rolesSubtitle: 'Pick one option. We only show what you need.',
+    coverage: 'Service Areas',
+    appBadge: 'Mobile app',
+    appTitle: 'BIN-GROUPS Super App',
+    appBody: 'BIN-GROUPS works in your web browser today. For help with the BIN-GROUPS mobile app, contact us.',
+    appCta: 'Ask about the mobile app',
+    contactTitle: 'Start With BIN-GROUPS',
+    contactText: 'Start with one property, one tenant request, one broker lead, or one maintenance contract. BIN-GROUPS keeps the process clear from the first click.',
     ctaStart: 'Partner With Us / Onboard Property',
-    ctaWhatsApp: 'WhatsApp BIN GROUP',
+    ctaWhatsApp: 'WhatsApp BIN-GROUPS',
     ctaEmail: 'Email Us',
     location: 'Al Ain, United Arab Emirates',
-    appTitle: 'BIN GROUP Super App',
-    appBody: 'BIN GROUP works in your web browser today. For help with the BIN GROUP mobile app, contact us.',
-    appCta: 'Ask about the mobile app',
-    appBadge: 'Mobile app',
+    askAi: 'Ask AI',
+    askAiAria: 'Open BIN AI assistant',
   },
   ar: {
-    stats: [['دقيقة', 'للفهم'], ['5', 'ملفات مترابطة'], ['7', 'إمارات'], ['إثبات', 'صور · موقع · وقت']],
-    whyUsTitle: 'لماذا يختار الملاك والمستأجرون BIN GROUP',
-    whyUsSubtitle: 'لسنا مركز اتصال، ولسنا سلسلة محادثات واتساب متفرقة. شركة مرخصة واحدة تعطيك دخولاً مباشراً لعقارك.',
-    whyUs: [
-      ['دخول كامل، بدون وسيط', 'يحصل المالك على بوابة دخول مباشرة لعقاره — التكاليف والعقود والتذاكر والتاريخ — بدلاً من انتظار مدير يرفع له تقريراً.'],
-      ['إرسال فني موثّق، لا إرسال بلا تتبع', 'تذهب طلبات الصيانة لفني مع تتبع حالة العمل عبر GPS، فيرى المالك والمستأجر بدقة أين أصبح العمل.'],
-      ['إثبات قبل الدفع', 'يرفع الفنيون صور قبل/بعد في كل عمل. يرى المالك والمستأجر نفس الإثبات قبل الموافقة على أي تكلفة.'],
-      ['ثنائي اللغة من اليوم الأول', 'كل شاشة للمالك والمستأجر والفني والوسيط تعمل بالعربية والإنجليزية — وليست مترجمة لاحقاً.'],
+    badge: 'BIN-GROUPS · صيانة وإدارة العقارات',
+    heading: 'صيانة وإدارة العقارات في جميع أنحاء الإمارات',
+    subline: 'فنيون مرخصون وموثّقون. أسعار ثابتة، وصور إثبات لكل عمل، وتتابع كل شيء من تطبيق واحد.',
+    getStarted: 'ابدأ الآن',
+    whatsappUs: 'راسلنا على واتساب',
+    trustLabel: 'لماذا تثق بنا',
+    trust: ['مرخصة في أبوظبي', 'نقداً أو بشيك فقط، مع إيصال في كل مرة', 'أهداف استجابة تبدأ من ساعة واحدة', 'العربية والإنجليزية'],
+    uaePass: 'الهوية الرقمية UAE PASS — قريباً',
+    uaePassAria: 'تسجيل الدخول عبر الهوية الرقمية UAE PASS قريباً وغير متاح حالياً',
+    whyTitle: 'لماذا BIN-GROUPS',
+    why: [
+      ['بدون مفاجآت', 'عقد مكتوب بنطاق واضح. أي عمل تزيد قيمته عن 1,000 درهم يحتاج موافقة المالك أولاً.'],
+      ['ترى كل شيء', 'صور إثبات قبل وبعد لكل عمل، وحالة العمل مباشرة في التطبيق.'],
+      ['استجابة سريعة', 'هدف الاستجابة للطوارئ خلال ساعة واحدة.'],
+      ['مدفوعات محمية', 'كل دفعة يتم التحقق منها ويصدر لها إيصال.'],
     ],
-    proofTitle: 'لماذا يثق الناس به بسرعة',
-    proofItems: ['شركة مرخصة في الإمارات', 'مسار خدمة واضح', 'تحقق العمليات', 'صور إثبات', 'سياق موقع GPS', 'سجلات بالوقت', 'موافقة أو اعتراض المستأجر', 'وضوح تكلفة المالك', 'تتبع مصدر الوسيط', 'دعم عربي وإنجليزي'],
-    flowTitle: 'مسار التشغيل ببساطة',
-    flow: ['تسجيل', 'تحقق', 'بلاغ', 'تنفيذ', 'موافقة'],
-    sections: { trust: 'إثبات الثقة', coverage: 'مناطق الخدمة', contact: 'ابدأ مع BIN GROUP', services: 'ماذا نقدم' },
-    services: [
-      ['الصيانة', 'طلبات الخدمة تصبح تذاكر متتبعة بدل مكالمات ضائعة — كل عمل يُسند ويُرسل ويُغلق بصورة إثبات.'],
-      ['إدارة العقار', 'المالك يرى حالة العقار والتكلفة والتقارير وسجل المستأجرين والخدمة بوضوح، من دخول واحد، في أي وقت.'],
-      ['عمل الفني', 'العمل الميداني مرتبط بالحالة وسياق موقع GPS وصور قبل/بعد في كل زيارة.'],
-      ['نمو الوسيط', 'الفرص ومصدر الإحالة والعقود والعمولات تبقى واضحة ومنظمة، من أول فرصة حتى تأكيد الصفقة.'],
-      ['تحكم العمليات', 'الموافقات والتحقق من المدفوعات ومخالفات SLA والوثائق وسجلات التدقيق تتم خلف الكواليس.'],
-      ['المساعد الذكي واستوديو التصميم', 'يشرح المستأجر المشكلة فيساعد التطبيق في تصنيف الطلب؛ واستوديو تصميم بالذكاء الاصطناعي يحوّل صورة الغرفة إلى أفكار تجديد.'],
-      ['جواز العقار', 'كل عقار يحتفظ بالعقود والتذاكر والإثبات والفواتير والفحوصات والتاريخ في مكان واحد — جاهز ليوم البيع أو التجديد أو التسليم.'],
-    ],
-    contactText: 'ابدأ بعقار واحد، طلب مستأجر واحد، فرصة وسيط واحدة، أو عقد صيانة واحد. BIN GROUP تجعل العملية واضحة من أول ضغطة.',
+    rolesTitle: 'اختر طريقة استخدامك لـ BIN-GROUPS',
+    rolesSubtitle: 'اختر خياراً واحداً، وسنعرض لك ما تحتاجه فقط.',
+    coverage: 'مناطق الخدمة',
+    appBadge: 'تطبيق الجوال',
+    appTitle: 'تطبيق BIN-GROUPS',
+    appBody: 'تعمل BIN-GROUPS اليوم من متصفح الويب. للمساعدة بخصوص تطبيق BIN-GROUPS للجوال، تواصل معنا.',
+    appCta: 'اسأل عن تطبيق الجوال',
+    contactTitle: 'ابدأ مع BIN-GROUPS',
+    contactText: 'ابدأ بعقار واحد، طلب مستأجر واحد، فرصة وسيط واحدة، أو عقد صيانة واحد. BIN-GROUPS تجعل العملية واضحة من أول ضغطة.',
     ctaStart: 'ابدأ بتسجيل عقارك',
-    ctaWhatsApp: 'واتساب BIN GROUP',
+    ctaWhatsApp: 'واتساب BIN-GROUPS',
     ctaEmail: 'راسلنا',
     location: 'العين، الإمارات العربية المتحدة',
-    appTitle: 'تطبيق BIN GROUP',
-    appBody: 'تعمل BIN GROUP اليوم من متصفح الويب. للمساعدة بخصوص تطبيق BIN GROUP للجوال، تواصل معنا.',
-    appCta: 'اسأل عن تطبيق الجوال',
-    appBadge: 'تطبيق الجوال',
+    askAi: 'اسأل المساعد',
+    askAiAria: 'افتح مساعد BIN الذكي',
   },
 };
 
-type StartCard = {
+type RoleCard = {
   titleEn: string;
   titleAr: string;
-  subtitleEn: string;
-  subtitleAr: string;
-  pointsEn: string[];
-  pointsAr: string[];
+  sentenceEn: string;
+  sentenceAr: string;
   path: string;
   icon: React.ElementType;
   ctaEn: string;
   ctaAr: string;
-  secondaryCtaEn?: string;
-  secondaryCtaAr?: string;
-  secondaryPath?: string;
-  secondaryIcon?: React.ElementType;
 };
 
-const cards: StartCard[] = [
+// One plain sentence and one button per role.
+const cards: RoleCard[] = [
   {
-    titleEn: 'Tenant & Home Search',
-    titleAr: 'المستأجر والبحث عن منزل',
-    subtitleEn: 'Already renting with BIN? Open your home portal. Looking for somewhere new? Search verified rooms, apartments, villas and homes.',
-    subtitleAr: 'تستأجر حالياً مع BIN؟ افتح بوابة منزلك. تبحث عن منزل جديد؟ تصفح الغرف والشقق والفلل والعقارات الموثقة.',
-    pointsEn: ['Existing tenant portal', 'Find rooms & homes', 'Viewings & applications', 'Contracts & move-in'],
-    pointsAr: ['بوابة المستأجر الحالي', 'غرف وعقارات للإيجار', 'معاينات وطلبات', 'عقود واستلام'],
-    path: '/login?intendedRole=tenant',
-    icon: UserRound,
-    ctaEn: 'I Already Rent With BIN',
-    ctaAr: 'أنا مستأجر حالي لدى BIN',
-    secondaryCtaEn: 'I’m Looking for a Home',
-    secondaryCtaAr: 'أبحث عن منزل',
-    secondaryPath: '/homes',
-    secondaryIcon: Search,
+    titleEn: 'Looking for a home',
+    titleAr: 'تبحث عن منزل',
+    sentenceEn: 'Browse verified rooms, apartments and villas to rent.',
+    sentenceAr: 'تصفح الغرف والشقق والفلل الموثقة للإيجار.',
+    path: '/homes',
+    icon: Search,
+    ctaEn: 'Find a home',
+    ctaAr: 'ابحث عن منزل',
   },
   {
-    titleEn: 'I am a Landlord / Owner',
-    titleAr: 'أنا مالك',
-    subtitleEn: 'See properties, contracts, rent, payments, maintenance proof, handover, and approvals.',
-    subtitleAr: 'راجع العقارات والعقود والإيجار والمدفوعات وإثبات الصيانة والتسليم والموافقات.',
-    pointsEn: ['Property passport', 'Payments & contracts', 'Maintenance proof', 'Approvals & handover'],
-    pointsAr: ['جواز العقار', 'مدفوعات وعقود', 'إثبات الصيانة', 'موافقات وتسليم'],
+    titleEn: 'Tenant',
+    titleAr: 'المستأجر',
+    sentenceEn: 'Already renting with us? Report issues, pay rent and track every job.',
+    sentenceAr: 'تستأجر معنا حالياً؟ أبلغ عن الأعطال وادفع الإيجار وتابع كل عمل.',
+    path: '/login?intendedRole=tenant',
+    icon: UserRound,
+    ctaEn: 'Open Tenant Portal',
+    ctaAr: 'فتح بوابة المستأجر',
+  },
+  {
+    titleEn: 'Landlord / Owner',
+    titleAr: 'المالك',
+    sentenceEn: 'See your properties, contracts, payments and maintenance proof in one place.',
+    sentenceAr: 'اطّلع على عقاراتك وعقودك ومدفوعاتك وإثبات الصيانة في مكان واحد.',
     path: '/login?intendedRole=owner',
     icon: Home,
     ctaEn: 'Open Owner Portal',
     ctaAr: 'فتح بوابة المالك',
-    secondaryCtaEn: 'Add New Property & Start Contract',
-    secondaryCtaAr: 'إضافة عقار جديد وبدء العقد',
-    secondaryPath: '/onboarding',
   },
   {
-    titleEn: 'I am a Real Estate Broker',
-    titleAr: 'أنا وسيط عقاري',
-    subtitleEn: 'Bring owner leads, tenant contracts, referral proof, documents, and commission tracking.',
-    subtitleAr: 'أضف ملاكاً أو مستأجرين مع إثبات الإحالة والمستندات وتتبع العمولة.',
-    pointsEn: ['New referrals', 'Lead attribution', 'Documents', 'Commissions'],
-    pointsAr: ['إحالات جديدة', 'إثبات مصدر الصفقة', 'مستندات', 'عمولات'],
+    titleEn: 'Real Estate Broker',
+    titleAr: 'الوسيط العقاري',
+    sentenceEn: 'Refer owners and tenants and track your commission from lead to deal.',
+    sentenceAr: 'أحِل الملاك والمستأجرين وتابع عمولتك من أول فرصة حتى الصفقة.',
     path: '/login?intendedRole=broker',
     icon: Building2,
     ctaEn: 'Open Broker Portal',
     ctaAr: 'فتح بوابة الوسيط',
   },
   {
-    titleEn: 'I am a Technician',
-    titleAr: 'أنا فني',
-    subtitleEn: 'See jobs, map, proof readiness, offline queue, support, and job history.',
-    subtitleAr: 'راجع المهام والخريطة وجاهزية الإثبات وقائمة دون اتصال والدعم وسجل العمل.',
-    pointsEn: ['Jobs', 'Location summary', 'Proof photos', 'Offline queue'],
-    pointsAr: ['المهام', 'الخريطة', 'صور الإثبات', 'قائمة دون اتصال'],
+    titleEn: 'Technician',
+    titleAr: 'الفني',
+    sentenceEn: 'See your jobs, upload photo proof and close work from your phone.',
+    sentenceAr: 'راجع مهامك وارفع صور الإثبات وأغلق العمل من هاتفك.',
     path: '/login?intendedRole=technician',
     icon: Wrench,
     ctaEn: 'Open Technician Portal',
@@ -185,43 +182,13 @@ const cards: StartCard[] = [
   },
 ];
 
-function FeatureCard({ title, body, icon }: { title: string; body: string; icon: React.ReactNode }) {
+function Section({ id, title, subtitle, children }: { id?: string; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <Paper sx={{ p: 3, height: '100%', borderRadius: 3, border: `1px solid ${line}`, boxShadow: '0 14px 36px rgba(17,24,39,.05)' }}>
-      <Stack spacing={1.3}>
-        <Box sx={{ p: 1.1, borderRadius: 2, bgcolor: alpha(gold, .12), color: goldText, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>
-          {icon}
-        </Box>
-        <Typography fontWeight={950} color={ink}>{title}</Typography>
-        <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, fontWeight: 650 }}>{body}</Typography>
-      </Stack>
-    </Paper>
-  );
-}
-
-function Checklist({ items, dark = false }: { items: string[]; dark?: boolean }) {
-  return (
-    <Grid container spacing={1.4}>
-      {items.map((item) => (
-        <Grid item xs={12} sm={6} md={2.4} key={item}>
-          <Stack direction="row" spacing={1.1} alignItems="center" sx={{ p: 2, height: '100%', borderRadius: 2.5, bgcolor: dark ? 'rgba(255,255,255,.045)' : '#fff', border: `1px solid ${dark ? alpha(gold, .16) : line}` }}>
-            <CheckCircle2 size={18} color={dark ? gold : goldText} />
-            <Typography sx={{ color: dark ? 'rgba(255,255,255,.78)' : '#374151', fontWeight: 850, lineHeight: 1.45 }}>{item}</Typography>
-          </Stack>
-        </Grid>
-      ))}
-    </Grid>
-  );
-}
-
-function Section({ chip, title, children, dark = false, subtitle }: { chip: string; title: string; children: React.ReactNode; dark?: boolean; subtitle?: string }) {
-  return (
-    <Box sx={{ py: 8, bgcolor: dark ? '#111827' : '#fff', borderBottom: `1px solid ${dark ? alpha(gold, .18) : line}` }}>
+    <Box component="section" id={id} aria-labelledby={id ? `${id}-title` : undefined} sx={{ py: { xs: 6, md: 8 }, bgcolor: '#fff', borderBottom: `1px solid ${line}`, scrollMarginTop: 16 }}>
       <Container maxWidth="lg">
-        <Box sx={{ textAlign: 'center', mb: 5 }}>
-          <Chip label={chip} sx={{ mb: 2, bgcolor: alpha(gold, dark ? .13 : .1), color: dark ? gold : '#6F5522', fontWeight: 950, border: `1px solid ${alpha(gold, .25)}` }} />
-          <Typography variant="h2" fontWeight={950} sx={{ color: dark ? '#fff' : ink }}>{title}</Typography>
-          {subtitle && <Typography variant="h6" sx={{ mt: 1.5, color: dark ? 'rgba(255,255,255,.62)' : muted, maxWidth: 830, mx: 'auto', lineHeight: 1.8, fontWeight: 700 }}>{subtitle}</Typography>}
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Typography id={id ? `${id}-title` : undefined} component="h2" variant="h3" fontWeight={950} sx={{ color: ink, fontSize: { xs: '1.8rem', md: '2.4rem' } }}>{title}</Typography>
+          {subtitle && <Typography sx={{ mt: 1.2, color: body, maxWidth: 720, mx: 'auto', lineHeight: 1.7, fontWeight: 650 }}>{subtitle}</Typography>}
         </Box>
         {children}
       </Container>
@@ -233,158 +200,125 @@ export default function SimpleStartPage() {
   const navigate = useNavigate();
   const { isRTL, lang, setLang } = useLanguage();
   const ar = lang === 'ar';
-  const c = companyContent[ar ? 'ar' : 'en'];
+  const c = content[ar ? 'ar' : 'en'];
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
   const phoneTel = CONTACT.phone.replace(/\s+/g, '');
-
-  const serviceIcons = [<Wrench size={22} />, <Building2 size={22} />, <Zap size={22} />, <Briefcase size={22} />, <CheckCircle2 size={22} />, <Sparkles size={22} />, <Award size={22} />];
-  const whyUsIcons = [<ShieldCheck size={22} />, <MapPin size={22} />, <CheckCircle2 size={22} />, <Globe size={22} />];
+  const whyIcons = [<FileText size={22} />, <Camera size={22} />, <Clock size={22} />, <Receipt size={22} />];
+  const trustIcons = [<BadgeCheck size={16} />, <Receipt size={16} />, <Clock size={16} />, <Globe size={16} />];
+  const scrollToRoles = () => document.getElementById('roles')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Box sx={{ py: { xs: 4, md: 7 }, borderBottom: `1px solid ${line}` }}>
+    <Box dir={isRTL ? 'rtl' : 'ltr'} lang={ar ? 'ar' : 'en'} sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: ink, direction: isRTL ? 'rtl' : 'ltr' }}>
+      {/* Small top bar: brand on one side, Ask AI + language on the other. */}
+      <Box component="header" sx={{ borderBottom: `1px solid ${line}`, bgcolor: '#fff' }}>
         <Container maxWidth="lg">
-          <Stack spacing={4}>
-            <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, background: `linear-gradient(135deg, ${alpha(binThemeTokens.gold, 0.11)}, #FFFFFF)`, boxShadow: '0 22px 56px rgba(17,24,39,0.08)' }}>
-              <Stack spacing={2} alignItems="flex-start">
-                <Stack direction="row" spacing={1} sx={{ alignSelf: isRTL ? 'flex-start' : 'flex-end' }}>
-                <Button type="button" data-testid="public-ai-open" aria-label={ar ? 'افتح مساعد BIN الذكي' : 'Open BIN AI assistant'} startIcon={<Sparkles size={16} />} onClick={() => emitFabEvent('bin:open-ai')} sx={{ borderRadius: 2, border: `1px solid ${alpha(gold, 0.35)}`, color: goldText, bgcolor: '#fff', fontWeight: 950, textTransform: 'none' }}>
-                  {ar ? 'اسأل المساعد' : 'Ask AI'}
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ py: 1.2 }}>
+            <Typography dir="ltr" sx={{ color: goldText, fontWeight: 950, letterSpacing: 1.5 }}>{BRAND}</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button size="small" type="button" data-testid="public-ai-open" aria-label={c.askAiAria} startIcon={<Sparkles size={14} />} onClick={() => emitFabEvent('bin:open-ai')} sx={{ borderRadius: 2, border: `1px solid ${alpha(gold, 0.35)}`, color: goldText, bgcolor: '#fff', fontWeight: 900, textTransform: 'none', minHeight: 36 }}>
+                {c.askAi}
+              </Button>
+              <Button
+                size="small"
+                type="button"
+                data-testid="language-toggle"
+                aria-label={ar ? 'Switch language to English' : 'Switch language to Arabic'}
+                startIcon={<Globe size={14} />}
+                onClick={() => setLang(ar ? 'en' : 'ar')}
+                sx={{
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(gold, 0.35)}`,
+                  color: goldText,
+                  bgcolor: '#fff',
+                  fontWeight: 900,
+                  textTransform: 'none',
+                  minHeight: 36,
+                }}
+              >
+                {ar ? 'EN' : 'AR'}
+              </Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
+
+      <Box sx={{ py: { xs: 3, md: 6 }, borderBottom: `1px solid ${line}` }}>
+        <Container maxWidth="lg">
+          <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, background: `linear-gradient(135deg, ${alpha(binThemeTokens.gold, 0.11)}, #FFFFFF)`, boxShadow: '0 22px 56px rgba(17,24,39,0.08)' }}>
+            <Stack spacing={2.2} alignItems="flex-start">
+              <Chip icon={<ShieldCheck size={16} />} label={c.badge} sx={{ height: 'auto', py: 0.5, maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }, bgcolor: alpha(binThemeTokens.gold, 0.15), color: goldText, fontWeight: 950 }} />
+              <Typography component="h1" variant="h2" sx={{ color: ink, fontWeight: 950, letterSpacing: ar ? 0 : -1.2, lineHeight: 1.12, maxWidth: 860, fontSize: { xs: '2.1rem', md: '3.4rem' } }}>
+                {c.heading}
+              </Typography>
+              <Typography sx={{ color: body, fontWeight: 650, lineHeight: 1.75, maxWidth: 760, fontSize: { xs: '1.02rem', md: '1.15rem' } }}>
+                {c.subline}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                <Button data-testid="landing-get-started" variant="contained" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={scrollToRoles} sx={{ bgcolor: ink, color: gold, fontWeight: 950, borderRadius: 3, py: 1.3, px: 3, '&:hover': { bgcolor: '#000' } }}>
+                  {c.getStarted}
                 </Button>
-                <Button
-                  type="button"
-                  data-testid="language-toggle"
-                  aria-label={ar ? 'Switch language to English' : 'Switch language to Arabic'}
-                  startIcon={<Globe size={16} />}
-                  onClick={() => setLang(ar ? 'en' : 'ar')}
-                  sx={{
-                                        borderRadius: 2,
-                    border: `1px solid ${alpha(gold, 0.35)}`,
-                    color: goldText,
-                    bgcolor: '#fff',
-                    fontWeight: 950,
-                    textTransform: 'none',
-                  }}
-                >
-                  {ar ? 'EN' : 'AR'}
+                <Button data-testid="landing-whatsapp" variant="outlined" component="a" href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noopener noreferrer" startIcon={<MessageSquare size={16} />} sx={{ borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.3, px: 3, bgcolor: '#fff' }}>
+                  {c.whatsappUs}
                 </Button>
-                </Stack>
-                <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ height: 'auto', py: 0.5, maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' },  bgcolor: alpha(binThemeTokens.gold, 0.15), color: goldText, fontWeight: 950 }} />
-                <Typography component="h1" variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
-                  {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}
-                </Typography>
-                <Typography sx={{ color: '#667085', fontWeight: 750, lineHeight: 1.8, maxWidth: 820 }}>
-                  {ar
-                    ? 'اختر دورك أولاً. سنعرض لك الخيارات المناسبة فقط حتى لا تضيع داخل التطبيق.'
-                    : 'Choose your role first. We will show only the options you need, so anyone can use the app without getting lost.'}
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={ar ? 'بدون اتصالات متكررة' : 'No-call workflow'} />
-                  <Chip label={ar ? 'إثبات بالصور' : 'Photo proof'} />
-                  <Chip label={ar ? 'تتبع مباشر' : 'Live tracking'} />
-                  <Chip label={ar ? 'عقود ومدفوعات' : 'Contracts & payments'} />
-                </Stack>
               </Stack>
-            </Paper>
-
-            <Grid container spacing={2.5}>
-              {cards.map((card) => (
-                <Grid item xs={12} md={6} key={card.titleEn}>
-                  <Paper sx={{ p: 3, height: '100%', borderRadius: 5, border: '1px solid #E5E7EB', boxShadow: '0 16px 42px rgba(17,24,39,0.05)', display: 'flex', flexDirection: 'column' }}>
-                    <Stack spacing={2} sx={{ flexGrow: 1 }}>
-                      <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: goldText }}>
-                        <SafeIcon icon={card.icon} size={25} />
-                      </Box>
-                      <Typography variant="h5" sx={{ color: '#111827', fontWeight: 950 }}>{ar ? card.titleAr : card.titleEn}</Typography>
-                      <Typography sx={{ color: '#667085', fontWeight: 700, lineHeight: 1.7 }}>{ar ? card.subtitleAr : card.subtitleEn}</Typography>
-                      <Grid container spacing={1}>
-                        {(ar ? card.pointsAr : card.pointsEn).map((point) => (
-                          <Grid item xs={6} key={point}>
-                            <Typography variant="caption" sx={{ display: 'block', p: 1, borderRadius: 2, bgcolor: '#F8F9FB', color: '#475467', fontWeight: 850 }}>• {point}</Typography>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Stack>
-                    <Stack spacing={1.5} sx={{ mt: 3 }}>
-                      {card.secondaryCtaEn && card.secondaryPath && (
-                        <Button fullWidth variant="contained" startIcon={card.secondaryIcon ? <SafeIcon icon={card.secondaryIcon} size={16} /> : undefined} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.secondaryPath!)} sx={{ bgcolor: '#111827', color: gold, fontWeight: 950, borderRadius: 3, py: 1.25 }}>
-                          {ar ? card.secondaryCtaAr : card.secondaryCtaEn}
-                        </Button>
-                      )}
-                      <Button fullWidth variant={card.secondaryCtaEn ? 'outlined' : 'contained'} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.path)} sx={
-                        card.secondaryCtaEn
-                        ? { borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.25, '&:hover': { bgcolor: alpha(gold, 0.05) } }
-                        : { bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, borderRadius: 3, py: 1.25 }
-                      }>
-                        {ar ? card.ctaAr : card.ctaEn}
-                      </Button>
-                    </Stack>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          </Stack>
+              <Box component="ul" aria-label={c.trustLabel} data-testid="landing-trust-strip" sx={{ listStyle: 'none', p: 0, m: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {c.trust.map((item, i) => (
+                  <Box component="li" key={item} sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1.3, py: 0.7, borderRadius: 2, bgcolor: '#fff', border: `1px solid ${line}`, color: ink, fontWeight: 800, fontSize: '.88rem' }}>
+                    <Box component="span" sx={{ color: goldText, display: 'inline-flex' }}>{trustIcons[i]}</Box>
+                    {item}
+                  </Box>
+                ))}
+                {/* Text only (no official UAE PASS artwork); not a link or button until the integration exists. */}
+                <Box component="li" data-testid="uae-pass-coming-soon" aria-label={c.uaePassAria} aria-disabled="true" sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1.3, py: 0.7, borderRadius: 2, bgcolor: '#F3F4F6', border: '1px dashed #9CA3AF', color: '#374151', fontWeight: 800, fontSize: '.88rem', cursor: 'default' }}>
+                  <Smartphone size={16} />
+                  {c.uaePass}
+                </Box>
+              </Box>
+            </Stack>
+          </Paper>
         </Container>
       </Box>
 
-      <Box sx={{ background: 'linear-gradient(160deg, #0B0B0C 0%, #1a1a2e 55%, #111827 100%)', py: { xs: 6, md: 8 }, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-        <Container maxWidth="lg">
-          <Stack spacing={4} alignItems="center">
-            <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, maxWidth: 920, lineHeight: 1.45 }}>
-              {ar ? 'طبقة الوصول لإدارة وتشغيل العقارات في الإمارات للملاك والمستأجرين والفنيين والوسطاء والإدارة.' : 'The UAE property operations access layer for owners, tenants, technicians, brokers, and admin.'}
-            </Typography>
-            <Grid container spacing={2} justifyContent="center" sx={{ maxWidth: 820 }}>
-              {c.stats.map(([v, l]) => (
-                <Grid item xs={6} sm={3} key={`${v}-${l}`}>
-                  <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .18)}`, borderRadius: 3 }}>
-                    <Typography sx={{ color: gold, fontWeight: 950, fontSize: '1.7rem' }}>{v}</Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,.62)', fontWeight: 850 }}>{l}</Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          </Stack>
-        </Container>
-      </Box>
-
-      <Section chip={c.sections.services} title={c.sections.services}>
-        <Grid container spacing={3}>
-          {c.services.map(([title, body], i) => (
-            <Grid item xs={12} sm={6} md={4} key={title}>
-              <FeatureCard title={title} body={body} icon={serviceIcons[i]} />
-            </Grid>
-          ))}
-        </Grid>
-      </Section>
-
-      <Section dark chip={ar ? 'لماذا نحن' : 'WHY US'} title={c.whyUsTitle} subtitle={c.whyUsSubtitle}>
-        <Grid container spacing={3}>
-          {c.whyUs.map(([title, body], i) => (
+      <Section id="why" title={c.whyTitle}>
+        <Grid container spacing={2.5}>
+          {c.why.map(([title, text], i) => (
             <Grid item xs={12} sm={6} md={3} key={title}>
-              <FeatureCard title={title} body={body} icon={whyUsIcons[i]} />
-            </Grid>
-          ))}
-        </Grid>
-      </Section>
-
-      <Section chip={c.sections.trust} title={c.proofTitle}>
-        <Checklist items={c.proofItems} />
-      </Section>
-
-      <Section dark chip={c.flowTitle} title={c.flowTitle}>
-        <Grid container spacing={2}>
-          {c.flow.map((step, i) => (
-            <Grid item xs={6} md={2.4} key={step}>
-              <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .2)}` }}>
-                <Typography sx={{ color: alpha(gold, .8), fontWeight: 950, fontSize: '.85rem' }}>0{i + 1}</Typography>
-                <Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.adaptiveText, mt: 1 }}>{step}</Typography>
+              <Paper sx={{ p: 3, height: '100%', borderRadius: 3, border: `1px solid ${line}`, boxShadow: '0 14px 36px rgba(17,24,39,.05)' }}>
+                <Stack spacing={1.3}>
+                  <Box sx={{ borderRadius: 2, bgcolor: alpha(gold, .12), color: goldText, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>{whyIcons[i]}</Box>
+                  <Typography component="h3" fontWeight={950} color={ink} fontSize="1.1rem">{title}</Typography>
+                  <Typography variant="body2" sx={{ color: body, lineHeight: 1.7, fontWeight: 600 }}>{text}</Typography>
+                </Stack>
               </Paper>
             </Grid>
           ))}
         </Grid>
       </Section>
 
-      <Section chip={c.sections.coverage} title={c.sections.coverage}>
+      <Section id="roles" title={c.rolesTitle} subtitle={c.rolesSubtitle}>
+        <Grid container spacing={2.5}>
+          {cards.map((card) => (
+            <Grid item xs={12} sm={6} md={4} key={card.titleEn}>
+              <Paper sx={{ p: 3, height: '100%', borderRadius: 4, border: '1px solid #E5E7EB', boxShadow: '0 16px 42px rgba(17,24,39,0.05)', display: 'flex', flexDirection: 'column' }}>
+                <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Box sx={{ width: 44, height: 44, borderRadius: 2.5, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: goldText, flexShrink: 0 }}>
+                      <SafeIcon icon={card.icon} size={22} />
+                    </Box>
+                    <Typography component="h3" variant="h6" sx={{ color: ink, fontWeight: 950 }}>{ar ? card.titleAr : card.titleEn}</Typography>
+                  </Stack>
+                  <Typography sx={{ color: body, fontWeight: 600, lineHeight: 1.65 }}>{ar ? card.sentenceAr : card.sentenceEn}</Typography>
+                </Stack>
+                <Button fullWidth variant="outlined" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={() => navigate(card.path)} sx={{ mt: 2.5, borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.2, '&:hover': { bgcolor: alpha(gold, 0.05) } }}>
+                  {ar ? card.ctaAr : card.ctaEn}
+                </Button>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Section>
+
+      <Section title={c.coverage}>
         <Stack direction="row" flexWrap="wrap" justifyContent="center" sx={{ gap: 1.5 }}>
           {(ar ? serviceAreasAr : serviceAreasEn).map(area => (
             <Box key={area} sx={{ px: 3, py: 1.2, bgcolor: '#fff', border: `1.5px solid ${alpha(gold, .28)}`, borderRadius: 2.5 }}>
@@ -397,15 +331,14 @@ export default function SimpleStartPage() {
         </Stack>
       </Section>
 
-
-      <Section chip={c.appBadge} title={c.appTitle} subtitle={c.appBody}>
+      <Section title={c.appTitle} subtitle={c.appBody}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" alignItems="center">
           <Chip icon={<Smartphone size={16} />} label={c.appBadge} sx={{ bgcolor: alpha(gold, 0.1), color: '#6F5522', fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
           <Button
             variant="contained"
             startIcon={<MessageSquare size={18} />}
             onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')}
-            sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, textTransform: 'none' }}
+            sx={{ bgcolor: gold, color: ink, fontWeight: 950, textTransform: 'none' }}
           >
             {c.appCta}
           </Button>
@@ -415,8 +348,8 @@ export default function SimpleStartPage() {
       <Box sx={{ py: 10, background: 'linear-gradient(160deg, #0B0B0C 0%, #1a1a2e 55%, #111827 100%)' }}>
         <Container maxWidth="md">
           <Stack spacing={4} alignItems="center" textAlign="center">
-            <Chip label={c.sections.contact} sx={{ bgcolor: alpha(gold, .12), color: gold, fontWeight: 950 }} />
-            <Typography variant="h2" fontWeight={950} sx={{ color: gold }}>{c.sections.contact}</Typography>
+            <Chip label={c.contactTitle} sx={{ bgcolor: alpha(gold, .12), color: gold, fontWeight: 950 }} />
+            <Typography variant="h2" fontWeight={950} sx={{ color: gold }}>{c.contactTitle}</Typography>
             <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.7)', maxWidth: 650 }}>{c.contactText}</Typography>
             <Grid container spacing={2}>
               {[
@@ -429,7 +362,7 @@ export default function SimpleStartPage() {
                   <Paper component={href ? 'a' : 'div'} href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} sx={{ p: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .22)}`, borderRadius: 3, display: 'block', textDecoration: 'none' }}>
                     <Stack direction="row" spacing={2} alignItems="center">
                       <Box sx={{ color: gold }}>{icon}</Box>
-                      <Box textAlign="left">
+                      <Box textAlign="start">
                         <Typography variant="caption" sx={{ color: alpha(gold, .7), fontWeight: 900 }}>{label}</Typography>
                         <Typography sx={{ color: '#fff', fontWeight: 850 }}>{value}</Typography>
                       </Box>

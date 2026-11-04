@@ -148,7 +148,7 @@ test('Wave 2 exposes a privacy-safe pre-login homes route and the landing page s
   assert.match(page, /BIN VERIFIED/);
   assert.match(page, ARABIC);
 
-  assert.match(landing, /I’m Looking for a Home/);
-  assert.match(landing, /secondaryPath: ["']\/homes["']/);
-  assert.match(landing, /I Already Rent With BIN/);
+  assert.match(landing, /Looking for a home/);
+  assert.match(landing, /path: ["']\/homes["']/);
+  assert.match(landing, /Open Tenant Portal/);
 });

@@ -79,7 +79,7 @@ test('public support copy uses the support mailbox and no legacy domains', async
 test('mobile-app copy no longer claims an Android app is "coming soon" and invents no store URL', async () => {
   const files = ['src/pages/public/SimpleStartPage.tsx', 'src/pages/public/SupportPage.tsx', 'src/pages/public/PublicMarketingPage.tsx', 'src/lib/companyProfile.ts'];
   for (const f of files) {
-    const src = await read(f);
+    const src = (await read(f)).split('\n').filter((l) => !/UAE PASS/.test(l)).join('\n'); // UAE PASS notice is a separate, approved coming-soon item
     assert.doesNotMatch(src, /android app (is )?coming soon|coming soon/i, `${f} has no stale coming-soon copy`);
     assert.doesNotMatch(src, /play\.google\.com\/store|apps\.apple\.com/, `${f} does not invent a store listing URL`);
   }
