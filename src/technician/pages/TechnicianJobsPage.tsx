@@ -185,7 +185,7 @@ export default function TechnicianJobsPage() {
                             data-delivery-state={deliveryState}
                             size="small"
                             icon={<BellRing size={11} />}
-                            label={`${tx('tech.jobs.dispatch_alert', 'Dispatch alert')}: ${formatStatusLabel(deliveryState, lang)}`}
+                            label={`${tx('tech.jobs.dispatch_alert', 'Dispatch alert')}: ${formatStatusLabel(deliveryState, lang === 'ar' ? 'ar' : 'en')}`}
                             sx={{
                                 fontSize: '0.62rem',
                                 fontWeight: 950,

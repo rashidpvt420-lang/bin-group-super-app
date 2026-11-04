@@ -49,8 +49,8 @@ const TenantProfileWithReadiness = () => <><TenantProfileReadinessCard /><Tenant
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isRTL, tx, lang } = useLanguage();
-    const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
+    const { isRTL, tx, lang, phrase } = useLanguage();
+    const copy = (en: string, ar: string) => phrase(en, ar);
     const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
     const isPhoneHeader = usePhoneHeader();
     const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service' || location.pathname === '/tenant/find-room-rent' || location.pathname === '/tenant/marketplace' || location.pathname === '/tenant/homes';

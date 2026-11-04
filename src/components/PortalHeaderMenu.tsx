@@ -3,6 +3,7 @@ import { Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, useMed
 import { useNavigate } from 'react-router-dom';
 import { Globe, LogOut, MoreVertical, UserX } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { COMMUNITY_LANGUAGES, LANGUAGE_NATIVE_NAMES } from '../i18n/communityLanguages';
 import SafeIcon from './SafeIcon';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { usePortalSession, type PortalRole } from './PortalSessionControls';
@@ -27,7 +28,7 @@ type Props = { role: PortalRole; items: PortalHeaderMenuItem[]; logoutRedirect?:
  * aria-haspopup, aria-expanded and aria-controls. Opens toward the inline end in both LTR and RTL.
  */
 export default function PortalHeaderMenu({ role, items, logoutRedirect }: Props) {
-  const { isRTL } = useLanguage();
+  const { isRTL, lang, phrase } = useLanguage();
   const navigate = useNavigate();
   const { nextLang, setLang, logoutLabel, languageSwitchLabel, handleLogout } = usePortalSession(role, logoutRedirect);
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
@@ -72,9 +73,15 @@ export default function PortalHeaderMenu({ role, items, logoutRedirect }: Props)
           <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={Globe} size={18} /></ListItemIcon>
           <ListItemText primary={languageSwitchLabel} />
         </MenuItem>
+        {COMMUNITY_LANGUAGES.filter((code) => code !== lang).map((code) => (
+          <MenuItem key={code} data-testid={`${role}-language-option-${code}-menu`} lang={code} onClick={run(() => setLang(code))} sx={{ minHeight: 48, color: binThemeTokens.textPrimary, fontWeight: 800 }}>
+            <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={Globe} size={18} /></ListItemIcon>
+            <ListItemText primary={LANGUAGE_NATIVE_NAMES[code]} />
+          </MenuItem>
+        ))}
         <MenuItem data-testid={`${role}-delete-account-menu`} onClick={run(() => navigate('/account-privacy'))} sx={{ minHeight: 48, color: binThemeTokens.textPrimary, fontWeight: 800 }}>
           <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={UserX} size={18} /></ListItemIcon>
-          <ListItemText primary={isRTL ? 'طلب حذف الحساب' : 'Request account deletion'} />
+          <ListItemText primary={phrase('Request account deletion', 'طلب حذف الحساب')} />
         </MenuItem>
         <MenuItem data-testid={`${role}-logout-menu`} onClick={run(handleLogout)} sx={{ minHeight: 48, color: '#B91C1C', fontWeight: 800 }}>
           <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={LogOut} size={18} /></ListItemIcon>
