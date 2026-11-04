@@ -6,7 +6,7 @@ import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { estimateTicketArrivalMinutes, getTechnicianLocation } from '../../utils/liveTracking';
 import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 import { chipTextColor } from '../../theme/statusColors';
 import Bi from '../../components/Bi';
@@ -137,9 +137,7 @@ export default function TenantTicketsPage() {
                     const isActive = ACTIVE_STATUSES.includes(status);
                     const isScheduledService = ticket.requestType === 'SCHEDULED_SERVICE';
                     const techLoc = getTechnicianLocation(ticket);
-                    const jobLoc = getTicketJobLocation(ticket);
-                    const distKm = calculateDistanceKm(techLoc, jobLoc);
-                    const etaMin = calculateEtaMinutes(distKm);
+                    const etaMin = estimateTicketArrivalMinutes(ticket, techLoc);
 
                     return (
                         <Paper
@@ -180,7 +178,7 @@ export default function TenantTicketsPage() {
                                     {isActive && (
                                         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" alignItems="center">
                                             {ticket.assignedTechnicianName && <Chip size="small" label={ticket.assignedTechnicianName} sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: 'rgba(255,255,255,0.05)', color: '#111827', height: 22 }} />}
-                                            {etaMin !== null && <Chip size="small" icon={<Clock size={11} />} label={`~${etaMin} min`} sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }} />}
+                                            {etaMin !== null && <Chip size="small" icon={<Clock size={11} />} label={`~${etaMin} min (estimate)`} sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }} />}
                                             <Chip size="small" icon={<Navigation size={11} />} label="Track" sx={{ fontSize: '0.75rem', fontWeight: 900, bgcolor: alpha(config.color, 0.15), color: chipTextColor(config.color), height: 22, '& .MuiChip-icon': { color: chipTextColor(config.color) } }} />
                                         </Stack>
                                     )}

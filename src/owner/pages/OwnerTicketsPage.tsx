@@ -19,8 +19,8 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import {
-    calculateDistanceKm, calculateEtaMinutes,
-    getTechnicianLocation, getTicketJobLocation
+    estimateTicketArrivalMinutes,
+    getTechnicianLocation
 } from '../../utils/liveTracking';
 import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
@@ -120,9 +120,7 @@ export default function OwnerTicketsPage() {
         const sCfg = STATUS_CONFIG[canonicalStatus] || STATUS_CONFIG['OPEN'];
                     const isActive = ACTIVE_STATUSES.includes(canonicalStatus);
                     const techLoc = getTechnicianLocation(ticket);
-                    const jobLoc  = getTicketJobLocation(ticket);
-                    const distKm  = calculateDistanceKm(techLoc, jobLoc);
-                    const etaMin  = calculateEtaMinutes(distKm);
+                    const etaMin  = estimateTicketArrivalMinutes(ticket, techLoc);
                     // Resolved from the property record — never the raw property document ID.
                     const propertyLabel = ticket.propertyId || ticket.propertyName ? ticketPropertyLabel(ticket) : '';
 
@@ -175,7 +173,7 @@ export default function OwnerTicketsPage() {
                                                 <Chip
                                                     size="small"
                                                     icon={<Clock size={11} />}
-                                                    label={`~${etaMin} min`}
+                                                    label={`~${etaMin} min (estimate)`}
                                                     sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }}
                                                 />
                                             )}
