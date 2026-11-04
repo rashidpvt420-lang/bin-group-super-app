@@ -19,6 +19,7 @@ const STAFF_CALLABLES = [
   'submitStaffQuickAction', 'completeStaffJobWithAi', 'requestStaffOvertime', 'triggerStaffShiftFinish',
   'executeMultiDeptAutomation', 'resolveStaffException', 'getStaffExceptionsQueue', 'runStaffAiAudit',
   'generateStaffAttendancePdf', 'generateStaffOvertimePdf', 'generateStaffPayslipPdf', 'issueOfficialStaffHrDocument',
+  'listPendingOvertimeClaims', 'reviewStaffOvertimeClaim',
 ];
 const TECHNICIAN_CALLABLES = ['getTechnicianOperationalReadiness', 'resumeTechnicianDuty', 'acceptTechnicianTicket', 'updateTicketLifecycle'];
 

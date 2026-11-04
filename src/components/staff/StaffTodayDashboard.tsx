@@ -349,8 +349,8 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
 
   const submitOvertime = async () => {
     const minutes = Number(overtimeMinutes);
-    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 360 || overtimeReason.trim().length < 5) {
-      setActionError("Enter overtime minutes from 1 to 360 and a meaningful reason.");
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120 || overtimeReason.trim().length < 5) {
+      setActionError("Enter overtime minutes from 1 to 120 (max 2 hours a day) and a meaningful reason.");
       return;
     }
 
@@ -563,7 +563,8 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
             label="Estimated minutes"
             value={overtimeMinutes}
             onChange={(event) => setOvertimeMinutes(event.target.value)}
-            inputProps={{ min: 1, max: 360 }}
+            inputProps={{ min: 1, max: 120 }}
+            helperText="Max 120 minutes a day. Your shift clock-in, job arrival GPS, job times and photos are attached automatically as proof."
             sx={{ mt: 1, mb: 2 }}
           />
           <TextField

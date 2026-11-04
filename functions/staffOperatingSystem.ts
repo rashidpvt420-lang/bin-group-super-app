@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { MAX_OVERTIME_CLAIM_MINUTES, OVERTIME_REVIEWER_ROLES, buildOvertimeProof, proofStrength, validateApprovedMinutes } from "./hrOvertimeProof";
 
 const FUNCTION_REGION = "europe-west3";
 const CALLABLE_OPTIONS = {
@@ -474,8 +475,8 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
 
   await assertStaffSession(request.auth, token);
 
-  if (!Number.isInteger(estimatedMinutes) || estimatedMinutes < 1 || estimatedMinutes > 360) {
-    throw new HttpsError("invalid-argument", "Estimated overtime minutes must be an integer from 1 to 360.");
+  if (!Number.isInteger(estimatedMinutes) || estimatedMinutes < 1 || estimatedMinutes > MAX_OVERTIME_CLAIM_MINUTES) {
+    throw new HttpsError("invalid-argument", `Overtime minutes must be an integer from 1 to ${MAX_OVERTIME_CLAIM_MINUTES} (UAE law: max 2 hours a day).`);
   }
   if (reason.length < 5) {
     throw new HttpsError("invalid-argument", "A meaningful overtime reason is required.");
@@ -488,6 +489,7 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
     throw new HttpsError("failed-precondition", "Overtime can be requested only from an active shift.");
   }
 
+  let ticketData: Record<string, unknown> | null = null;
   if (jobId) {
     const ticketSnap = await db.collection("maintenanceTickets").doc(jobId).get();
     if (!ticketSnap.exists) {
@@ -496,7 +498,9 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
     if (assignedTechnicianUid(ticketSnap.data() || {}) !== uid) {
       throw new HttpsError("permission-denied", "The overtime work order is not assigned to this staff member.");
     }
+    ticketData = ticketSnap.data() || {};
   }
+  const proof = buildOvertimeProof(shiftSnap.data() || {}, ticketData);
 
   const existingSnap = await db.collection("staff_request_trackers")
     .where("staffId", "==", uid)
@@ -529,6 +533,9 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
       { name: "Payroll Eligibility", status: "PENDING" },
     ],
     shiftId: shiftRef.id,
+    shiftDate: todayStr,
+    proof,
+    proofStrength: proofStrength(proof),
     createdAt: timestamp,
     updatedAt: timestamp,
   });
@@ -549,6 +556,117 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
     trackerId: trackerRef.id,
     message: "Overtime request submitted for supervisor review.",
   };
+});
+
+/** Pending overtime claims with their proof, for HR / operations reviewers only. */
+export const listPendingOvertimeClaims = onCall(CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  const token = request.auth.token || {};
+  const role = getCallerRole(token);
+  await assertStaffSession(request.auth, token);
+  if (!isCeoOrAdmin(token, role) && !(OVERTIME_REVIEWER_ROLES as readonly string[]).includes(role)) {
+    throw new HttpsError("permission-denied", "Only HR, operations managers or supervisors can review overtime.");
+  }
+  const snap = await ensureDb().collection("staff_request_trackers")
+    .where("requestType", "==", "OVERTIME_CLAIM")
+    .where("status", "in", ["SUBMITTED", "PENDING_REVIEW", "IN_REVIEW"])
+    .limit(100)
+    .get();
+  return {
+    claims: snap.docs.map((doc) => {
+      const t = doc.data() || {};
+      return {
+        trackerId: doc.id,
+        staffId: t.staffId || null,
+        shiftDate: t.shiftDate || null,
+        jobId: t.jobId || null,
+        estimatedMinutes: Number(t.estimatedMinutes) || 0,
+        reason: text(t.reason).slice(0, 500),
+        proof: t.proof || null,
+        proofStrength: t.proofStrength || "NONE",
+        status: t.status,
+      };
+    }),
+  };
+});
+
+/**
+ * HR / operations review of an overtime claim. Sets approvedMinutes (max 120 and never more
+ * than claimed). This only marks payroll eligibility; money is paid only through the payroll
+ * batch and the MFA Finance Admin settle step, and only up to clocked overtime.
+ */
+export const reviewStaffOvertimeClaim = onCall(CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+  const uid = request.auth.uid;
+  const token = request.auth.token || {};
+  const role = getCallerRole(token);
+  const db = ensureDb();
+  const data = request.data || {};
+  const trackerId = text(data.trackerId);
+  const decision = upper(data.decision);
+  const note = text(data.note).slice(0, 1000);
+
+  await assertStaffSession(request.auth, token);
+  if (!isCeoOrAdmin(token, role) && !(OVERTIME_REVIEWER_ROLES as readonly string[]).includes(role)) {
+    throw new HttpsError("permission-denied", "Only HR, operations managers or supervisors can review overtime.");
+  }
+  if (!trackerId) throw new HttpsError("invalid-argument", "trackerId is required.");
+  if (!["APPROVE", "REJECT"].includes(decision)) throw new HttpsError("invalid-argument", "Decision must be APPROVE or REJECT.");
+  if (decision === "REJECT" && note.length < 3) throw new HttpsError("invalid-argument", "A reason is required to reject.");
+
+  const trackerRef = db.collection("staff_request_trackers").doc(trackerId);
+  let result: Record<string, unknown> = {};
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(trackerRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Overtime claim not found.");
+    const t = snap.data() || {};
+    if (upper(t.requestType) !== "OVERTIME_CLAIM") throw new HttpsError("failed-precondition", "Not an overtime claim.");
+    if (!["SUBMITTED", "PENDING_REVIEW", "IN_REVIEW"].includes(upper(t.status))) {
+      throw new HttpsError("failed-precondition", `Claim is already ${upper(t.status)}.`);
+    }
+    if (t.staffId === uid) throw new HttpsError("permission-denied", "You cannot review your own overtime.");
+    const claimed = Number(t.estimatedMinutes) || 0;
+    let approvedMinutes = 0;
+    if (decision === "APPROVE") {
+      const ok = validateApprovedMinutes(data.approvedMinutes ?? claimed, claimed);
+      if (ok === null) {
+        throw new HttpsError("invalid-argument", `Approved minutes must be 1 to ${Math.min(claimed, MAX_OVERTIME_CLAIM_MINUTES)}.`);
+      }
+      approvedMinutes = ok;
+    }
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const status = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    tx.set(trackerRef, {
+      status,
+      approvedMinutes,
+      reviewNote: note || null,
+      reviewedByUid: uid,
+      reviewedByRole: role,
+      reviewedAt: timestamp,
+      updatedAt: timestamp,
+      steps: [
+        { name: "Submitted", status: "COMPLETED" },
+        { name: "Supervisor Reviewing", status: "COMPLETED" },
+        { name: "HR Verification", status: decision === "APPROVE" ? "COMPLETED" : "REJECTED" },
+        { name: "Payroll Eligibility", status: decision === "APPROVE" ? "IN_PROGRESS" : "CANCELLED" },
+      ],
+    }, { merge: true });
+    tx.set(db.collection("audit_logs").doc(), {
+      action: "STAFF_OVERTIME_CLAIM_REVIEWED",
+      actorUid: uid,
+      actorRole: role,
+      trackerId,
+      staffId: t.staffId || null,
+      decision,
+      claimedMinutes: claimed,
+      approvedMinutes,
+      timestamp,
+    });
+    result = { status, approvedMinutes };
+  });
+  return { success: true, trackerId, ...result };
 });
 
 /**
