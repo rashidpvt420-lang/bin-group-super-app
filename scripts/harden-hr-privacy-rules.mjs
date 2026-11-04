@@ -58,7 +58,8 @@ const legacyStaffDocuments = `    match /staffDocuments/{documentId} {
       allow delete: if isHr();
     }`;
 
-const hardenedStaffDocuments = `    match /staffDocuments/{documentId} {
+// Intermediate hardened block (Finance removed). Accepted as a "before" so existing rules tighten further.
+const priorHardenedStaffDocuments = `    match /staffDocuments/{documentId} {
       // Passports, IDs, visas and medical files are not a general Finance data source.
       // Finance consumes payroll-safe records from staffPayslips/payroll instead.
       allow read: if isHr() || staffCanRead(resource.data);
@@ -67,20 +68,33 @@ const hardenedStaffDocuments = `    match /staffDocuments/{documentId} {
       allow delete: if isHr();
     }`;
 
+// Rashid, 4 Nov 2026: identity/medical files readable only by HR manager tier and the employee.
+const hardenedStaffDocuments = `    match /staffDocuments/{documentId} {
+      // Passports, IDs, visas and medical files are not a general Finance data source.
+      // Finance consumes payroll-safe records from staffPayslips/payroll instead.
+      // Reads: hr_admin / hr_manager (and full admin) plus the employee's own record only.
+      allow read: if isHrManagerTier() || staffCanRead(resource.data);
+      allow create: if isHr() || staffRequestCreate(request.resource.data);
+      allow update: if isHr();
+      allow delete: if isHr();
+    }`;
+
 const transformations = [
   ['hrProfiles', legacy, hardened],
   ['staffMoodCheckins', legacyMood, hardenedMood],
-  ['staffDocuments', legacyStaffDocuments, hardenedStaffDocuments],
+  ['staffDocuments', [legacyStaffDocuments, priorHardenedStaffDocuments], hardenedStaffDocuments],
 ];
 
 let changed = false;
 for (const [label, before, after] of transformations) {
   if (source.includes(after)) continue;
-  if (!source.includes(before)) {
+  const befores = Array.isArray(before) ? before : [before];
+  const found = befores.find((candidate) => source.includes(candidate));
+  if (!found) {
     console.error(`[harden-hr-privacy-rules] expected ${label} rule block was not found`);
     process.exit(1);
   }
-  source = source.replace(before, after);
+  source = source.replace(found, after);
   changed = true;
 }
 

@@ -45,3 +45,21 @@ describe('payroll records are server-only writes', () => {
     }
   });
 });
+
+describe('staffDocuments reads: HR manager tier + own record only (Rashid, 4 Nov 2026)', () => {
+  before(async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), 'staffDocuments/doc_a'), { uid: 'staff_a', documentType: 'passport', status: 'pending_hr_review' });
+    });
+  });
+  it('hr_admin, hr_manager and the employee can read', async () => {
+    for (const [uid, claims] of [['staff_a', { role: 'technician' }], ['hra', { role: 'hr_admin' }], ['hrm2', { role: 'hr_manager' }]]) {
+      await assertSucceeds(getDoc(doc(ctx(uid, claims), 'staffDocuments/doc_a')));
+    }
+  });
+  it('hr_staff, finance, ops, support and other staff cannot read', async () => {
+    for (const role of ['hr_staff', 'finance_admin', 'finance_staff', 'operations_admin', 'support_admin', 'manager', 'account_manager', 'technician']) {
+      await assertFails(getDoc(doc(ctx(`d_${role}`, { role }), 'staffDocuments/doc_a')));
+    }
+  });
+});
