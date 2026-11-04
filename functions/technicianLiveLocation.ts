@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { withRejectionReasonLog } from "./callableRejectionLog";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import {
@@ -137,7 +138,7 @@ function requireSessionId(value: unknown) {
 
 export const updateTechnicianLiveLocation = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => {
+  withRejectionReasonLog("updateTechnicianLiveLocation", async (request) => {
     requireTechnician(request.auth);
 
     const technicianUid = request.auth!.uid;
@@ -474,7 +475,7 @@ export const updateTechnicianLiveLocation = onCall(
       ticketId,
       ...result,
     };
-  },
+  }),
 );
 
 export const reconcileExpiredTechnicianLiveLocations = onSchedule(
