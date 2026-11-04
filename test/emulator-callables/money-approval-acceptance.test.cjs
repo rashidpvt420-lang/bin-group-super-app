@@ -81,3 +81,29 @@ for (const role of ['admin', 'super_admin', 'ceo', 'finance_admin']) {
     }
   });
 }
+
+// ---- payment approval (securePaymentApproval) + painting: live-claims guard ----
+const { adminApprovePayment, adminRejectPayment, financeDecidePaintingPayment } = lib('runtimeAll.js');
+
+test('payment approval: denied roles and stale/suspended admins refused, payment untouched', async () => {
+  await db.doc('payment_transactions/pay_tx_acc').set({ status: 'PENDING_VERIFICATION', amount: 100, paymentMethod: 'CASH' });
+  const actors = [];
+  for (const role of ['manager', 'operations_admin', 'hr_admin', 'finance_staff', 'finance_manager']) actors.push(await createUser(`pa_${role}`, { role }, { tokenExtra: MFA }));
+  const stale = await createUser('pa_fa_stale', { role: 'finance_admin' }, { tokenExtra: MFA });
+  await admin.auth().setCustomUserClaims(stale.uid, { role: 'hr_admin' });
+  const susp = await createUser('pa_admin_susp', { role: 'admin', admin: true }, { tokenExtra: MFA });
+  await admin.auth().setCustomUserClaims(susp.uid, { role: 'admin', admin: true, suspended: true });
+  for (const actor of [...actors, stale, susp]) {
+    await expectHttpsError(call(adminApprovePayment, actor, { paymentId: 'pay_tx_acc' }), 'permission-denied');
+    await expectHttpsError(call(adminRejectPayment, actor, { paymentId: 'pay_tx_acc', reason: 'test reject reason' }), 'permission-denied');
+  }
+  assert.equal((await db.doc('payment_transactions/pay_tx_acc').get()).data().status, 'PENDING_VERIFICATION');
+});
+
+test('painting: finance_manager demoted after token mint is refused; admin claims still do not grant', async () => {
+  const stale = await createUser('pt_fm_stale', { role: 'finance_manager' }, { tokenExtra: MFA });
+  await admin.auth().setCustomUserClaims(stale.uid, { role: 'hr_admin' });
+  await expectHttpsError(call(financeDecidePaintingPayment, stale, { invoiceId: 'inv_none', decision: 'approve' }), 'permission-denied');
+  const adm = await createUser('pt_admin', { role: 'admin', admin: true }, { tokenExtra: MFA });
+  await expectHttpsError(call(financeDecidePaintingPayment, adm, { invoiceId: 'inv_none', decision: 'approve' }), 'permission-denied');
+});
