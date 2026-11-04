@@ -7,7 +7,11 @@ import React, {
   type ReactNode,
 } from "react";
 
-type Language = "en" | "ar";
+import { COMMUNITY_LANGUAGES, COMMUNITY_TRANSLATIONS, type CommunityLanguage } from "../i18n/communityLanguages";
+
+export type Language = "en" | "ar" | CommunityLanguage;
+export const SUPPORTED_LANGUAGES: Language[] = ["en", "ar", ...COMMUNITY_LANGUAGES];
+const isCommunityLanguage = (value: string): value is CommunityLanguage => (COMMUNITY_LANGUAGES as readonly string[]).includes(value);
 
 interface LanguageContextType {
   lang: Language;
@@ -16,12 +20,14 @@ interface LanguageContextType {
   toggleLanguage: () => void;
   t: (key: string, variables?: Record<string, any>) => string;
   tx: (key: string, fallback: string, variables?: Record<string, any>) => string;
+  /** English/Arabic pair for inline copy; other languages look the English phrase up, else show English. */
+  phrase: (en: string, ar: string) => string;
   isRTL: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-const translations: Record<Language, Record<string, string>> = {
+const translations: Record<"en" | "ar", Record<string, string>> = {
     en: {
         // ── Owner /financials page (FinancialDashboardPage) ────────────────
         'fin.kpi.sovereign_payout': 'Net payout to you',
@@ -613,19 +619,17 @@ const translations: Record<Language, Record<string, string>> = {
         'btn.exit': 'Exit',
         'btn.quote': 'GET INSTITUTIONAL QUOTE',
         'status.sovereign': 'BIN-GROUPS GRADE',
-        'login.portal': 'PARTNER PORTAL',
+        'login.portal': 'Sign in',
         'login.auth_access': 'AUTHENTICATED INSTITUTIONAL ACCESS',
         'login.email': 'Email Address',
         'login.password': 'Password',
         'login.google': 'SIGN IN WITH GOOGLE',
         'login.or_sso': 'OR INSTITUTIONAL SSO',
         'login.forgot_password': 'Forgot Password',
-        'login.iso_secure': 'ISO 27001 SECURE',
-        'login.iso_secure_badge': 'ISO 27001 Certified & Sovereign Secured',
         'login.inst_grade': 'INSTITUTIONAL GRADE',
         'login.uae_ops': 'UAE PORTFOLIO OPS',
         'login.footer': '© 2026 BIN-GROUP UAE. UNAUTHORIZED ACCESS IS MONITORED.',
-        'login.authorized_only': 'Authorized client and partner access only.',
+        'login.authorized_only': 'Use the email and password for your BIN GROUP account.',
         'login.role_required.title': 'Account Setup Incomplete',
         'login.role_required.body': 'Your account is signed in, but no role has been assigned yet. Please contact support or try a different account.',
         'login.role_required.retry': 'Try a Different Account',
@@ -1678,19 +1682,17 @@ const translations: Record<Language, Record<string, string>> = {
         'btn.exit': 'خروج',
         'btn.quote': 'احصل على تسعيرة مؤسسية',
         'status.sovereign': 'فئة مجموعة بن',
-        'login.portal': 'بوابة الشركاء',
+        'login.portal': 'تسجيل الدخول',
         'login.auth_access': 'دخول مؤسسي موثق',
         'login.email': 'البريد الإلكتروني',
         'login.password': 'كلمة المرور',
         'login.google': 'الدخول عبر جوجل',
         'login.or_sso': 'أو الدخول المؤسسي الموحد',
         'login.forgot_password': 'نسيت كلمة المرور',
-        'login.iso_secure': 'آمن بمعايير ISO 27001',
-        'login.iso_secure_badge': 'معتمد بمعايير ISO 27001 ومؤمن سيادياً',
         'login.inst_grade': 'درجة مؤسسية',
         'login.uae_ops': 'عمليات محفظة الإمارات',
         'login.footer': '© 2026 مجموعة بن الإمارات. الدخول غير المصرح به مراقب.',
-        'login.authorized_only': 'دخول العملاء والشركاء المصرح لهم فقط.',
+        'login.authorized_only': 'استخدم البريد الإلكتروني وكلمة المرور الخاصة بحسابك في BIN GROUP.',
         'login.role_required.title': 'إعداد الحساب غير مكتمل',
         'login.role_required.body': 'تم تسجيل دخولك، ولكن لم يتم تعيين دور لحسابك بعد. يرجى التواصل مع الدعم أو تجربة حساب آخر.',
         'login.role_required.retry': 'تجربة حساب آخر',
@@ -2214,7 +2216,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Language>(() => {
     if (typeof window === "undefined") return "en";
     const stored = localStorage.getItem("bin_language");
-    return stored === "ar" ? "ar" : "en";
+    return stored && (SUPPORTED_LANGUAGES as string[]).includes(stored) ? (stored as Language) : "en";
   });
 
   const setLang = (nextLang: Language) => {
@@ -2231,15 +2233,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   const value = useMemo<LanguageContextType>(() => {
+    const community = isCommunityLanguage(lang) ? COMMUNITY_TRANSLATIONS[lang] : null;
+    const lookup = (key: string) => (community ? community[key] : translations[lang as "en" | "ar"]?.[key]);
     const t = (key: string, variables?: Record<string, any>): string => {
-      const raw = translations[lang]?.[key] ?? translations.en?.[key];
+      const raw = lookup(key) ?? translations.en?.[key];
       return interpolateTranslation(coerceTranslationString(raw, key), variables);
     };
 
     const tx = (key: string, fallback: string, variables?: Record<string, any>): string => {
-      const raw = translations[lang]?.[key] ?? translations.en?.[key] ?? fallback;
+      const raw = lookup(key) ?? (community && fallback ? community[fallback] : undefined) ?? translations.en?.[key] ?? fallback;
       return interpolateTranslation(coerceTranslationString(raw, fallback || key), variables);
     };
+
+    const phrase = (en: string, ar: string): string => (lang === "ar" ? ar : community?.[en] ?? en);
 
     return {
       lang,
@@ -2248,6 +2254,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       toggleLanguage,
       t,
       tx,
+      phrase,
       isRTL: lang === "ar",
     };
   }, [lang]);

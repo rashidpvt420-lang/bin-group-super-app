@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { withRejectionReasonLog } from "./callableRejectionLog";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   assertTechnicianLiveLocationEligibility,
@@ -32,7 +33,7 @@ const MIN_REPORT_INTERVAL_MS = 15_000;
  */
 export const reportTechnicianAvailabilityLocation = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => {
+  withRejectionReasonLog("reportTechnicianAvailabilityLocation", async (request) => {
     requireTechnician(request.auth);
     const technicianUid = request.auth!.uid;
     await assertTechnicianLiveLocationEligibility(technicianUid);
@@ -143,5 +144,5 @@ export const reportTechnicianAvailabilityLocation = onCall(
       });
       return { ok: true, reportedAtMs: serverNowMs, maxAgeMs: 15 * 60_000 };
     });
-  },
+  }),
 );

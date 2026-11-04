@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { withRejectionReasonLog } from "./callableRejectionLog";
 import * as crypto from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -308,7 +309,7 @@ export const verifyBrokerPayoutOtp = onCall({
   return { status: "VERIFIED", challengeId };
 });
 
-export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, withRejectionReasonLog("submitBrokerPayoutRequest", async (request) => {
   const broker = await requireBroker(request.auth);
   const challengeId = text(request.data?.challengeId);
   if (!challengeId) throw new HttpsError("failed-precondition", "Verified payout OTP evidence is required.");
@@ -392,4 +393,4 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
     });
   });
   return { status: "SUCCESS", payoutRequestId: payoutRef.id, amount: commissions.amount, commissionCount: commissions.ids.length };
-});
+}));

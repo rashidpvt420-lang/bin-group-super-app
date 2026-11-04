@@ -24,6 +24,7 @@ import { Bot, Grip, Send, ShieldCheck, Sparkles, User, X } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
 import { functions, httpsCallable } from '../lib/firebase';
+import { classifyPublicAssistantError, publicAssistantFallbackNote } from '../lib/publicAssistantErrors';
 import { generateSovereignAIResponse, type SovereignRole } from '../utils/propertyTruthIntelligence';
 
 export interface SovereignAIChatProps {
@@ -348,6 +349,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
     setLoading(true);
 
     const fallbackSummary = isAutoSummary ? generateSummary() : undefined;
+    let publicFailureNote = '';
     try {
       if (!allowLiveProvider && publicAssistant) {
         try {
@@ -365,7 +367,12 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           }]);
           return;
         } catch (publicError) {
-          console.warn('[SovereignAI] Public assistant unavailable; local guidance shown:', publicError);
+          const publicReason = classifyPublicAssistantError(publicError);
+          publicFailureNote = publicAssistantFallbackNote(publicReason);
+          console.warn('[SovereignAI] Public assistant unavailable; local guidance shown:', {
+            reason: publicReason,
+            code: String((publicError as { code?: unknown })?.code || ''),
+          });
         }
       }
       if (!allowLiveProvider) {
@@ -373,7 +380,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         setMessages((prev) => [...prev, {
           id: `ai_${Date.now()}`,
           type: 'ai',
-          text: `LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE\n${localText}`,
+          text: `LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE\n${publicFailureNote ? `${publicFailureNote}\n` : ''}${localText}`,
           timestamp: new Date(),
           live: false,
           provider: 'local-guidance',
