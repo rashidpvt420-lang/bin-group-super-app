@@ -1037,6 +1037,17 @@ async function recordLeaveDeduction(requestId: string, data: FirebaseFirestore.D
     await writeHrAudit("HR_LEAVE_DEDUCTED", requestId, { uid, leaveType, days });
 }
 
+/**
+ * Re-reads the technician leave record and writes the balance deduction.
+ * Idempotent: a record that already has leaveDeduction is left unchanged.
+ * Emergency and unpaid leave do not move the annual or sick balance.
+ */
+export async function applyApprovedLeaveDeduction(requestId: string) {
+    const snap = await db.collection("staffRequests").doc(requestId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "Leave request not found.");
+    await recordLeaveDeduction(requestId, snap.data() || {});
+}
+
 /** Caller's own leave balances, computed server-side from join date and approved requests. */
 export const getMyLeaveBalance = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
