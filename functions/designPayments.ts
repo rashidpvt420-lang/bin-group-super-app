@@ -4,10 +4,25 @@ import { createHash } from 'crypto';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { resolveActivePaymentConfiguration } from './paymentConfiguration';
 import { assertDesignPaymentBinding, designPaymentTerms, DESIGN_PAYMENT_METHODS, DESIGN_PAYMENT_WORKFLOW } from './designPaymentPolicy';
+import { protectedMediaUrl } from './aiDesignMedia';
+import {
+  assertChoiceLockedForHandoff,
+  buildExecutionBrief,
+  buildLockedChoice,
+  ENGINEER_BRIEF_STATUSES,
+  LOCKABLE_DESIGN_STATUSES,
+  matchDesignOption,
+  publicExecutionBrief,
+  publicLockedChoice,
+  sameLockedChoice,
+} from './designExecutionBrief';
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const options = { cors: true, region: 'europe-west3', enforceAppCheck: true };
+const STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
+const MEDIA_TTL_MS = 15 * 60 * 1000;
+const ENGINEER_ROLES = ['technician', 'engineer'];
 const now = () => admin.firestore.FieldValue.serverTimestamp();
 const text = (value: unknown, max = 300) => String(value ?? '').trim().slice(0, max);
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
@@ -247,8 +262,317 @@ export const adminHandoffDesignRequest = onCall(options, async (request) => {
     if (s.payment?.paymentVerified !== true || s.payment?.status !== 'APPROVED' || !s.payment.receiptGeneration || !s.payment.receiptHash || s.design.paymentVerified !== true) throw new HttpsError('failed-precondition', 'Verified immutable payment evidence is required before engineer handoff.');
     if (s.design.status === 'ENGINEER_REVIEW') return { ok: true, idempotent: true };
     if (s.design.status !== 'PAID') throw new HttpsError('failed-precondition', 'Only a paid design can enter engineer review.');
-    transaction.update(s.designRef, { status: 'ENGINEER_REVIEW', workflowStage: 'ENGINEER_REVIEW', adminHandoffStatus: 'ENGINEER_REVIEW', engineerHandoffStatus: 'READY_FOR_SCOPE_REVIEW', engineerHandoffBy: user.uid, engineerHandoffAt: now(), updatedAt: now() });
-    transaction.create(db.collection('audit_logs').doc(`design_handoff_${requestId}`), { action: 'DESIGN_ENGINEER_HANDOFF_READY', actorId: user.uid, actorRole: user.role, targetType: 'design_requests', targetId: requestId, paymentId: s.paymentRef.id, quoteHash: s.terms.quoteHash, createdAt: now() });
+    let executionBrief: ReturnType<typeof buildExecutionBrief>;
+    try {
+      assertChoiceLockedForHandoff(s.design, s.terms.quoteHash);
+      executionBrief = buildExecutionBrief(s.design);
+    } catch (error) {
+      throw new HttpsError('failed-precondition', (error as Error).message);
+    }
+    const handoffCount = Number(s.design.engineerHandoffCount || 0) + 1;
+    const handoffAuditId = handoffCount === 1 ? `design_handoff_${requestId}` : `design_handoff_${requestId}_v${handoffCount}`;
+    transaction.update(s.designRef, {
+      status: 'ENGINEER_REVIEW', workflowStage: 'ENGINEER_REVIEW', adminHandoffStatus: 'ENGINEER_REVIEW',
+      engineerHandoffStatus: 'READY_FOR_SCOPE_REVIEW', engineerHandoffBy: user.uid, engineerHandoffAt: now(),
+      engineerHandoffCount: handoffCount, executionBrief, updatedAt: now(),
+    });
+    transaction.create(db.collection('audit_logs').doc(handoffAuditId), {
+      action: 'DESIGN_ENGINEER_HANDOFF_READY', actorId: user.uid, actorRole: user.role,
+      targetType: 'design_requests', targetId: requestId, paymentId: s.paymentRef.id, quoteHash: s.terms.quoteHash,
+      lockedOptionId: s.design.lockedChoice.optionId, lockedImageStoragePath: s.design.lockedChoice.imageStoragePath,
+      handoffCount, createdAt: now(),
+    });
+    return { ok: true, idempotent: false };
+  });
+});
+
+function canLockDesign(user: { uid: string; role: string }, design: Record<string, any>) {
+  if (user.role === 'owner' && design.ownerId === user.uid) return true;
+  return user.role === 'tenant' && design.role === 'tenant' && (design.tenantId === user.uid || design.userId === user.uid);
+}
+
+function choiceError(error: unknown): never {
+  throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The chosen design could not be locked.');
+}
+
+function partyRecipients(requestId: string, design: Record<string, any>) {
+  const ownerId = text(design.ownerId, 180);
+  const tenantId = text(design.tenantId, 180);
+  const recipients: Array<{ id: string; role: 'owner' | 'tenant'; link: string }> = [];
+  if (ownerId) recipients.push({ id: ownerId, role: 'owner', link: `/owner/design-studio/request/${requestId}` });
+  if (tenantId && tenantId !== ownerId) recipients.push({ id: tenantId, role: 'tenant', link: `/tenant/design-studio/request/${requestId}` });
+  return recipients;
+}
+
+function conceptDocId(requestId: string, conceptId: unknown) {
+  const idPart = text(conceptId, 80);
+  return /^[A-Za-z0-9_-]{1,80}$/.test(idPart) ? `${requestId}_${idPart}` : '';
+}
+
+export const lockChosenDesignOption = onCall(options, async (request) => {
+  const user = await actor(request);
+  const requestId = id(request.data?.designRequestId);
+  const optionId = text(request.data?.optionId, 80);
+  if (request.data?.optionIndex !== undefined && request.data?.optionIndex !== null && !Number.isInteger(request.data.optionIndex)) {
+    throw new HttpsError('invalid-argument', 'optionIndex must be a whole number.');
+  }
+  if (!optionId && !Number.isInteger(request.data?.optionIndex)) throw new HttpsError('invalid-argument', 'Choose a design option.');
+  const optionIndex = Number.isInteger(request.data?.optionIndex) ? Number(request.data.optionIndex) : undefined;
+  return db.runTransaction(async (transaction) => {
+    const designRef = db.collection('design_requests').doc(requestId);
+    const quoteRef = db.collection('design_quotes').doc(requestId);
+    const approvalRef = db.collection('design_approvals').doc(`${requestId}_owner`);
+    const designSnap = await transaction.get(designRef);
+    if (!designSnap.exists) throw new HttpsError('not-found', 'The design request is missing.');
+    const design = designSnap.data() || {};
+    if (!canLockDesign(user, design)) throw new HttpsError('permission-denied', 'Only the tenant or the property owner can lock this design.');
+    const status = String(design.status || '');
+    if (!LOCKABLE_DESIGN_STATUSES.includes(status as typeof LOCKABLE_DESIGN_STATUSES[number])) {
+      throw new HttpsError('failed-precondition', status === 'ENGINEER_REVIEW'
+        ? 'The chosen design is with the engineer. An admin must authorize a design-choice revision before it can change. The deposit is not refunded by that step.'
+        : 'This design can no longer be changed from here.');
+    }
+    if (status === 'CHOICE_REVISION_PENDING' && design.choiceRevisionAuthorized !== true) {
+      throw new HttpsError('failed-precondition', 'A design-choice revision has not been authorized.');
+    }
+    const match = (() => {
+      try { return matchDesignOption(design, { optionId, optionIndex }); }
+      catch (error) { choiceError(error); }
+    })();
+    const nextVersion = Number(design.lockedChoice?.lockVersion || 0) + 1;
+    const draft = buildLockedChoice(design, match, user, nextVersion);
+    if (sameLockedChoice(design.lockedChoice, draft)) {
+      if (design.executionBrief?.imageStoragePath === draft.imageStoragePath) {
+        return { ok: true, idempotent: true, optionId: draft.optionId, lockVersion: Number(design.lockedChoice.lockVersion || 1) };
+      }
+      const executionBrief = (() => {
+        try { return buildExecutionBrief(design); }
+        catch (error) { choiceError(error); }
+      })();
+      transaction.update(designRef, { executionBrief, updatedAt: now() });
+      return { ok: true, idempotent: false, optionId: design.lockedChoice.optionId, lockVersion: Number(design.lockedChoice.lockVersion || 1) };
+    }
+    const choice = draft;
+    const conceptTargets = (Array.isArray(design.concepts) ? design.concepts : [])
+      .map((concept: any) => ({ concept, docId: conceptDocId(requestId, concept?.id) }))
+      .filter((item: { docId: string }) => Boolean(item.docId));
+    const conceptRefs = conceptTargets.map((item: { docId: string }) => db.collection('design_concepts').doc(item.docId));
+    const [quoteSnap, approvalSnap, ...conceptSnaps] = await Promise.all([
+      transaction.get(quoteRef),
+      transaction.get(approvalRef),
+      ...conceptRefs.map((ref) => transaction.get(ref)),
+    ]);
+    if (!quoteSnap.exists) throw new HttpsError('not-found', 'The canonical design quote is missing.');
+    const executionBrief = (() => {
+      try { return buildExecutionBrief({ ...design, lockedChoice: choice }); }
+      catch (error) { choiceError(error); }
+    })();
+    const summary = publicLockedChoice(choice);
+    const returnedToPaid = status === 'CHOICE_REVISION_PENDING' && design.paymentVerified === true;
+    transaction.update(designRef, {
+      lockedChoice: { ...choice, lockedAt: now() },
+      selectedConceptId: choice.optionId,
+      executionBrief,
+      choiceRevisionAuthorized: false,
+      ...(returnedToPaid ? {
+        status: 'PAID',
+        workflowStage: 'PAID',
+        adminHandoffStatus: 'PAYMENT_VERIFIED',
+        engineerHandoffStatus: 'WAITING_ADMIN_HANDOFF',
+        executionStatus: 'AWAITING_ADMIN_HANDOFF',
+      } : {}),
+      updatedAt: now(),
+    });
+    transaction.update(quoteRef, { lockedChoice: summary, updatedAt: now() });
+    if (approvalSnap.exists) transaction.update(approvalRef, { lockedChoice: summary, updatedAt: now() });
+    conceptSnaps.forEach((snap, index) => {
+      if (!snap.exists) return;
+      const selected = conceptTargets[index]?.concept?.id === choice.optionId;
+      transaction.update(conceptRefs[index], { selected, selectedForExecution: selected, updatedAt: now() });
+    });
+    transaction.create(db.collection('audit_logs').doc(`design_choice_lock_${requestId}_v${choice.lockVersion}`), {
+      action: 'DESIGN_CHOICE_LOCKED', actorId: user.uid, actorRole: user.role,
+      targetType: 'design_requests', targetId: requestId,
+      optionId: choice.optionId, optionIndex: choice.optionIndex, optionLabel: choice.optionLabel,
+      imageStoragePath: choice.imageStoragePath, imageSha256: choice.imageSha256,
+      quoteHash: choice.quoteHash, lockVersion: choice.lockVersion, createdAt: now(),
+    });
+    return { ok: true, idempotent: false, optionId: choice.optionId, lockVersion: choice.lockVersion };
+  });
+});
+
+// Re-approval path after engineer handoff: admin MFA authorizes a new lock.
+// The previous picture stays in place until the tenant or owner locks again.
+// Payment is not refunded, re-approved, or collected again. Handoff must be repeated.
+export const authorizeDesignChoiceRevision = onCall(options, async (request) => {
+  const user = await actor(request, true);
+  const requestId = id(request.data?.designRequestId);
+  const reason = text(request.data?.reason, 500);
+  if (reason.length < 8) throw new HttpsError('invalid-argument', 'A short reason for the design-choice revision is required.');
+  return db.runTransaction(async (transaction) => {
+    const s = await state(transaction, requestId);
+    if (s.design.status === 'CHOICE_REVISION_PENDING' && s.design.choiceRevisionAuthorized === true) return { ok: true, idempotent: true };
+    if (s.design.status !== 'ENGINEER_REVIEW') {
+      throw new HttpsError('failed-precondition', 'A design-choice revision is only available while the engineer is reviewing the locked design, and before it is marked ready.');
+    }
+    if (s.payment?.paymentVerified !== true) throw new HttpsError('failed-precondition', 'Verified payment is required. This step does not approve or refund a payment.');
+    const revisionCount = Number(s.design.choiceRevisionCount || 0) + 1;
+    const revisionKey = revisionCount === 1 ? requestId : `${requestId}_v${revisionCount}`;
+    transaction.update(s.designRef, {
+      status: 'CHOICE_REVISION_PENDING', workflowStage: 'CHOICE_REVISION_PENDING',
+      choiceRevisionAuthorized: true, choiceRevisionBy: user.uid, choiceRevisionReason: reason, choiceRevisionAt: now(),
+      choiceRevisionCount: revisionCount,
+      adminHandoffStatus: 'CHOICE_REVISION_PENDING', engineerHandoffStatus: 'CHOICE_REVISION_PENDING',
+      executionStatus: 'AWAITING_CHOICE_REVISION', updatedAt: now(),
+    });
+    transaction.create(db.collection('audit_logs').doc(`design_choice_revision_${revisionKey}`), {
+      action: 'DESIGN_CHOICE_REVISION_AUTHORIZED', actorId: user.uid, actorRole: user.role,
+      targetType: 'design_requests', targetId: requestId, reason, quoteHash: s.terms.quoteHash,
+      previousOptionId: s.design.lockedChoice?.optionId || null, revisionCount, createdAt: now(),
+    });
+    for (const recipient of partyRecipients(requestId, s.design)) {
+      transaction.create(db.collection('notifications').doc(`design_choice_revision_${revisionKey}_${recipient.role}`), {
+        recipientId: recipient.id, type: 'DESIGN_CHOICE_REVISION', title: 'Confirm the chosen design again',
+        body: `Design request ${requestId} needs the chosen design confirmed again before execution continues. The deposit is unchanged. Reason: ${reason}`,
+        link: recipient.link, requestId, read: false, createdAt: now(),
+      });
+    }
+    return { ok: true, idempotent: false };
+  });
+});
+
+async function executionActor(request: any) {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Login required.');
+  const token = request.auth.token || {};
+  const record = await admin.auth().getUser(request.auth.uid);
+  if (record.disabled || !record.emailVerified || token.email_verified !== true || token.suspended === true || record.customClaims?.suspended === true) {
+    throw new HttpsError('permission-denied', 'An active, verified account is required.');
+  }
+  const role = roleOf(token);
+  const claimsRole = roleOf(record.customClaims);
+  if (financeRole(token) && financeRole(record.customClaims) && token.firebase?.sign_in_second_factor) {
+    return { uid: request.auth.uid as string, role, kind: 'admin' as const };
+  }
+  if (ENGINEER_ROLES.includes(role) && role === claimsRole) return { uid: request.auth.uid as string, role, kind: 'engineer' as const };
+  if (['owner', 'tenant'].includes(role) && role === claimsRole) return { uid: request.auth.uid as string, role, kind: 'party' as const };
+  throw new HttpsError('permission-denied', 'You cannot open this design execution brief.');
+}
+
+function partyCanRead(user: { uid: string; role: string }, design: Record<string, any>) {
+  return (user.role === 'owner' && design.ownerId === user.uid)
+    || (user.role === 'tenant' && (design.tenantId === user.uid || design.userId === user.uid));
+}
+
+async function signedDesignImage(path: unknown, kind: 'reference' | 'generated') {
+  const safe = text(path, 1000);
+  if (!safe || safe.includes('://') || safe.startsWith('/') || safe.includes('..')) return '';
+  return protectedMediaUrl(admin.storage().bucket(STORAGE_BUCKET) as any, safe, kind, MEDIA_TTL_MS, (message, detail) => {
+    console.warn(`designExecution: ${message}`, detail);
+  });
+}
+
+export const getDesignExecutionBrief = onCall(options, async (request) => {
+  const user = await executionActor(request);
+  const requestId = id(request.data?.designRequestId || request.data?.requestId);
+  const snap = await db.collection('design_requests').doc(requestId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'The design request is missing.');
+  const design = snap.data() || {};
+  const allowed = user.kind === 'admin' || user.kind === 'engineer' || (user.kind === 'party' && partyCanRead(user, design));
+  if (!allowed) throw new HttpsError('permission-denied', 'You cannot open this design execution brief.');
+  if (user.kind === 'engineer' && !ENGINEER_BRIEF_STATUSES.includes(String(design.status || '') as typeof ENGINEER_BRIEF_STATUSES[number])) {
+    throw new HttpsError('failed-precondition', 'The execution brief is available once the design is in engineer review.');
+  }
+  if (!design.lockedChoice?.imageStoragePath) throw new HttpsError('failed-precondition', 'Lock a chosen design before opening the execution brief.');
+  const executionBrief = (() => {
+    try {
+      const stored = design.executionBrief?.imageStoragePath === design.lockedChoice.imageStoragePath
+        ? design.executionBrief
+        : buildExecutionBrief(design);
+      return publicExecutionBrief(stored);
+    } catch (error) {
+      throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The execution brief is unavailable.');
+    }
+  })();
+  const [chosenImageUrl, referenceImageUrl] = await Promise.all([
+    signedDesignImage(design.lockedChoice.imageStoragePath, 'generated'),
+    signedDesignImage(executionBrief?.referenceImagePath || design.referenceImagePaths?.[0], 'reference'),
+  ]);
+  return {
+    requestId,
+    status: design.status || '',
+    propertyName: text(design.propertyName, 160),
+    lockedChoice: publicLockedChoice(design.lockedChoice),
+    executionBrief,
+    chosenImageUrl,
+    referenceImageUrl,
+    completionNote: text(design.completionNote, 500),
+  };
+});
+
+export const listDesignsAwaitingExecution = onCall(options, async (request) => {
+  const user = await executionActor(request);
+  if (user.kind === 'party') throw new HttpsError('permission-denied', 'Only an engineer or admin can list design execution jobs.');
+  const snap = await db.collection('design_requests').where('status', 'in', ['ENGINEER_REVIEW', 'EXECUTION_READY']).limit(30).get();
+  return {
+    designs: snap.docs.map((docSnap) => {
+      const data = docSnap.data() || {};
+      const choice = data.lockedChoice || {};
+      return {
+        id: docSnap.id,
+        status: String(data.status || ''),
+        propertyName: text(data.propertyName, 160),
+        zoneType: text(data.scope?.zoneType, 80),
+        optionLabel: text(choice.optionLabel, 120),
+        finishTier: text(choice.finishTier, 40),
+      };
+    }),
+  };
+});
+
+export const markDesignExecutionReady = onCall(options, async (request) => {
+  const user = await executionActor(request);
+  if (user.kind === 'party') throw new HttpsError('permission-denied', 'Only an engineer or an admin with MFA can mark this design ready.');
+  const requestId = id(request.data?.designRequestId);
+  const note = text(request.data?.completionNote, 500);
+  return db.runTransaction(async (transaction) => {
+    const s = await state(transaction, requestId);
+    if (s.design.status === 'EXECUTION_READY') {
+      if (note && note !== text(s.design.completionNote, 500)) {
+        throw new HttpsError('failed-precondition', 'This design is already marked ready. Completion details cannot be changed here.');
+      }
+      return { ok: true, idempotent: true };
+    }
+    if (s.design.status !== 'ENGINEER_REVIEW') throw new HttpsError('failed-precondition', 'Only a design in engineer review can be marked ready for handover.');
+    if (s.payment?.paymentVerified !== true || s.design.paymentVerified !== true) {
+      throw new HttpsError('failed-precondition', 'Verified deposit evidence is required. Marking ready does not approve a payment.');
+    }
+    try { assertChoiceLockedForHandoff(s.design, s.terms.quoteHash); }
+    catch (error) { throw new HttpsError('failed-precondition', (error as Error).message); }
+    const choice = s.design.lockedChoice || {};
+    transaction.update(s.designRef, {
+      status: 'EXECUTION_READY', workflowStage: 'EXECUTION_READY', executionStatus: 'READY_FOR_HANDOVER',
+      engineerHandoffStatus: 'EXECUTION_READY', adminHandoffStatus: 'EXECUTION_READY',
+      completionNote: note, completedBy: user.uid, completedByRole: user.role, completedAt: now(), updatedAt: now(),
+    });
+    transaction.create(db.collection('audit_logs').doc(`design_execution_ready_${requestId}`), {
+      action: 'DESIGN_EXECUTION_MARKED_READY', actorId: user.uid, actorRole: user.role,
+      targetType: 'design_requests', targetId: requestId, optionId: choice.optionId || null,
+      optionLabel: choice.optionLabel || null, completionNote: note, quoteHash: s.terms.quoteHash, createdAt: now(),
+    });
+    const summary = [
+      `Design request ${requestId} is done and ready for handover.`,
+      choice.optionLabel ? `Locked design: ${choice.optionLabel}.` : '',
+      choice.style ? `Style: ${choice.style}.` : '',
+      choice.finishTier ? `Finish tier: ${choice.finishTier}.` : '',
+      s.design.propertyName ? `Property: ${text(s.design.propertyName, 160)}.` : '',
+      note ? `Completion note: ${note}` : 'The locked design and execution brief are on the request.',
+    ].filter(Boolean).join(' ');
+    for (const recipient of partyRecipients(requestId, s.design)) {
+      transaction.create(db.collection('notifications').doc(`design_execution_ready_${requestId}_${recipient.role}`), {
+        recipientId: recipient.id, type: 'DESIGN_EXECUTION_READY', title: 'Design work is ready for handover',
+        body: summary, link: recipient.link, requestId, read: false, createdAt: now(),
+      });
+    }
     return { ok: true, idempotent: false };
   });
 });

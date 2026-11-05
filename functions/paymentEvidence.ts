@@ -329,4 +329,9 @@ export {
   submitDesignOwnerDecision,
   adminReviewDesignPayment,
   adminHandoffDesignRequest,
+  lockChosenDesignOption,
+  authorizeDesignChoiceRevision,
+  getDesignExecutionBrief,
+  listDesignsAwaitingExecution,
+  markDesignExecutionReady,
 } from './designPayments';

@@ -21,12 +21,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
 import { stripDesignPrompt } from '../lib/stripDesignPrompt';
 import { designStatusLabel, honestDesignStatus } from '../lib/designStatusLabels';
+import { declaredDesignText, designScopeGaps } from '../lib/designScopeGaps';
+import DesignExecutionBriefView from '../components/design/DesignExecutionBriefView';
 
 // High-contrast text on the dark cards (>= 4.5:1, WCAG AA). Theme textSecondary is too dark here.
 const LABEL_TEXT = '#D1D5DB';
 const BODY_TEXT = '#F3F4F6';
 
-const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
+const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED', 'EXECUTION_READY', 'CHOICE_REVISION_PENDING'];
+const LOCKABLE_STATUSES = ['AI_CONCEPT_READY', 'AWAITING_OWNER_APPROVAL', 'PENDING_OWNER_NOC', 'DEPOSIT_PENDING', 'OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'PAYMENT_PENDING', 'PAID', 'CHOICE_REVISION_PENDING'];
 const PRIVATE_MEDIA_REFRESH_MS = 10 * 60 * 1000;
 
 type ProtectedMedia = {
@@ -60,14 +63,14 @@ function buildExecutionScope(request: any) {
     return {
         zoneType: text(scope.zoneType, 'Design zone'),
         dimensions: Number(scope.dimensions || 0),
-        unitNumber: text(scope.unitNumber),
-        floorLevel: text(scope.floorLevel),
+        unitNumber: declaredDesignText(scope.unitNumber) || 'Not declared',
+        floorLevel: declaredDesignText(scope.floorLevel) || 'Not declared',
         propertyName: text(request?.propertyName),
         designStyle: text(request?.designStyle),
-        finishTier: text(scope.finishTier),
+        finishTier: declaredDesignText(scope.finishTier) || 'Not declared',
         emirate: text(scope.emirate),
-        existingCondition: text(scope.existingCondition, 'Not declared'),
-        requiredWork: text(scope.requiredWork, 'Not declared'),
+        existingCondition: declaredDesignText(scope.existingCondition) || 'Not declared',
+        requiredWork: declaredDesignText(scope.requiredWork) || declaredDesignText(scope.scopeDescription) || 'Not declared',
         scopeDescription: text(scope.scopeDescription, 'Not declared'),
         keepConstraints: text(scope.keepConstraints, 'No constraints declared'),
         imageCount: Array.isArray(scope.referenceImagePaths) ? scope.referenceImagePaths.length : 0,
@@ -95,6 +98,7 @@ function DesignRequestDetailContent() {
     const { tx, isRTL } = useLanguage() as any;
     const lang: 'en' | 'ar' = isRTL ? 'ar' : 'en';
     const [selectedOption, setSelectedOption] = useState(0);
+    const [completionNote, setCompletionNote] = useState('');
     const navigate = useNavigate();
     const [request, setRequest] = useState<any>(null);
     const [protectedMedia, setProtectedMedia] = useState<ProtectedMedia>({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
@@ -174,6 +178,11 @@ function DesignRequestDetailContent() {
             if (timer !== undefined) window.clearInterval(timer);
         };
     }, [id, user?.uid]);
+
+    useEffect(() => {
+        const lockedIndex = request?.lockedChoice?.optionIndex;
+        if (Number.isInteger(lockedIndex)) setSelectedOption(lockedIndex);
+    }, [request?.id, request?.lockedChoice?.optionIndex, request?.lockedChoice?.lockVersion]);
 
     const handleOwnerAction = async (action: 'APPROVE' | 'REJECT' | 'TAKEOVER') => {
         if (!id || !request || !user?.uid) return;
@@ -257,6 +266,46 @@ function DesignRequestDetailContent() {
     // No fake readiness: without generated images the owner cannot move to payment.
     const canPayForDesign = canCreatePayment && (shownStatus !== 'IMAGES_NOT_READY' || mediaLoading);
     const executionScope = request.executionScope || buildExecutionScope(request);
+    const lockedChoice = request.lockedChoice || null;
+    const lockedIndex = Number.isInteger(lockedChoice?.optionIndex) ? Number(lockedChoice.optionIndex) : -1;
+    const previewIsLocked = lockedIndex === optionIndex;
+    const isBoundTenant = role === 'tenant' && request.role === 'tenant' && (request.tenantId === user?.uid || request.userId === user?.uid);
+    const canLockChoice = (isOwner || isBoundTenant) && LOCKABLE_STATUSES.includes(String(request.status || '')) && Boolean(generatedImages[optionIndex]);
+    const scopeGaps = designScopeGaps(scope);
+    const canMarkReady = isAdmin && request.status === 'ENGINEER_REVIEW' && Boolean(lockedChoice?.imageStoragePath);
+    const lockedImageUrl = lockedIndex >= 0 ? generatedImages[lockedIndex] || '' : '';
+
+    const handleLockChoice = async () => {
+        if (!id || !user?.uid) return;
+        setProcessing(true);
+        setActionError('');
+        try {
+            const lock = httpsCallable(functions, 'lockChosenDesignOption');
+            await lock({
+                designRequestId: id,
+                optionIndex,
+                optionId: conceptOptions[optionIndex]?.id || undefined,
+            });
+        } catch (err: any) {
+            setActionError(err?.message || 'The chosen design could not be locked.');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleMarkExecutionReady = async () => {
+        if (!id || !user?.uid) return;
+        setProcessing(true);
+        setActionError('');
+        try {
+            const markReady = httpsCallable(functions, 'markDesignExecutionReady');
+            await markReady({ designRequestId: id, completionNote });
+        } catch (err: any) {
+            setActionError(err?.message || 'The design could not be marked ready for handover.');
+        } finally {
+            setProcessing(false);
+        }
+    };
 
     return (
         <Container maxWidth="xl" sx={{ py: 6, pr: { xs: 9, md: 3 }, pb: { xs: 14, md: 8 } }}>
@@ -274,7 +323,7 @@ function DesignRequestDetailContent() {
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{generatedImages.length > 1 ? `PICK YOUR DESIGN - ${generatedImages.length} OPTIONS` : 'AI DESIGN'}</Typography>
                             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', overflowWrap: 'anywhere' }}>{text(scope.zoneType, 'DESIGN').toUpperCase()}</Typography>
                             <Typography variant="body2" sx={{ color: LABEL_TEXT, mt: 1 }}>
-                                {isTenantRequest ? 'Tenant request requires owner NOC before payment and execution.' : 'Pick the option you like, then approve the quote to pay the deposit. Nothing is charged until you approve.'}
+                                {isTenantRequest ? 'Tenant request requires owner NOC before payment and execution. Choose one design to lock it for the engineer.' : 'Compare the options, then choose the design to lock for the engineer. Nothing is charged until you approve.'}
                             </Typography>
                         </Box>
 
@@ -291,7 +340,7 @@ function DesignRequestDetailContent() {
                                 </Box>
                             )}
                             {primaryVisual && (
-                                <Chip label={text(conceptOptions[optionIndex]?.optionLabel, `Option ${optionIndex + 1}`)} sx={{ position: 'absolute', top: 16, left: 16, bgcolor: 'rgba(0,0,0,0.75)', color: '#FFF', fontWeight: 900 }} />
+                                <Chip label={previewIsLocked ? `Locked for execution · ${text(lockedChoice?.optionLabel, conceptOptions[optionIndex]?.optionLabel)}` : text(conceptOptions[optionIndex]?.optionLabel, `Option ${optionIndex + 1}`)} sx={{ position: 'absolute', top: 16, left: 16, bgcolor: 'rgba(0,0,0,0.75)', color: '#FFF', fontWeight: 900 }} />
                             )}
                         </Box>
 
@@ -312,10 +361,24 @@ function DesignRequestDetailContent() {
                                             <Box component="button" type="button" onClick={() => setSelectedOption(index)} aria-pressed={index === optionIndex} aria-label={`Show ${text(conceptOptions[index]?.optionLabel, `option ${index + 1}`)}`} sx={{ p: 0, width: '100%', bgcolor: 'transparent', cursor: 'pointer', borderRadius: 2, border: index === optionIndex ? `3px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.2)', overflow: 'hidden' }}>
                                                 <Box component="img" alt={text(conceptOptions[index]?.optionLabel, `Option ${index + 1}`)} src={url} sx={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }} />
                                             </Box>
-                                            <Typography variant="caption" sx={{ color: index === optionIndex ? binThemeTokens.gold : LABEL_TEXT, fontWeight: 800 }}>{text(conceptOptions[index]?.optionLabel, `Option ${index + 1}`)}</Typography>
+                                            <Typography variant="caption" sx={{ color: index === optionIndex || index === lockedIndex ? binThemeTokens.gold : LABEL_TEXT, fontWeight: 800 }}>{text(conceptOptions[index]?.optionLabel, `Option ${index + 1}`)}{index === lockedIndex ? ' · Locked' : ''}</Typography>
                                         </Grid>
                                     ))}
                                 </Grid>
+                                {lockedChoice?.optionLabel && !previewIsLocked && (
+                                    <Alert severity="info" sx={{ mt: 2 }}>You are previewing {text(conceptOptions[optionIndex]?.optionLabel, `option ${optionIndex + 1}`)}. Locked for execution: {lockedChoice.optionLabel}.</Alert>
+                                )}
+                                {previewIsLocked && lockedChoice?.optionLabel && (
+                                    <Alert severity="success" sx={{ mt: 2 }} data-testid="design-choice-locked">Locked for execution: {lockedChoice.optionLabel}. The engineer builds this option.</Alert>
+                                )}
+                                {canLockChoice && !previewIsLocked && (
+                                    <Button fullWidth variant="contained" data-testid="choose-this-design" onClick={handleLockChoice} disabled={processing} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} aria-label={`Choose ${text(conceptOptions[optionIndex]?.optionLabel, `option ${optionIndex + 1}`)} for execution`}>
+                                        Choose this design
+                                    </Button>
+                                )}
+                                {canLockChoice && previewIsLocked && (
+                                    <Typography variant="body2" sx={{ color: LABEL_TEXT, mt: 1.5 }}>This design is already locked. Choose another option only when you want to replace it before engineer handoff.</Typography>
+                                )}
                             </Box>
                         )}
 
@@ -324,9 +387,13 @@ function DesignRequestDetailContent() {
                             <Grid container spacing={3}>
                                 <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>UNIT</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.unitNumber}</Typography></Grid>
                                 <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>FLOOR</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.floorLevel}</Typography></Grid>
-                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>DIMENSIONS</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.dimensions} SQ FT</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>DIMENSIONS</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.dimensions > 0 ? `${executionScope.dimensions} SQ FT` : 'Not declared'}</Typography></Grid>
                                 <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: LABEL_TEXT, fontWeight: 800 }}>FINISH TIER</Typography><Typography variant="body1" fontWeight="900" sx={{ color: BODY_TEXT }}>{executionScope.finishTier.toUpperCase()}</Typography></Grid>
                             </Grid>
+
+                            {scopeGaps.length > 0 && !request.executionBrief && (
+                                <Alert severity="warning" sx={{ mt: 3 }} data-testid="design-scope-gaps">Incomplete scope. {scopeGaps.join(' ')}</Alert>
+                            )}
 
                             <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
 
@@ -360,6 +427,15 @@ function DesignRequestDetailContent() {
                                     </Grid>
                                 )}
                             </Grid>
+                            {request.executionBrief && (
+                                <Box sx={{ mt: 4 }}>
+                                    <DesignExecutionBriefView
+                                        brief={request.executionBrief}
+                                        chosenImageUrl={lockedImageUrl}
+                                        referenceImageUrl={referenceImages[0] || ''}
+                                    />
+                                </Box>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -406,6 +482,10 @@ function DesignRequestDetailContent() {
                                 </Stack>
                             )}
 
+                            {canPayForDesign && !lockedChoice?.optionId && (
+                                <Alert severity="warning" sx={{ mb: 2 }}>Choose a design and tap Choose this design. The engineer cannot be handed this job until one option is locked. The 15% deposit is the same for every option.</Alert>
+                            )}
+
                             {canPayForDesign && (
                                 <Stack spacing={2}>
                                     <Button variant="outlined" fullWidth onClick={handleLoadPaymentInstructions} disabled={processing}>
@@ -443,10 +523,24 @@ function DesignRequestDetailContent() {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText size={18} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: BODY_TEXT, overflowWrap: 'anywhere' }}>Admin: {designStatusLabel(request.adminHandoffStatus || 'REQUEST_CREATED', lang)}</Typography></Box>
                             </Stack>
 
+                            {canAdminHandoff && !lockedChoice?.imageStoragePath && (
+                                <Alert severity="warning" sx={{ mt: 2 }}>The tenant or owner must lock a chosen design before this job can go to the engineer.</Alert>
+                            )}
                             {canAdminHandoff && (
-                                <Button fullWidth variant="contained" onClick={handleAdminEngineerHandoff} disabled={processing} sx={{ mt: 3, bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
+                                <Button fullWidth variant="contained" onClick={handleAdminEngineerHandoff} disabled={processing || !lockedChoice?.imageStoragePath} sx={{ mt: 3, bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
                                     MARK READY FOR ENGINEER REVIEW
                                 </Button>
+                            )}
+                            {canMarkReady && (
+                                <Stack spacing={1.5} sx={{ mt: 3 }}>
+                                    <TextField label="Completion note for tenant and owner" value={completionNote} onChange={(event) => setCompletionNote(event.target.value.slice(0, 500))} multiline minRows={2} fullWidth />
+                                    <Button fullWidth variant="contained" onClick={handleMarkExecutionReady} disabled={processing} sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
+                                        MARK WORK READY FOR HANDOVER
+                                    </Button>
+                                </Stack>
+                            )}
+                            {request.status === 'EXECUTION_READY' && (
+                                <Alert severity="success" sx={{ mt: 2 }}>Work is done and ready for handover.{request.completionNote ? ` ${request.completionNote}` : ''}</Alert>
                             )}
                         </Paper>
                     </Stack>

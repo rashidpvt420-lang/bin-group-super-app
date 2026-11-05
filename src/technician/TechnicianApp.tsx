@@ -24,6 +24,8 @@ import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
+import TechnicianDesignBriefsPage from './pages/TechnicianDesignBriefsPage';
+import TechnicianDesignBriefPage from './pages/TechnicianDesignBriefPage';
 import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvidence';
 import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidence';
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
@@ -127,6 +129,8 @@ export default function TechnicianApp() {
                 <Route path="/dashboard/full" element={<TechnicianDashboardPage />} />
                 <Route path="/jobs" element={<TechnicianJobsPage />} />
                 <Route path="/job/:id" element={<TechnicianJobDetailPage />} />
+                <Route path="/designs" element={<TechnicianDesignBriefsPage />} />
+                <Route path="/design/:requestId" element={<TechnicianDesignBriefPage />} />
                 <Route path="/proof-readiness" element={<TechnicianProofReadinessPage />} />
                 <Route path="/chat" element={<TechnicianChatPage />} />
                 <Route path="/chat/:ticketId" element={<TechnicianChatPage />} />
