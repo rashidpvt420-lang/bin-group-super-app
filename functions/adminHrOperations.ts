@@ -1,9 +1,30 @@
 import { createHash } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { applyApprovedLeaveDeduction } from "./hrAutomation";
+import { inclusiveDays } from "./hrLeaveEngine";
+
+/**
+ * Official attendance and pay hours come from staff_shifts (clockInTime / clockOutTime).
+ * Payroll, getMyHours, and the attendance PDF all read that clock.
+ * staffAttendance is a status sheet only. It must not store a second set of hours.
+ */
+export const OFFICIAL_ATTENDANCE_HOURS_SOURCE = "staff_shifts";
+const AUTHORITATIVE_LEAVE_COLLECTION = "staffRequests";
+const LEAVE_REQUEST_TYPES = ["annual_leave", "sick_leave", "emergency_leave", "unpaid_leave"] as const;
+const LEAVE_TYPE_ALIASES: Record<string, (typeof LEAVE_REQUEST_TYPES)[number]> = {
+  ANNUAL: "annual_leave",
+  SICK: "sick_leave",
+  EMERGENCY: "emergency_leave",
+  UNPAID: "unpaid_leave",
+  ANNUAL_LEAVE: "annual_leave",
+  SICK_LEAVE: "sick_leave",
+  EMERGENCY_LEAVE: "emergency_leave",
+  UNPAID_LEAVE: "unpaid_leave",
+};
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -37,12 +58,71 @@ async function assertStaff(uid: string) {
   return snap.data() || {};
 }
 
+function canonicalLeaveType(value: unknown) {
+  const raw = clean(value).toUpperCase();
+  const mapped = LEAVE_TYPE_ALIASES[raw];
+  if (!mapped) throw new HttpsError("invalid-argument", "Choose annual, sick, emergency, or unpaid leave.");
+  return mapped;
+}
+
+function isLeaveRecord(data: Record<string, unknown>) {
+  const requestType = clean(data.requestType || data.leaveType);
+  return data.category === "leave" || (LEAVE_REQUEST_TYPES as readonly string[]).includes(requestType);
+}
+
+function millisOf(value: unknown) {
+  const candidate = value as { toMillis?: () => number } | null;
+  if (candidate && typeof candidate.toMillis === "function") return candidate.toMillis();
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function loadAuthoritativeLeaveRequests() {
+  const [byCategory, byType] = await Promise.all([
+    db.collection(AUTHORITATIVE_LEAVE_COLLECTION).where("category", "==", "leave").limit(100).get(),
+    db.collection(AUTHORITATIVE_LEAVE_COLLECTION).where("requestType", "in", [...LEAVE_REQUEST_TYPES]).limit(100).get(),
+  ]);
+  const docs = new Map<string, QueryDocumentSnapshot>();
+  for (const doc of [...byCategory.docs, ...byType.docs]) docs.set(doc.id, doc);
+  return { docs: [...docs.values()] };
+}
+
+function publicAttendanceRow(entry: any) {
+  return {
+    id: entry.id,
+    uid: entry.uid || null,
+    workDate: entry.workDate || null,
+    status: entry.status || null,
+    note: entry.note || null,
+    hoursSource: OFFICIAL_ATTENDANCE_HOURS_SOURCE,
+    shiftClockRecorded: Boolean(entry.shiftClockIn && entry.shiftClockOut),
+  };
+}
+
+function publicLeaveRow(entry: any) {
+  const status = clean(entry.status);
+  return {
+    id: entry.id,
+    uid: entry.uid || entry.userId || entry.technicianId || null,
+    leaveType: entry.leaveType || entry.requestType || null,
+    startDate: entry.startDate || null,
+    endDate: entry.endDate || null,
+    leaveDays: Number(entry.leaveDays) || null,
+    reason: entry.reason || null,
+    status,
+    open: ["pending_hr_review", "pending", "submitted"].includes(status.toLowerCase()),
+    source: entry.source || null,
+    createdAtMs: millisOf(entry.createdAt),
+    authoritativeCollection: AUTHORITATIVE_LEAVE_COLLECTION,
+  };
+}
+
 export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireHrAdmin(request);
   await requirePrivilegedMfaSession(request.auth);
   const [attendanceSnap, leaveSnap, documentSnap, uploadSnap] = await Promise.all([
     settleSection("attendance", db.collection("staffAttendance").orderBy("workDate", "desc").limit(100).get()),
-    settleSection("leaveRequests", db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get()),
+    settleSection("leaveRequests", loadAuthoritativeLeaveRequests()),
     settleSection("documents", db.collection("staffHrDocuments").orderBy("createdAt", "desc").limit(100).get()),
     settleSection("staffUploads", db.collection("staffDocuments").orderBy("createdAt", "desc").limit(100).get()),
   ]);
@@ -56,8 +136,8 @@ export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3",
     success: unavailable.length === 0,
     complete: unavailable.length === 0,
     unavailableSections: unavailable,
-    attendance: mapDocs(attendanceSnap),
-    leaveRequests: mapDocs(leaveSnap),
+    attendance: mapDocs(attendanceSnap).map(publicAttendanceRow),
+    leaveRequests: mapDocs(leaveSnap).map(publicLeaveRow).sort((a: any, b: any) => b.createdAtMs - a.createdAtMs),
     documents: mapDocs(documentSnap),
     // Documents staff uploaded themselves (staff vault). Metadata only; file bytes stay behind
     // Storage rules. HR can verify credential uploads from here instead of re-registering them.
@@ -85,24 +165,36 @@ export const adminRecordStaffAttendance = onCall({ cors: true, region: "europe-w
   if (!["PRESENT", "ABSENT", "ON_LEAVE", "SICK_LEAVE", "REMOTE", "OFF_DAY"].includes(status)) {
     throw new HttpsError("invalid-argument", "Unsupported attendance status.");
   }
+  if (clean(request.data?.checkIn) || clean(request.data?.checkOut) || request.data?.hours != null || request.data?.workedMinutes != null) {
+    throw new HttpsError("invalid-argument", "Attendance hours are not entered on this sheet. The shift clock is the only hours record, and nothing was saved.");
+  }
   await assertStaff(uid);
+  const shiftId = `SHIFT_${uid}_${workDate}`;
+  const shiftSnap = await db.collection("staff_shifts").doc(shiftId).get();
+  const shift = shiftSnap.data() || {};
+  const shiftClockIn = shift.clockInTime || null;
+  const shiftClockOut = shift.clockOutTime || null;
   const now = FieldValue.serverTimestamp();
   const recordId = `${uid}_${workDate}`;
   await db.collection("staffAttendance").doc(recordId).set({
     uid, workDate, status,
-    checkIn: clean(request.data?.checkIn) || null,
-    checkOut: clean(request.data?.checkOut) || null,
     note: clean(request.data?.note) || null,
     source: "ADMIN_HR_COMMAND",
+    hoursSource: OFFICIAL_ATTENDANCE_HOURS_SOURCE,
+    shiftId: shiftSnap.exists ? shiftId : null,
+    shiftClockIn,
+    shiftClockOut,
+    checkIn: FieldValue.delete(),
+    checkOut: FieldValue.delete(),
     recordedBy: actorId,
     updatedAt: now,
     createdAt: now,
   }, { merge: true });
   await db.collection("audit_logs").add({
     actorId, actorRole, action: "ADMIN_RECORD_STAFF_ATTENDANCE", targetType: "staffAttendance", targetId: recordId,
-    metadata: { uid, workDate, status }, createdAt: now,
+    metadata: { uid, workDate, status, hoursSource: OFFICIAL_ATTENDANCE_HOURS_SOURCE, shiftClockRecorded: Boolean(shiftClockIn && shiftClockOut) }, createdAt: now,
   });
-  return { success: true, recordId };
+  return { success: true, recordId, hoursSource: OFFICIAL_ATTENDANCE_HOURS_SOURCE, shiftClockRecorded: Boolean(shiftClockIn && shiftClockOut) };
 });
 
 export const adminCreateStaffLeaveRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
@@ -110,28 +202,38 @@ export const adminCreateStaffLeaveRequest = onCall({ cors: true, region: "europe
   await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   await assertStaff(uid);
-  const leaveType = clean(request.data?.leaveType, "ANNUAL").toUpperCase();
+  const leaveType = canonicalLeaveType(request.data?.leaveType);
   const startDate = clean(request.data?.startDate);
   const endDate = clean(request.data?.endDate);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
     throw new HttpsError("invalid-argument", "Leave dates must use YYYY-MM-DD.");
   }
+  const leaveDays = inclusiveDays(startDate, endDate);
+  if (leaveDays < 1 || leaveDays > 90) {
+    throw new HttpsError("invalid-argument", "Leave must be 1 to 90 days. The day count is calculated on the server.");
+  }
   const now = FieldValue.serverTimestamp();
-  const ref = db.collection("staffLeaveRequests").doc();
+  const ref = db.collection(AUTHORITATIVE_LEAVE_COLLECTION).doc();
   await ref.set({
-    uid, leaveType, startDate, endDate,
+    uid, userId: uid, technicianId: uid,
+    requestType: leaveType,
+    leaveType,
+    category: "leave",
+    requestLabel: leaveType.replace(/_/g, " "),
+    startDate, endDate, leaveDays,
     reason: clean(request.data?.reason) || null,
-    status: "PENDING",
+    status: "pending_hr_review",
     source: "ADMIN_HR_COMMAND",
     createdBy: actorId,
+    paperless: true,
     createdAt: now,
     updatedAt: now,
   });
   await db.collection("audit_logs").add({
-    actorId, actorRole, action: "ADMIN_CREATE_STAFF_LEAVE", targetType: "staffLeaveRequests", targetId: ref.id,
-    metadata: { uid, leaveType, startDate, endDate }, createdAt: now,
+    actorId, actorRole, action: "ADMIN_CREATE_STAFF_LEAVE", targetType: AUTHORITATIVE_LEAVE_COLLECTION, targetId: ref.id,
+    metadata: { uid, leaveType, startDate, endDate, leaveDays }, createdAt: now,
   });
-  return { success: true, requestId: ref.id };
+  return { success: true, requestId: ref.id, leaveDays };
 });
 
 export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
@@ -140,22 +242,41 @@ export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe
   const requestId = clean(request.data?.requestId);
   const decision = clean(request.data?.decision).toUpperCase();
   if (!["APPROVED", "REJECTED", "CANCELLED"].includes(decision)) throw new HttpsError("invalid-argument", "Invalid leave decision.");
-  const ref = db.collection("staffLeaveRequests").doc(requestId);
+  const ref = db.collection(AUTHORITATIVE_LEAVE_COLLECTION).doc(requestId);
   const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "Leave request not found.");
+  if (!snap.exists) {
+    const legacy = await db.collection("staffLeaveRequests").doc(requestId).get();
+    const now = FieldValue.serverTimestamp();
+    await db.collection("audit_logs").add({
+      actorId, actorRole, action: "ADMIN_REVIEW_STAFF_LEAVE_REFUSED", targetType: AUTHORITATIVE_LEAVE_COLLECTION, targetId: requestId,
+      metadata: { decision, reason: legacy.exists ? "legacy_staffLeaveRequests_not_authoritative" : "not_found" }, createdAt: now,
+    });
+    throw new HttpsError(
+      legacy.exists ? "failed-precondition" : "not-found",
+      legacy.exists
+        ? "This is not the technician leave record. Approval was not saved and the balance was not changed."
+        : "Leave request not found. Nothing was approved.",
+    );
+  }
+  const data = snap.data() || {};
+  if (!isLeaveRecord(data)) {
+    throw new HttpsError("failed-precondition", "This record is not a leave request. Nothing was approved and the balance was not changed.");
+  }
+  const status = decision === "APPROVED" ? "approved" : decision === "REJECTED" ? "rejected" : "cancelled";
   const now = FieldValue.serverTimestamp();
   await ref.set({
-    status: decision,
+    status,
     reviewNote: clean(request.data?.reviewNote) || null,
     reviewedBy: actorId,
     reviewedAt: now,
     updatedAt: now,
   }, { merge: true });
+  if (decision === "APPROVED") await applyApprovedLeaveDeduction(requestId);
   await db.collection("audit_logs").add({
-    actorId, actorRole, action: "ADMIN_REVIEW_STAFF_LEAVE", targetType: "staffLeaveRequests", targetId: requestId,
-    metadata: { decision }, createdAt: now,
+    actorId, actorRole, action: "ADMIN_REVIEW_STAFF_LEAVE", targetType: AUTHORITATIVE_LEAVE_COLLECTION, targetId: requestId,
+    metadata: { decision, status, uid: data.uid || data.userId || data.technicianId || null }, createdAt: now,
   });
-  return { success: true, requestId, decision };
+  return { success: true, requestId, decision, authoritativeCollection: AUTHORITATIVE_LEAVE_COLLECTION };
 });
 
 const HR_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
