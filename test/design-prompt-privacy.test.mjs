@@ -10,6 +10,7 @@ const compat = readFileSync('functions/aiDesignStudioCompat.ts', 'utf8');
 const page = readFileSync('src/pages/DesignRequestDetailPage.tsx', 'utf8');
 const ownerPage = readFileSync('apps/owner-app/src/pages/DesignRequestDetailPage.tsx', 'utf8');
 const adminPage = readFileSync('apps/admin-panel/src/pages/admin/DesignStudioAdminPage.tsx', 'utf8');
+const identityHardener = readFileSync('scripts/harden-property-identity-registry-rules.mjs', 'utf8');
 
 test('image prompt is split off the client design record', () => {
   const split = fields.splitDesignPrompt({
@@ -37,4 +38,7 @@ test('design records and client screens do not keep the raw image prompt', () =>
   assert.match(adminPage, /written image prompt is not shown/);
   assert.match(rules, /match \/design_generation_prompts\/\{promptId\} \{[\s\S]*?allow read, create, update, delete: if false;/);
   assert.match(rules, /'design_generation_prompts'/);
+  assert.match(identityHardener, /readWithDesignPrompt/);
+  assert.match(identityHardener, /property_identity_registry', 'design_generation_prompts'/);
+  assert.match(rules, /'payroll_entries', 'property_identity_registry', 'design_generation_prompts'/);
 });
