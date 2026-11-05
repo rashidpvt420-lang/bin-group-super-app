@@ -469,7 +469,7 @@ export const submitAIDesignRequest = onCall({
       quoteTotal: quote.finalTotal,
       mobilizationAmount: quote.mobilizationAmount,
     };
-    const concepts = generatedOptions.map((option, index) => ({
+    const generatedConcepts = generatedOptions.map((option, index) => ({
       ...conceptBase,
       id: index === 0 ? "primary" : option.render.option.id,
       optionLabel: option.render.option.label,
@@ -479,8 +479,8 @@ export const submitAIDesignRequest = onCall({
       providerRequestId: option.render.providerRequestId || null,
       prompt: buildOptionPrompt(prompt, DESIGN_OPTION_DIRECTIONS.findIndex((d) => d.id === option.render.option.id)),
     }));
-    const optionPrompts = concepts.map((concept) => ({ id: concept.id, prompt: concept.prompt }));
-    const clientConcepts = concepts.map(({ prompt: _prompt, ...rest }) => rest);
+    const optionPrompts = generatedConcepts.map((concept) => ({ id: concept.id, prompt: concept.prompt }));
+    const concepts = generatedConcepts.map(({ prompt: _prompt, ...rest }) => rest);
     const now = admin.firestore.FieldValue.serverTimestamp();
     const requestPayload = {
       id: requestId,
@@ -503,7 +503,7 @@ export const submitAIDesignRequest = onCall({
       designObjective: cleanText(payload.designObjective, "refresh", 120),
       scope: { ...scope, referenceImagePaths: [referencePath], imageCount: 1 },
       quote,
-      concepts: clientConcepts,
+      concepts,
       conceptCount: concepts.length,
       selectedConceptId: null,
       executionDetails,
@@ -548,7 +548,7 @@ export const submitAIDesignRequest = onCall({
         createdAt: now,
         updatedAt: now,
       });
-      for (const option of clientConcepts) {
+      for (const option of concepts) {
         transaction.create(db.collection("design_concepts").doc(`${requestId}_${option.id}`), {
           requestId,
           userId: uid,
