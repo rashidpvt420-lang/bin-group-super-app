@@ -72,6 +72,7 @@ export * from "./homeDiscovery";
 // exporting the separately reviewed Owner/Tenant and Admin replacement callables.
 export * from "./aiDesignStudioLaunchHold";
 export * from "./aiDesignStudio";
+export * from "./designPromptPrivacy";
 export * from "./aiDesignStudioCompat";
 // Explicit aliases replace the legacy hard-failing implementations re-exported
 // from index.ts without creating duplicate public callable names.

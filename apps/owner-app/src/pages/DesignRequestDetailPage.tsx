@@ -29,7 +29,16 @@ export default function DesignRequestDetailPage() {
         if (!id) return;
         const unsub = onSnapshot(doc(db, 'design_requests', id), (snap) => {
             if (snap.exists()) {
-                setRequest({ id: snap.id, ...snap.data() });
+                const data = snap.data() || {};
+                const { prompt: _prompt, conceptPrompt: _conceptPrompt, customPrompt: _customPrompt, imagePrompt: _imagePrompt, providerPrompt: _providerPrompt, ...safe } = data;
+                const concepts = Array.isArray(safe.concepts)
+                    ? safe.concepts.map((concept: any) => {
+                        if (!concept || typeof concept !== 'object') return concept;
+                        const { prompt: _optionPrompt, conceptPrompt: _optionConceptPrompt, customPrompt: _optionCustomPrompt, imagePrompt: _optionImagePrompt, providerPrompt: _optionProviderPrompt, ...rest } = concept;
+                        return rest;
+                    })
+                    : safe.concepts;
+                setRequest({ id: snap.id, ...safe, concepts });
             }
             setLoading(false);
         });

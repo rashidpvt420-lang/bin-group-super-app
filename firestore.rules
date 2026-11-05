@@ -1994,6 +1994,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Image-generation prompts stay on the server for audit and regeneration.
+    // Owner, tenant, and admin clients cannot read them. The wildcard admin read below excludes this collection.
+    match /design_generation_prompts/{promptId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /design_approvals/{approvalId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid));
       allow create: if false;
@@ -2622,7 +2628,7 @@ service cloud.firestore {
       }
     }
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
@@ -2641,6 +2647,7 @@ service cloud.firestore {
           'telemetry_logs',
           'payment_transactions',
           'design_requests',
+          'design_generation_prompts',
           'design_quotes',
           'design_approvals',
           'design_receipt_registry',
@@ -2767,6 +2774,7 @@ service cloud.firestore {
           'telemetry_logs',
           'payment_transactions',
           'design_requests',
+          'design_generation_prompts',
           'design_quotes',
           'design_approvals',
           'design_receipt_registry',

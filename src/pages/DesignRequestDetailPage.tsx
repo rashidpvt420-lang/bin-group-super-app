@@ -20,6 +20,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
 import { designStatusLabel, honestDesignStatus } from '../lib/designStatusLabels';
+import { stripDesignPrompt } from '../lib/stripDesignPrompt';
 
 // High-contrast text on the dark cards (>= 4.5:1, WCAG AA). Theme textSecondary is too dark here.
 const LABEL_TEXT = '#D1D5DB';
@@ -118,7 +119,7 @@ function DesignRequestDetailContent() {
             doc(db, 'design_requests', id),
             (snap) => {
                 if (snap.exists()) {
-                    setRequest({ id: snap.id, ...snap.data() });
+                    setRequest(stripDesignPrompt({ id: snap.id, ...snap.data() }));
                 } else setRequest(null);
                 setLoading(false);
             },

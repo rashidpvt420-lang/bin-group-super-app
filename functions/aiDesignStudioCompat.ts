@@ -185,7 +185,16 @@ export const generateDesignConceptCompat = onCall({
     };
 
     await settleAiUsageQuota(quota, true);
-    await db.collection("design_requests").add({
+    const requestRef = db.collection("design_requests").doc();
+    const batch = db.batch();
+    batch.set(db.collection("design_generation_prompts").doc(requestRef.id), {
+      requestId,
+      sourceCollection: "design_requests",
+      sourceId: requestRef.id,
+      conceptPrompt: prompt,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    batch.set(requestRef, {
       userId: request.auth.uid,
       createdBy: request.auth.uid,
       createdByRole: quota.role,
@@ -198,7 +207,6 @@ export const generateDesignConceptCompat = onCall({
       inputImageBytes: reference.bytes,
       inputImageSha256: reference.sha256,
       outputMimeType: result.mimeType,
-      prompt,
       scope: concept.scope,
       designStyle: concept.designStyle,
       status: "AI_CONCEPT_READY",
@@ -206,6 +214,7 @@ export const generateDesignConceptCompat = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    await batch.commit();
 
     return {
       status: "SUCCESS",

@@ -32,7 +32,6 @@ export type DesignConcept = {
   id: string;
   title: string;
   style: string;
-  prompt: string;
   scopeSummary: string;
   beforeImageUrl: string;
   afterImageUrl: string;
@@ -171,7 +170,6 @@ export function buildDesignConcepts(input: {
   quoteTotal?: number;
   mobilizationAmount?: number;
 }): DesignConcept[] {
-  const basePrompt = buildConceptPrompt(input);
   const beforeImage = input.uploadedImageUrl || '';
   const executionDetails = buildDesignExecutionDetails(input);
   const base = {
@@ -188,9 +186,9 @@ export function buildDesignConcepts(input: {
   };
 
   return [
-    { ...base, id: 'premium_functional', title: 'Premium Functional Concept', style: input.designStyle, prompt: `${basePrompt}. Focus on functionality and premium finishes.`, scopeSummary: 'Standard upgrades with durable, high-quality materials.' },
-    { ...base, id: 'luxury_signature', title: 'Luxury Signature Concept', style: input.designStyle, prompt: `${basePrompt}. Focus on absolute luxury, bespoke elements, and signature lighting.`, scopeSummary: 'Bespoke design, premium lighting, high-end materials.' },
-    { ...base, id: 'cost_controlled', title: 'Cost-Controlled Upgrade', style: input.designStyle, prompt: `${basePrompt}. Focus on impactful visual changes while retaining structural integrity to minimize cost.`, scopeSummary: 'Smart cosmetic upgrades, retain core structure, impactful finishes.' },
+    { ...base, id: 'premium_functional', title: 'Premium Functional Concept', style: input.designStyle, scopeSummary: 'Standard upgrades with durable, high-quality materials.' },
+    { ...base, id: 'luxury_signature', title: 'Luxury Signature Concept', style: input.designStyle, scopeSummary: 'Bespoke design, premium lighting, high-end materials.' },
+    { ...base, id: 'cost_controlled', title: 'Cost-Controlled Upgrade', style: input.designStyle, scopeSummary: 'Smart cosmetic upgrades, retain core structure, impactful finishes.' },
   ];
 }
 

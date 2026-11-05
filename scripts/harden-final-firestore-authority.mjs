@@ -10,6 +10,7 @@ const liveLocationReadCatchAll = "      allow read: if collection != 'tickets' &
 const invoiceRegistryReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
 const payrollReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();";
 const propertyIdentityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
+const designPromptReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts']) && hasAdminClaim();";
 const readCatchAllCandidates = [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll, invoiceRegistryReadCatchAll, liveLocationReadCatchAll];
 const legacyWriteList = `          'system_secrets',
           'users',
@@ -261,13 +262,18 @@ text = text.replace(
 for (const candidate of readCatchAllCandidates) {
   if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
 }
-const canonicalReadCatchAll = text.includes(propertyIdentityReadCatchAll)
-  ? propertyIdentityReadCatchAll
-  : text.includes(payrollReadCatchAll)
-    ? payrollReadCatchAll
-    : text.includes(invoiceRegistryReadCatchAll)
-      ? invoiceRegistryReadCatchAll
-      : '';
+if (text.includes(propertyIdentityReadCatchAll) && !text.includes(designPromptReadCatchAll)) {
+  text = text.replace(propertyIdentityReadCatchAll, designPromptReadCatchAll);
+}
+const canonicalReadCatchAll = text.includes(designPromptReadCatchAll)
+  ? designPromptReadCatchAll
+  : text.includes(propertyIdentityReadCatchAll)
+    ? propertyIdentityReadCatchAll
+    : text.includes(payrollReadCatchAll)
+      ? payrollReadCatchAll
+      : text.includes(invoiceRegistryReadCatchAll)
+        ? invoiceRegistryReadCatchAll
+        : '';
 if (!canonicalReadCatchAll) {
   throw new Error('[final-firestore-authority] global read catch-all could not be bounded with canonical server-only exclusions');
 }
