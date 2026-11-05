@@ -289,7 +289,7 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
 
   const [attendanceSnap, leaveSnap, documentSnap, payrollSnap] = await Promise.all([
     settleSection("attendance", db.collection("staffAttendance").where("uid", "==", uid).limit(120).get()),
-    settleSection("leaveRequests", db.collection("staffLeaveRequests").where("uid", "==", uid).limit(120).get()),
+    settleSection("leaveRequests", db.collection("staffRequests").where("uid", "==", uid).limit(200).get()),
     settleSection("documents", db.collection("staffHrDocuments").where("uid", "==", uid).limit(120).get()),
     includePrivate ? settleSection("payroll", readPayrollForStaff(db, uid)) : Promise.resolve({ section: "payroll", value: null, failed: false }),
   ]);
@@ -303,16 +303,18 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
       id: entry.id,
       workDate: entry.workDate || null,
       status: entry.status || null,
-      checkIn: entry.checkIn || null,
-      checkOut: entry.checkOut || null,
       note: entry.note || null,
+      hoursSource: "staff_shifts",
+      shiftClockRecorded: Boolean(entry.shiftClockIn && entry.shiftClockOut),
     }));
+  const leaveTypes = new Set(["annual_leave", "sick_leave", "emergency_leave", "unpaid_leave"]);
   const leaveRequests = mapDocs(leaveSnap)
+    .filter((entry: any) => entry.category === "leave" || leaveTypes.has(clean(entry.requestType)) || leaveTypes.has(clean(entry.leaveType)))
     .sort((a: any, b: any) => String(serializeDate(b.createdAt) || "").localeCompare(String(serializeDate(a.createdAt) || "")))
     .slice(0, 60)
     .map((entry: any) => ({
       id: entry.id,
-      leaveType: entry.leaveType || null,
+      leaveType: entry.leaveType || entry.requestType || null,
       startDate: entry.startDate || null,
       endDate: entry.endDate || null,
       reason: entry.reason || null,
