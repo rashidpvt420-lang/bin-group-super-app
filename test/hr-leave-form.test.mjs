@@ -42,8 +42,9 @@ test('callable stores validated dates and day count instead of today/today', () 
 test('HR page has the leave form with dates, day count and certificate, and keeps the free-text box', () => {
   const page = readFileSync('src/technician/pages/TechnicianHRPageV2.tsx', 'utf8');
   assert.match(page, /data-testid="leave-request-form"/);
-  assert.match(page, /type="date" label="Start date"/);
-  assert.match(page, /type="date" label="End date"/);
+  // Labels are translated through the HR string helper (PR HR H), so accept the plain or ht('...') form.
+  assert.match(page, /type="date" label=(?:"Start date"|\{ht\('Start date'\)\})/);
+  assert.match(page, /type="date" label=(?:"End date"|\{ht\('End date'\)\})/);
   assert.match(page, /data-testid="leave-day-count"/);
   assert.match(page, /medical_certificate\/\$\{Date\.now\(\)\}/);
   assert.match(page, /CREATE AI HR CASE/);
