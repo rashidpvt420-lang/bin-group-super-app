@@ -570,6 +570,12 @@ export const createStaffHrCase = onCall(
             leaveForm = checked;
         }
         const result: typeof classified = leaveForm ? { ...classified, requestType: leaveForm.leaveType as typeof classified.requestType, category: "leave" } : classified;
+        if (!leaveForm && result.requestType === "overtime") {
+            throw new HttpsError(
+                "failed-precondition",
+                "This chat does not create a payable overtime claim, and no hours were saved. During an active shift, submit 1 to 120 minutes with the job evidence.",
+            );
+        }
         const caseId = stableCaseId(uid, message, request.data?.idempotencyKey);
         const requestRef = db.collection("staffRequests").doc(caseId);
         const conversationRef = db.collection("hrAiConversations").doc(requestRef.id);
@@ -615,7 +621,6 @@ export const createStaffHrCase = onCall(
                 certificatePath: leaveForm.certificatePath,
                 leaveFormSource: "SERVER_VALIDATED_LEAVE_FORM",
             } : {}),
-            hours: 0,
             createdAt: now,
             updatedAt: now,
         };
