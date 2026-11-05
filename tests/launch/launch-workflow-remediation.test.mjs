@@ -498,7 +498,7 @@ test('a locked design can change only through an audited revision, then completi
     assert.match(notification.body, /d1/);
     assert.match(notification.body, /Option 2 - Light and airy/);
     assert.match(notification.body, /light and airy picture/);
-    assert.match(notification.link, new RegExp(`/${role}/design-studio/request/d1`));
+    assert.equal(notification.link, `/${role}/design-studio/request/d1`);
   }
   assert.equal(f.records.get('audit_logs/design_execution_ready_d1').action, 'DESIGN_EXECUTION_MARKED_READY');
   assert.equal([...f.records.keys()].some((key) => key.startsWith('contracts/')), false);
