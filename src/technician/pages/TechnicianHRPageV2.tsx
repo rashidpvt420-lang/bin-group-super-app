@@ -11,18 +11,17 @@ import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngi
 import HrBi, { useHrText } from '../components/HrBi';
 import TechnicianLanguagePicker from '../components/TechnicianLanguagePicker';
 import MyHoursPanel from '../components/MyHoursPanel';
+import MyPayslipsPanel from '../components/MyPayslipsPanel';
 
 const quickPrompts = [
   'I need annual leave next week',
   'I am sick and going to hospital',
-  'I worked overtime yesterday',
   'My salary is missing deduction issue',
   'I need passport visa Emirates ID update',
   'My room AC and water problem in camp',
   'I need helmet gloves uniform tools',
   'There is unsafe electric shock accident risk',
   'Supervisor pressure unfair treatment complaint',
-  'مجھے اوور ٹائم چاہیے',
   'मुझे छुट्टी चाहिए',
   'എനിക്ക് sick leave വേണം',
   'Kailangan ko po ng payslip',
@@ -177,7 +176,6 @@ export default function TechnicianHRPageV2() {
         startDate: String(leave?.startDate || new Date().toISOString().split('T')[0]),
         endDate: String(leave?.endDate || new Date().toISOString().split('T')[0]),
         ...(leave ? { leaveType: leave.leaveType, leaveDays: leaveDayCount(String(leave.startDate), String(leave.endDate)) } : {}),
-        hours: 0,
       };
       const localCase = { ...base, createdAtLocal: now, optimistic: true };
       setRequests((prev) => sortByNewest([localCase, ...prev.filter((item) => item.id !== optimisticId)]));
@@ -328,7 +326,8 @@ export default function TechnicianHRPageV2() {
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><HrBi en={"People AI Intent Router"} ar={"مساعد طلبات الموظفين"} /></Typography></Stack>
             <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language" sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
             <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'CREATE AI HR CASE'}</Button>
-            {answer && <Alert severity={answer.includes('could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
+            <Alert data-testid="overtime-chat-not-payable" severity="info" sx={{ mt: 2 }}>{ht('Overtime pay is not requested in this chat. During an active shift, claim 1 to 120 minutes with the job evidence.')}</Alert>
+            {answer && <Alert severity={answer.includes('could not') || answer.includes('payable overtime') ? 'warning' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
           </Paper>
         </Grid>
         <Grid item xs={12} md={5}>
@@ -340,6 +339,7 @@ export default function TechnicianHRPageV2() {
       </Grid>
 
       <MyHoursPanel />
+      <MyPayslipsPanel />
 
       <Paper data-testid="leave-request-form" sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Sun color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><HrBi en={"Leave Request"} ar={"طلب إجازة"} /></Typography></Stack>
