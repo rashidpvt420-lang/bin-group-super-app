@@ -50,7 +50,7 @@ test('payroll rows for a staff member are found even when the collection has mor
 });
 
 test('a failed staff-details section is reported, not returned as an empty list with success:true', async () => {
-  const restore = failCollection('staffLeaveRequests');
+  const restore = failCollection('staffRequests');
   try {
     const result = await call(adminGetStaffDetails, hrAdmin, { uid: 'tech_n25' });
     assert.equal(result.success, false);
@@ -68,7 +68,7 @@ test('a failed HR operations section is reported; all sections failing is an err
   } finally { restoreOne(); }
   const original = db.collection;
   db.collection = function patched(name) {
-    if (!['staffAttendance', 'staffLeaveRequests', 'staffHrDocuments'].includes(name)) return original.call(this, name);
+    if (!['staffAttendance', 'staffRequests', 'staffHrDocuments'].includes(name)) return original.call(this, name);
     const failing = { get: async () => { throw new Error('simulated outage'); } };
     for (const method of ['where', 'orderBy', 'limit']) failing[method] = () => failing;
     return failing;

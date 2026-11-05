@@ -13,7 +13,8 @@ test('admin leave approval updates the technician staffRequests record and recal
   assert.match(hr, /await applyApprovedLeaveDeduction\(requestId\)/);
   assert.match(hr, /legacy_staffLeaveRequests_not_authoritative/);
   assert.match(hr, /This is not the technician leave record/);
-  assert.doesNotMatch(hr, /collection\("staffLeaveRequests"\)\.doc\(\)/);
+  assert.match(hr, /collection\("staffLeaveRequests"\)\.doc\(requestId\)\.get\(\)/);
+  assert.doesNotMatch(hr, /collection\("staffLeaveRequests"\)\.doc\(\)\.set/);
   assert.doesNotMatch(hr, /targetType: "staffLeaveRequests"/);
   assert.match(automation, /export async function applyApprovedLeaveDeduction/);
   assert.match(automation, /await recordLeaveDeduction\(requestId, snap\.data\(\) \|\| \{\}\)/);
