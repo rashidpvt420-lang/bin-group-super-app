@@ -3,7 +3,7 @@ import { Alert, Box, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, 
 import { Clock } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import Bi from '../../components/Bi';
+import HrBi, { useHrText } from './HrBi';
 
 const dubaiMonth = (offset = 0) => {
   const now = new Date(Date.now() + 4 * 3600 * 1000);
@@ -18,6 +18,7 @@ const hm = (minutes?: number) => {
 
 /** Staff member's own hours and overtime proof, from the server hours engine (getMyHours). */
 export default function MyHoursPanel() {
+  const { ht } = useHrText();
   const [month, setMonth] = useState(dubaiMonth());
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
@@ -43,22 +44,22 @@ export default function MyHoursPanel() {
     <Paper data-testid="my-hours-panel" sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
         <Clock color={binThemeTokens.gold} />
-        <Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"My Hours"} ar={"ساعات عملي"} /></Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950"><HrBi en={"My Hours"} ar={"ساعات عملي"} /></Typography>
         <TextField select size="small" value={month} onChange={(e) => setMonth(e.target.value)} sx={{ ml: 'auto', minWidth: 140, '& .MuiInputBase-root': { color: '#111827' } }}>
           {[0, -1, -2].map((o) => <MenuItem key={o} value={dubaiMonth(o)}>{dubaiMonth(o)}</MenuItem>)}
         </TextField>
       </Stack>
       <Typography data-testid="my-roster" variant="body2" color="rgba(255,255,255,0.7)" sx={{ mb: 2 }}>
-        <Bi en={"My roster (GST): "} ar={"جدول نوباتي: "} />
+        <HrBi en={"My roster (GST): "} ar={"جدول نوباتي: "} />
         {roster
           ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => `${d} ${roster[String(i)] ? `${roster[String(i)]!.start}-${roster[String(i)]!.end}` : 'off'}`).join(' · ')
-          : <Bi en={"Not set by HR yet"} ar={"لم يحدده قسم الموارد البشرية بعد"} />}
+          : <HrBi en={"Not set by HR yet"} ar={"لم يحدده قسم الموارد البشرية بعد"} />}
       </Typography>
       {error && <Alert severity="error">{error}</Alert>}
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-        <Chip label={`Worked ${hm(totals.workedMinutes)}`} />
-        <Chip label={`Clocked overtime ${hm(totals.clockedOvertimeMinutes)}`} />
-        <Chip label={`Approved overtime ${hm(totals.payableOvertimeMinutes)}`} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
+        <Chip label={`${ht('Worked')} ${hm(totals.workedMinutes)}`} />
+        <Chip label={`${ht('Clocked overtime')} ${hm(totals.clockedOvertimeMinutes)}`} />
+        <Chip label={`${ht('Approved overtime')} ${hm(totals.payableOvertimeMinutes)}`} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
       </Stack>
       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', mb: 1 }}>
         Overtime is paid only when it is on the clock (max 2 hours a day) and HR approves it. Times are Dubai time (GST).
@@ -66,7 +67,7 @@ export default function MyHoursPanel() {
       <Table size="small">
         <TableHead><TableRow>{['DATE', 'IN', 'OUT', 'WORKED', 'OVERTIME', 'NOTE'].map((h) => <TableCell key={h} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{h}</TableCell>)}</TableRow></TableHead>
         <TableBody>
-          {(data?.days || []).length === 0 && <TableRow><TableCell colSpan={6} sx={{ color: 'rgba(255,255,255,0.5)' }}>No shifts this month.</TableCell></TableRow>}
+          {(data?.days || []).length === 0 && <TableRow><TableCell colSpan={6} sx={{ color: 'rgba(255,255,255,0.5)' }}>{ht('No shifts this month.')}</TableCell></TableRow>}
           {(data?.days || []).map((d: any) => (
             <TableRow key={d.shiftDate}>
               <TableCell sx={{ color: '#fff' }}>{d.shiftDate}</TableCell>
@@ -74,13 +75,13 @@ export default function MyHoursPanel() {
               <TableCell sx={{ color: '#fff' }}>{time(d.clockOutAt)}</TableCell>
               <TableCell sx={{ color: '#fff' }}>{d.workedMinutes !== undefined ? hm(d.workedMinutes) : '—'}</TableCell>
               <TableCell sx={{ color: '#fff' }}>{d.overtimeMinutes ? hm(d.overtimeMinutes) : '—'}</TableCell>
-              <TableCell>{d.missedClockOut ? <Chip size="small" color="error" label="MISSED CLOCK-OUT" /> : d.restDay ? <Chip size="small" label="REST DAY" /> : null}</TableCell>
+              <TableCell>{d.missedClockOut ? <Chip size="small" color="error" label={ht('MISSED CLOCK-OUT')} /> : d.restDay ? <Chip size="small" label={ht('REST DAY')} /> : null}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-      <Typography variant="subtitle2" color="#FFF" fontWeight={900} sx={{ mt: 3, mb: 1 }}><Bi en={"My overtime claims and proof"} ar={"طلبات العمل الإضافي والإثبات"} /></Typography>
-      {(data?.claims || []).length === 0 && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>No overtime claims this month.</Typography>}
+      <Typography variant="subtitle2" color="#FFF" fontWeight={900} sx={{ mt: 3, mb: 1 }}><HrBi en={"My overtime claims and proof"} ar={"طلبات العمل الإضافي والإثبات"} /></Typography>
+      {(data?.claims || []).length === 0 && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>{ht('No overtime claims this month.')}</Typography>}
       {(data?.claims || []).map((c: any) => {
         const job = c.proof?.job;
         const loc = job?.arrivalLocation;
@@ -89,8 +90,8 @@ export default function MyHoursPanel() {
             <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
               <Typography color="#fff" fontWeight={900}>{c.shiftDate}</Typography>
               <Chip size="small" label={c.status} color={c.status === 'APPROVED' ? 'success' : c.status === 'REJECTED' ? 'error' : 'default'} />
-              <Chip size="small" label={`Claimed ${hm(c.estimatedMinutes)}`} />
-              {c.approvedMinutes > 0 && <Chip size="small" label={`Approved ${hm(c.approvedMinutes)}`} />}
+              <Chip size="small" label={`${ht('Claimed')} ${hm(c.estimatedMinutes)}`} />
+              {c.approvedMinutes > 0 && <Chip size="small" label={`${ht('Approved')} ${hm(c.approvedMinutes)}`} />}
             </Stack>
             <Typography variant="caption" component="div" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
               Shift clock-in {time(c.proof?.shift?.clockInAt)}{c.jobId ? ` · Job ${c.jobId}: arrived ${time(job?.arrivedAt)}, started ${time(job?.startedAt)}, done ${time(job?.completedAt)}` : ''}

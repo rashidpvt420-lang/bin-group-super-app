@@ -57,6 +57,7 @@ export const TECH_STRINGS: Record<string, Row> = {
 };
 
 const STORAGE_KEY = 'bin_tech_language';
+const LANGUAGE_EVENT = 'bin-tech-language-change';
 
 export function isTechLang(value: unknown): value is TechLang {
   return TECH_LANGUAGES.some((l) => l.code === value);
@@ -87,9 +88,17 @@ export function useTechnicianLanguage(appLang: string) {
   useEffect(() => {
     try { if (!window.localStorage.getItem(STORAGE_KEY)) setLangState(appLang === 'ar' ? 'ar' : 'en'); } catch { /* ignore */ }
   }, [appLang]);
+  // Keep every mounted technician screen/component in sync when the language is changed in one place.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onChange = (e: Event) => { const next = (e as CustomEvent).detail; if (isTechLang(next)) setLangState(next); };
+    window.addEventListener(LANGUAGE_EVENT, onChange);
+    return () => window.removeEventListener(LANGUAGE_EVENT, onChange);
+  }, []);
   const setLang = useCallback((next: TechLang) => {
     setLangState(next);
     try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* ignore */ }
+    try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { /* ignore */ }
   }, []);
   const tt = useCallback((key: string, fallbackEn: string) => techT(lang, key, fallbackEn), [lang]);
   return { lang, setLang, tt, isRTL: techDir(lang) === 'rtl', locale: techLocale(lang) };
