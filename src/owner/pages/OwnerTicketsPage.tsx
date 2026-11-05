@@ -173,9 +173,14 @@ export default function OwnerTicketsPage() {
                                                 <Chip
                                                     size="small"
                                                     icon={<Clock size={11} />}
-                                                    label={`~${etaMin} min (estimate)`}
+                                                    label={`~${etaMin} min rough estimate`}
                                                     sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }}
                                                 />
+                                            )}
+                                            {etaMin !== null && (
+                                                <Typography variant="caption" data-testid="owner-eta-rough-estimate" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
+                                                    Straight-line estimate. Not a road route and not a vehicle type.
+                                                </Typography>
                                             )}
                                             <Chip
                                                 size="small"
