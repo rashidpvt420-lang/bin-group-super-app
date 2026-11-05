@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import { splitDesignPrompt } from "./designPromptFields";
