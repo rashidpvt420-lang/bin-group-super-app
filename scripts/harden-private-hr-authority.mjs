@@ -10,6 +10,7 @@ const liveLocationRead = "      allow read: if collection != 'tickets' && collec
 const invoiceRegistryRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
 const payrollRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();";
 const propertyIdentityRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
+const designPromptRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts']) && hasAdminClaim();";
 
 const legacyWritePrefix = `          'system_secrets',
           'users',
@@ -86,7 +87,8 @@ if (
   !source.includes(liveLocationRead) &&
   !source.includes(invoiceRegistryRead) &&
   !source.includes(payrollRead) &&
-  !source.includes(propertyIdentityRead)
+  !source.includes(propertyIdentityRead) &&
+  !source.includes(designPromptRead)
 ) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }

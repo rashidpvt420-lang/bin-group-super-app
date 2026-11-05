@@ -81,6 +81,7 @@ const liveLocationAdminRead = "allow read: if collection != 'tickets' && collect
 const invoiceRegistryAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
 const payrollAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();";
 const propertyIdentityAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
+const designPromptAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts']) && hasAdminClaim();";
 if (rules.includes(legacyAdminRead)) {
   rules = rules.replace(legacyAdminRead, hardenedAdminRead);
 } else if (
@@ -91,7 +92,8 @@ if (rules.includes(legacyAdminRead)) {
   !rules.includes(liveLocationAdminRead) &&
   !rules.includes(invoiceRegistryAdminRead) &&
   !rules.includes(payrollAdminRead) &&
-  !rules.includes(propertyIdentityAdminRead)
+  !rules.includes(propertyIdentityAdminRead) &&
+  !rules.includes(designPromptAdminRead)
 ) {
   throw new Error('Unable to harden generic admin read fallback for Broker KYC rate limits.');
 }

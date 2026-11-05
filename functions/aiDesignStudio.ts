@@ -481,7 +481,7 @@ export const submitAIDesignRequest = onCall({
       quoteTotal: quote.finalTotal,
       mobilizationAmount: quote.mobilizationAmount,
     };
-    const concepts = generatedOptions.map((option, index) => ({
+    const generatedConcepts = generatedOptions.map((option, index) => ({
       ...conceptBase,
       id: index === 0 ? "primary" : option.render.option.id,
       optionKey: option.render.option.id,
@@ -492,6 +492,8 @@ export const submitAIDesignRequest = onCall({
       providerRequestId: option.render.providerRequestId || null,
       prompt: buildOptionPrompt(prompt, DESIGN_OPTION_DIRECTIONS.findIndex((d) => d.id === option.render.option.id)),
     }));
+    const optionPrompts = generatedConcepts.map((concept) => ({ id: concept.id, prompt: concept.prompt }));
+    const concepts = generatedConcepts.map(({ prompt: _prompt, ...rest }) => rest);
     const now = admin.firestore.FieldValue.serverTimestamp();
     const requestPayload = {
       id: requestId,
@@ -517,7 +519,6 @@ export const submitAIDesignRequest = onCall({
       concepts,
       conceptCount: concepts.length,
       selectedConceptId: null,
-      conceptPrompt: prompt,
       executionDetails,
       referenceImagePaths: [referencePath],
       generatedImagePaths: generatedPaths,
@@ -542,6 +543,13 @@ export const submitAIDesignRequest = onCall({
       const fresh = await transaction.get(requestRef);
       if (fresh.exists) throw new HttpsError("already-exists", "This design request was already created.");
       transaction.create(requestRef, requestPayload);
+      transaction.create(db.collection("design_generation_prompts").doc(requestId), {
+        requestId,
+        sourceCollection: "design_requests",
+        conceptPrompt: prompt,
+        conceptPrompts: optionPrompts,
+        createdAt: now,
+      });
       transaction.create(db.collection("design_quotes").doc(requestId), {
         requestId,
         userId: uid,

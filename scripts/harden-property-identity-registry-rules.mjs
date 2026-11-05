@@ -24,8 +24,15 @@ if (genericStart < 0) throw new Error('[property-identity-registry] generic fall
 const generic = rules.slice(genericStart);
 const readOld = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])";
 const readNew = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry'])";
-let next = generic.includes(readNew) ? generic : generic.replace(readOld, readNew);
-if (!next.includes(readNew)) throw new Error('[property-identity-registry] read fallback exclusion could not be hardened');
+// A stricter list may also exclude design_generation_prompts. That collection stays
+// server-only. Do not rewrite it back to the shorter property-identity list.
+const readWithDesignPrompt = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts'])";
+let next = generic.includes(readNew) || generic.includes(readWithDesignPrompt)
+  ? generic
+  : generic.replace(readOld, readNew);
+if (!next.includes(readNew) && !next.includes(readWithDesignPrompt)) {
+  throw new Error('[property-identity-registry] read fallback exclusion could not be hardened');
+}
 
 const writeAnchor = "          'properties',\n          'users',";
 const writeReplacement = "          'properties',\n          'property_identity_registry',\n          'users',";

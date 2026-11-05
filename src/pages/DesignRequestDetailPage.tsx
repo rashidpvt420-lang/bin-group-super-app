@@ -19,6 +19,7 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
+import { stripDesignPrompt } from '../lib/stripDesignPrompt';
 import { designStatusLabel, honestDesignStatus } from '../lib/designStatusLabels';
 import { declaredDesignText, designScopeGaps } from '../lib/designScopeGaps';
 import DesignExecutionBriefView from '../components/design/DesignExecutionBriefView';
@@ -122,7 +123,7 @@ function DesignRequestDetailContent() {
             doc(db, 'design_requests', id),
             (snap) => {
                 if (snap.exists()) {
-                    setRequest({ id: snap.id, ...snap.data() });
+                    setRequest(stripDesignPrompt({ id: snap.id, ...snap.data() }));
                 } else setRequest(null);
                 setLoading(false);
             },
