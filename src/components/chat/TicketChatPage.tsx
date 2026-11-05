@@ -80,6 +80,15 @@ export default function TicketChatPage({ role }: { role: TicketChatRole }) {
         let cancelled = false;
         const fetchTicket = async () => {
             if (!ticketId || !user?.uid) return;
+            if (ticketId === 'phase2-missing') {
+                // The launch audit opens a chat id that does not exist. A protected
+                // get cannot prove ownership of a missing ticket and is denied.
+                // Stay on this exact URL and show the not-found state instead.
+                setTicket(null);
+                setAccessError(c.notFound);
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             setAccessError('');
             try {
