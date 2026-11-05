@@ -6,6 +6,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
 import { inclusiveDays, leaveSummary, splitSickDays, validateLeaveForm, type LeaveFormResult, type LeaveRecord } from "./hrLeaveEngine";
+import { ROSTER_SOURCE, dubaiParts, missedClockOutDue, startReminderDue, validateWeeklyRoster, type WeeklyRoster } from "./hrRosterEngine";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
@@ -1242,3 +1243,102 @@ export const dailyHrComplianceSweep = onSchedule("every 24 hours", async () => {
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+
+// ---------------------------------------------------------------------------
+// Roster (fix F). Server-written to staff_roster/{uid} (existing rules: HR/admin write, staff read own).
+const ROSTER_MANAGER_ROLES = ["admin", "super_admin", "ceo", "hr_admin", "hr_manager", "hr_staff", "operations_manager"];
+async function requireRosterManager(auth: any) {
+    if (!auth?.uid || auth.token?.suspended === true) throw new HttpsError("unauthenticated", "Login required.");
+    const token = auth.token || {};
+    const role = normalizeRole(token.role || token.userRole || token.primaryRole);
+    if (!(token.admin === true || token.isAdmin === true || ROSTER_MANAGER_ROLES.includes(role))) {
+        throw new HttpsError("permission-denied", "HR roster permission required.");
+    }
+    await requirePrivilegedMfaSession(auth);
+}
+
+export const hrSetStaffRoster = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        await requireRosterManager(request.auth);
+        const staffId = safeText(request.data?.staffId);
+        if (!/^[A-Za-z0-9_-]{6,128}$/.test(staffId)) throw new HttpsError("invalid-argument", "staffId required.");
+        const checked = validateWeeklyRoster(request.data?.weekly);
+        if (!checked.ok) throw new HttpsError("invalid-argument", checked.error);
+        const db = admin.firestore();
+        await db.collection("staff_roster").doc(staffId).set({
+            uid: staffId, staffId, weekly: checked.weekly, timezone: "Asia/Dubai", source: ROSTER_SOURCE,
+            updatedAt: FieldValue.serverTimestamp(), updatedBy: request.auth!.uid,
+        }, { merge: true });
+        await db.collection("audit_logs").add({
+            actorId: request.auth!.uid, action: "HR_STAFF_ROSTER_SET", targetType: "staff_roster", targetId: staffId,
+            weekly: checked.weekly, createdAt: FieldValue.serverTimestamp(),
+        });
+        return { ok: true, staffId, weekly: checked.weekly };
+    },
+);
+
+export const getMyRoster = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        assertStaffActor(request.auth);
+        const snap = await admin.firestore().collection("staff_roster").doc(request.auth!.uid).get();
+        const data = snap.exists ? snap.data() || {} : {};
+        const checked = data.source === ROSTER_SOURCE ? validateWeeklyRoster(data.weekly) : null;
+        return { ok: true, weekly: checked && checked.ok ? checked.weekly : null, timezone: "Asia/Dubai" };
+    },
+);
+
+async function createOnce(ref: FirebaseFirestore.DocumentReference, data: Record<string, unknown>) {
+    try { await ref.create(data); return true; } catch (e: any) {
+        if (e?.code === 6 || /already exists/i.test(String(e?.message))) return false;
+        throw e;
+    }
+}
+
+export const hrShiftReminderSweep = onSchedule(
+    { schedule: "every 15 minutes", timeZone: "Asia/Dubai", region: "europe-west3" },
+    async () => {
+        const db = admin.firestore();
+        const nowMs = Date.now();
+        const today = dubaiParts(nowMs).date;
+        const yesterday = dubaiParts(nowMs - 86400000).date;
+        const rosters = await db.collection("staff_roster").where("source", "==", ROSTER_SOURCE).limit(2000).get();
+        const rosterByUid = new Map<string, WeeklyRoster>();
+        rosters.forEach((d) => { const c = validateWeeklyRoster(d.data().weekly); if (c.ok) rosterByUid.set(d.id, c.weekly); });
+        const base = { read: false, createdAt: FieldValue.serverTimestamp(), createdByUid: "SYSTEM_HR_ROSTER", deliverySource: "schedule:hrShiftReminderSweep" };
+
+        for (const [uid, weekly] of rosterByUid) {
+            const shift = await db.collection("staff_shifts").doc(`SHIFT_${uid}_${today}`).get();
+            const due = startReminderDue(weekly, nowMs, shift.exists && millisOf(shift.data()?.clockInTime) !== null);
+            if (!due) continue;
+            await createOnce(db.collection("notifications").doc(`HR_SHIFT_START_${uid}_${today}`), {
+                ...base, recipientId: uid, recipientRole: "staff", type: "HR_SHIFT_START_REMINDER",
+                title: "SHIFT STARTS SOON", body: `Your shift starts at ${due.start} (GST). Please clock in on time.`,
+                link: "/technician", metadata: { shiftDate: today, start: due.start, end: due.end },
+            });
+        }
+
+        const open = await db.collection("staff_shifts").where("shiftDate", "in", [yesterday, today]).limit(2000).get();
+        for (const doc of open.docs) {
+            const s = doc.data();
+            const uid = safeText(s.staffId || s.uid);
+            const shiftDate = safeText(s.shiftDate);
+            if (!uid || !shiftDate) continue;
+            if (!missedClockOutDue({ weekly: rosterByUid.get(uid) || null, shiftDate, clockInMs: millisOf(s.clockInTime), clockOutMs: millisOf(s.clockOutTime), nowMs })) continue;
+            const meta = { shiftDate, shiftId: doc.id, staffId: uid };
+            const created = await createOnce(db.collection("notifications").doc(`HR_MISSED_CLOCKOUT_${uid}_${shiftDate}`), {
+                ...base, recipientId: uid, recipientRole: "staff", type: "HR_MISSED_CLOCK_OUT",
+                title: "YOU HAVE NOT CLOCKED OUT", body: `Your shift on ${shiftDate} is still open. Clock out now or tell HR the correct time.`,
+                link: "/technician", metadata: meta,
+            });
+            if (created) {
+                await createOnce(db.collection("notifications").doc(`HR_MISSED_CLOCKOUT_ADMIN_${uid}_${shiftDate}`), {
+                    ...base, recipientId: "ADMIN_GROUP", recipientRole: "admin", type: "HR_MISSED_CLOCK_OUT",
+                    title: "MISSED CLOCK-OUT", body: `Staff ${uid} has an open shift from ${shiftDate}. No hours are paid until it is corrected.`,
+                    link: "/admin/hr", metadata: meta,
+                });
+            }
+        }
+    },
+);
