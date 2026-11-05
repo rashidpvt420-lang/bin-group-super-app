@@ -173,7 +173,7 @@ export default function OwnerTicketsPage() {
                                                 <Chip
                                                     size="small"
                                                     icon={<Clock size={11} />}
-                                                    label={`~${etaMin} min rough estimate`}
+                                                    label={`~${etaMin} min (estimate)`}
                                                     sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }}
                                                 />
                                             )}
