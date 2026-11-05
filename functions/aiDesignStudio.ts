@@ -469,23 +469,18 @@ export const submitAIDesignRequest = onCall({
       quoteTotal: quote.finalTotal,
       mobilizationAmount: quote.mobilizationAmount,
     };
-    const optionPrompts: Array<{ id: string; prompt: string }> = [];
-    const concepts = generatedOptions.map((option, index) => {
-      const id = index === 0 ? "primary" : option.render.option.id;
-      optionPrompts.push({
-        id,
-        prompt: buildOptionPrompt(prompt, DESIGN_OPTION_DIRECTIONS.findIndex((d) => d.id === option.render.option.id)),
-      });
-      return {
-        ...conceptBase,
-        id,
-        optionLabel: option.render.option.label,
-        title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} - ${option.render.option.label}`,
-        afterImageStoragePath: option.path,
-        generatedImageSha256: option.sha256,
-        providerRequestId: option.render.providerRequestId || null,
-      };
-    });
+    const concepts = generatedOptions.map((option, index) => ({
+      ...conceptBase,
+      id: index === 0 ? "primary" : option.render.option.id,
+      optionLabel: option.render.option.label,
+      title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} - ${option.render.option.label}`,
+      afterImageStoragePath: option.path,
+      generatedImageSha256: option.sha256,
+      providerRequestId: option.render.providerRequestId || null,
+      prompt: buildOptionPrompt(prompt, DESIGN_OPTION_DIRECTIONS.findIndex((d) => d.id === option.render.option.id)),
+    }));
+    const optionPrompts = concepts.map((concept) => ({ id: concept.id, prompt: concept.prompt }));
+    const clientConcepts = concepts.map(({ prompt: _prompt, ...rest }) => rest);
     const now = admin.firestore.FieldValue.serverTimestamp();
     const requestPayload = {
       id: requestId,
@@ -508,7 +503,7 @@ export const submitAIDesignRequest = onCall({
       designObjective: cleanText(payload.designObjective, "refresh", 120),
       scope: { ...scope, referenceImagePaths: [referencePath], imageCount: 1 },
       quote,
-      concepts,
+      concepts: clientConcepts,
       conceptCount: concepts.length,
       selectedConceptId: null,
       executionDetails,
@@ -553,7 +548,7 @@ export const submitAIDesignRequest = onCall({
         createdAt: now,
         updatedAt: now,
       });
-      for (const option of concepts) {
+      for (const option of clientConcepts) {
         transaction.create(db.collection("design_concepts").doc(`${requestId}_${option.id}`), {
           requestId,
           userId: uid,
