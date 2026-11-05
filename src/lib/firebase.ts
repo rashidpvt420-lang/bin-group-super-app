@@ -5,6 +5,7 @@
 
 import { registerPlugin } from '@capacitor/core';
 import { installOfflineCacheTeardown } from './offlineCacheTeardown';
+import { installTransientAuthLookupRetry } from './transientAuthLookupRetry.mjs';
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
@@ -320,6 +321,13 @@ if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
 }
 
 export const db: Firestore = getFirestore(app);
+
+// Auth 12.19 clears a persisted session when accounts:lookup returns HTTP 503.
+// Install the retry before getAuth so a blip cannot send a signed-in refresh to /login.
+if (typeof window !== 'undefined') {
+  installTransientAuthLookupRetry();
+}
+
 export const auth: Auth = getAuth(app);
 
 if (typeof window !== 'undefined') {
