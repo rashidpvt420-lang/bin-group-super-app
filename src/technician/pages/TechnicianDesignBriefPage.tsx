@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import { functions, httpsCallable } from '../../lib/firebase';
+import { useLanguage } from '../../context/LanguageContext';
 import { designStatusLabel } from '../../lib/designStatusLabels';
 import DesignExecutionBriefView, { type DesignExecutionBrief } from '../../components/design/DesignExecutionBriefView';
 
@@ -17,6 +18,8 @@ type BriefResponse = {
 
 export default function TechnicianDesignBriefPage() {
   const { requestId = '' } = useParams();
+  const { tx, isRTL } = useLanguage();
+  const lang = isRTL ? 'ar' : 'en';
   const [brief, setBrief] = useState<BriefResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -62,13 +65,13 @@ export default function TechnicianDesignBriefPage() {
     }
   };
 
-  if (loading) return <CircularProgress aria-label="Loading design brief" />;
-  if (!brief) return <Alert severity="error">{error || 'This design brief is not available.'}</Alert>;
+  if (loading) return <CircularProgress aria-label={tx('tech.design.loadingBrief', 'Loading design brief')} />;
+  if (!brief) return <Alert severity="error">{error || tx('tech.design.briefUnavailable', 'This design brief is not available.')}</Alert>;
 
   return (
-    <Stack spacing={2} data-testid="technician-design-brief">
-      <Typography variant="h5" fontWeight={950}>{brief.propertyName || 'Design request'}</Typography>
-      <Typography variant="body2">{designStatusLabel(brief.status)} · {brief.requestId}</Typography>
+    <Stack spacing={2} data-testid="technician-design-brief" sx={{ direction: isRTL ? 'rtl' : 'ltr', px: { xs: 0, sm: 1 } }}>
+      <Typography variant="h5" fontWeight={950}>{brief.propertyName || tx('tech.design.request', 'Design request')}</Typography>
+      <Typography variant="body2">{designStatusLabel(brief.status, lang)} · {brief.requestId}</Typography>
       {error && <Alert severity="error">{error}</Alert>}
       <DesignExecutionBriefView
         tone="light"
@@ -77,15 +80,15 @@ export default function TechnicianDesignBriefPage() {
         referenceImageUrl={brief.referenceImageUrl}
       />
       {brief.status === 'ENGINEER_REVIEW' && (
-        <Stack spacing={1.5}>
-          <TextField label="Completion note for tenant and owner" value={note} onChange={(event) => setNote(event.target.value.slice(0, 500))} multiline minRows={2} fullWidth />
-          <Button variant="contained" onClick={() => void markReady()} disabled={processing} sx={{ fontWeight: 900 }}>
-            {processing ? 'Saving…' : 'Mark work ready for handover'}
+        <Stack spacing={1.5} direction={{ xs: 'column', sm: 'column' }}>
+          <TextField label={tx('tech.design.completionNote', 'Completion note for tenant and owner')} value={note} onChange={(event) => setNote(event.target.value.slice(0, 500))} multiline minRows={2} fullWidth />
+          <Button variant="contained" onClick={() => void markReady()} disabled={processing} sx={{ fontWeight: 900, width: { xs: '100%', sm: 'auto' } }}>
+            {processing ? tx('tech.design.saving', 'Saving…') : tx('tech.design.markReady', 'Mark work ready for handover')}
           </Button>
         </Stack>
       )}
       {brief.status === 'EXECUTION_READY' && (
-        <Alert severity="success">Work is done and ready for handover. Tenant and owner have the update.{brief.completionNote ? ` ${brief.completionNote}` : ''}</Alert>
+        <Alert severity="success">{tx('tech.design.ready', 'Work is done and ready for handover. Tenant and owner have the update.')}{brief.completionNote ? ` ${brief.completionNote}` : ''}</Alert>
       )}
     </Stack>
   );
