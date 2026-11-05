@@ -620,6 +620,63 @@ export const issueOfficialStaffHrDocument = onCall(SECURE_CALLABLE_OPTIONS, asyn
 });
 
 /**
+ * The caller's own official payslip PDFs. Admin generation writes pdf_reports with
+ * reportType STAFF_DIGITAL_PAYSLIP and staffUid. This list never accepts another uid.
+ */
+export const listMyPayslips = onCall(SECURE_CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  const token = request.auth.token || {};
+  await assertStaffSession(request.auth, token);
+  const uid = request.auth.uid;
+  const snap = await ensureDb().collection("pdf_reports").where("staffUid", "==", uid).limit(80).get();
+  const payslips = snap.docs
+    .map((doc) => ({ reportId: doc.id, ...(doc.data() || {}) }))
+    .filter((row) => upper((row as { reportType?: unknown }).reportType) === "STAFF_DIGITAL_PAYSLIP" && text((row as { staffUid?: unknown }).staffUid) === uid)
+    .map((row) => ({
+      reportId: row.reportId,
+      monthPeriod: text((row as { monthPeriod?: unknown }).monthPeriod) || null,
+      generatedAt: text((row as { generatedAt?: unknown }).generatedAt) || null,
+      status: text((row as { status?: unknown }).status) || "ISSUED",
+    }))
+    .sort((a, b) => String(b.monthPeriod || b.generatedAt || "").localeCompare(String(a.monthPeriod || a.generatedAt || "")));
+  return { payslips };
+});
+
+/** Short-lived download for one of the caller's own payslips. Other staff and other report types are refused. */
+export const openMyPayslip = onCall(SECURE_CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  const token = request.auth.token || {};
+  await assertStaffSession(request.auth, token);
+  const uid = request.auth.uid;
+  const reportId = text(request.data?.reportId);
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(reportId)) {
+    throw new HttpsError("invalid-argument", "A payslip id is required.");
+  }
+  const db = ensureDb();
+  const snap = await db.collection("pdf_reports").doc(reportId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Payslip not found.");
+  const data = snap.data() || {};
+  const storagePath = text(data.storagePath);
+  if (text(data.staffUid) !== uid || upper(data.reportType) !== "STAFF_DIGITAL_PAYSLIP" || !storagePath.startsWith(`staff-reports/${uid}/`)) {
+    throw new HttpsError("permission-denied", "You can download only your own payslip.");
+  }
+  const file = getStorage().bucket().file(storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "The payslip file is missing.");
+  const [url] = await file.getSignedUrl({ action: "read", expires: Date.now() + 5 * 60 * 1000 });
+  await db.collection("audit_logs").add({
+    actorId: uid,
+    actorRole: callerRole(token) || "staff",
+    action: "STAFF_PAYSLIP_DOWNLOADED",
+    targetType: "pdf_reports",
+    targetId: reportId,
+    metadata: { staffUid: uid, reportType: "STAFF_DIGITAL_PAYSLIP" },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { ok: true, reportId, expiresInSeconds: 300, url };
+});
+
+/**
  * Public integrity verifier. It returns only non-sensitive issuance metadata.
  */
 export const verifyReportPdfHash = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
