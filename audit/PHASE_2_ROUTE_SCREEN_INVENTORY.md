@@ -9,11 +9,11 @@ Generated from canonical router sources.
 | main | 79 |
 | owner | 40 |
 | tenant | 35 |
-| technician | 18 |
+| technician | 20 |
 | broker | 17 |
 | adminops | 76 |
 
-Total registered route entries/aliases: **265**.
+Total registered route entries/aliases: **267**.
 
 The CSV records:
 
