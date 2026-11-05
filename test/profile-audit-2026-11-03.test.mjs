@@ -49,8 +49,8 @@ for (const [profile, files] of Object.entries(biFiles)) {
   test(`${profile} screens carry Arabic copy for static text`, () => {
     for (const f of files) {
       const src = read(f);
-      assert.match(src, /import Bi from '/, `${f} should import Bi`);
-      for (const m of src.matchAll(/<Bi en=\{("(?:[^"\\]|\\.)*")\} ar=\{("(?:[^"\\]|\\.)*")\} \/>/g)) {
+      assert.match(src, /import (?:Bi|HrBi)\b[^\n]* from '/, `${f} should import Bi (or the technician HrBi drop-in)`);
+      for (const m of src.matchAll(/<(?:Bi|HrBi) en=\{("(?:[^"\\]|\\.)*")\} ar=\{("(?:[^"\\]|\\.)*")\} \/>/g)) {
         const ar = JSON.parse(m[2]);
         assert.ok(/[\u0600-\u06FF]/.test(ar) || /^[\s\d%:·.,()#+-]*$/.test(ar) || /BIN/.test(ar), `${f}: Arabic copy missing for ${m[1]}`);
         assert.notEqual(ar, JSON.parse(m[1]).trim() === '' ? null : '', `${f}: empty Arabic for ${m[1]}`);
