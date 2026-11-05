@@ -39,6 +39,10 @@ type DesignScope = {
   isMallEnvironment: boolean;
   scopeDescription: string;
   addons: string[];
+  unitNumber: string;
+  floorLevel: string;
+  existingCondition: string;
+  requiredWork: string;
 };
 
 function cleanText(value: unknown, fallback = "", maxLength = 500) {
@@ -140,6 +144,10 @@ function cleanScope(value: unknown): DesignScope {
     addons: Array.isArray(scope.addons)
       ? scope.addons.map((item) => cleanText(item, "", 80)).filter(Boolean).slice(0, 20)
       : [],
+    unitNumber: cleanText(scope.unitNumber, "", 40),
+    floorLevel: cleanText(scope.floorLevel || scope.floor, "", 40),
+    existingCondition: cleanText(scope.existingCondition, "", 240),
+    requiredWork: cleanText(scope.requiredWork || scope.scopeDescription, "", 1000),
   };
 }
 
@@ -411,6 +419,10 @@ export const submitAIDesignRequest = onCall({
   const unit: any = tenantContext.unit || {};
   const property: any = tenantContext.property || {};
   const ownerId = role === "tenant" ? propertyOwnerId(property, unit) : uid;
+  const linkedUnitNumber = cleanText(unit.unitNumber || unit.unitNo, "", 40);
+  const linkedFloor = cleanText(unit.floorLevel || unit.floor || unit.floorNumber, "", 40);
+  if (!scope.unitNumber && linkedUnitNumber) scope.unitNumber = linkedUnitNumber;
+  if (!scope.floorLevel && linkedFloor) scope.floorLevel = linkedFloor;
   if (!ownerId) throw new HttpsError("failed-precondition", "The canonical property owner could not be resolved.");
   const quota = await reserveAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
   const ownerEmail = role === "tenant"
@@ -472,6 +484,7 @@ export const submitAIDesignRequest = onCall({
     const concepts = generatedOptions.map((option, index) => ({
       ...conceptBase,
       id: index === 0 ? "primary" : option.render.option.id,
+      optionKey: option.render.option.id,
       optionLabel: option.render.option.label,
       title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} - ${option.render.option.label}`,
       afterImageStoragePath: option.path,

@@ -66,6 +66,13 @@ export default function TechnicianSimpleDashboardPage() {
 
         <TechnicianDutyAvailabilityCard isRTL={isRTL} />
 
+        <UiCard isRTL={isRTL} testId="technician-design-jobs-entry" label={t('tech.home.designJobs', 'Design jobs', 'أعمال التصميم')} title={t('tech.home.designJobsTitle', 'Locked room designs', 'تصاميم الغرف المقفلة')}>
+          <Typography sx={{ ...uiType.body, color: ui.muted, mt: 0.5 }}>{t('tech.home.designJobsDetail', 'Open the picture and layout brief for a design the tenant locked.', 'افتح الصورة وموجز التنفيذ للتصميم الذي قفله المستأجر.')}</Typography>
+          <Box sx={{ mt: 1.5 }}>
+            <UiButton tone="outline" onClick={() => navigate('/technician/designs')} data-testid="technician-open-design-jobs">{t('tech.home.openDesignJobs', 'Open design briefs', 'افتح موجزات التصميم')}</UiButton>
+          </Box>
+        </UiCard>
+
         {!loading && !error && active.length > 0 && (
           <UiCard isRTL={isRTL} label={`${t('tech.home.today', 'Your jobs', 'مهامك')} · ${active.length}`}>
             <Box sx={{ mt: 0.5 }}>
