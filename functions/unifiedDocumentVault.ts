@@ -217,12 +217,19 @@ async function staffArtifacts(actor: VaultActor) {
   const pairs: Array<[string, string]> = [
     ["uid", actor.uid], ["staffId", actor.uid], ["userId", actor.uid], ["technicianId", actor.uid],
   ];
-  const collections = ["staffDocuments", "pdf_reports", "staffLetters"];
+  const collections = ["staffDocuments", "staffLetters"];
   const artifacts = (
     await Promise.all(collections.map(async (name) =>
       (await queryMany(name, pairs)).map((doc) => toArtifact(name, doc.id, doc.data()))
     ))
   ).flat();
+  // Official PDFs are keyed by staffUid, not uid. Query that field or the technician never sees their payslip.
+  const reports = await queryMany("pdf_reports", [...pairs, ["staffUid", actor.uid]]);
+  reports.forEach((doc) => {
+    const data = doc.data() || {};
+    const owner = text(data.staffUid || data.uid || data.staffId || data.userId || data.technicianId);
+    if (owner === actor.uid) artifacts.push(toArtifact("pdf_reports", doc.id, data));
+  });
 
   if (actor.role === "technician") {
     const tickets = await queryMany("maintenanceTickets", [
