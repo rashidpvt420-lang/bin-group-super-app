@@ -108,7 +108,9 @@ test('Owner and Tenant tracking card renders the embedded map without overstatin
   assert.match(trackingSummary, /GPS PENDING/);
   assert.match(trackingSummary, /rough arrival estimate/i);
   assert.match(trackingSummary, /approximate straight-line distance/i);
-  assert.match(trackingSummary, /Open route in Google Maps/);
+  assert.match(trackingSummary, /Open in Google Maps/);
+  assert.match(trackingSummary, /Not road routing\. Vehicle type is not detected/);
+  assert.doesNotMatch(trackingSummary, /Open route in Google Maps/);
   assert.match(trackingSummary, /Embedded map is unavailable right now/);
   assert.match(
     trackingSummary,
