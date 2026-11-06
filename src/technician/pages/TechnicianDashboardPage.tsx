@@ -37,6 +37,9 @@ import {
     User,
     Zap,
     DollarSign,
+    Check,
+    Navigation,
+    Timer,
 } from 'lucide-react';
 import {
     collection,
@@ -241,6 +244,31 @@ export default function TechnicianDashboardPage() {
         return () => { cancelled = true; };
     }, [user?.uid]);
 
+    const [hoursSummary, setHoursSummary] = useState<{ workedMinutes: number; payableOvertimeMinutes: number; clockedOvertimeMinutes: number }>({ workedMinutes: 0, payableOvertimeMinutes: 0, clockedOvertimeMinutes: 0 });
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        let cancelled = false;
+        httpsCallable(functions, 'getMyHours')({})
+            .then((res: any) => {
+                if (cancelled) return;
+                const totals = res?.data?.totals || {};
+                setHoursSummary({
+                    workedMinutes: Number(totals.workedMinutes) || 0,
+                    payableOvertimeMinutes: Number(totals.payableOvertimeMinutes) || 0,
+                    clockedOvertimeMinutes: Number(totals.clockedOvertimeMinutes) || 0,
+                });
+            })
+            .catch(() => { /* non-blocking */ });
+        return () => { cancelled = true; };
+    }, [user?.uid]);
+
+    const activeMission = useMemo(() => {
+        return activeJobs.find((j: any) =>
+            ['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(String(j.status || ''))
+        ) || activeJobs[0] || null;
+    }, [activeJobs]);
+
     useEffect(() => {
         if (!user?.uid) return;
         setDutyStatus(user.dutyStatus || 'OFF');
@@ -425,6 +453,139 @@ export default function TechnicianDashboardPage() {
             <Box sx={{ mb: 3 }}>
                 <StaffTodayDashboard userName={technicianName} role={trade} isRtl={isRTL} />
             </Box>
+
+            {activeMission && (() => {
+                const rawStatus = String(activeMission.status || '').toUpperCase();
+                const isEnRoute = ['ON_THE_WAY', 'EN_ROUTE'].includes(rawStatus);
+                const isArrived = rawStatus === 'ARRIVED';
+                const isInProgress = rawStatus === 'IN_PROGRESS';
+                const priority = String(activeMission.priority || 'standard').toLowerCase();
+                const isEmergency = priority === 'emergency';
+                const categoryTitle = String(activeMission.category || activeMission.issueType || 'Maintenance Work Order');
+                const locationTitle = String(activeMission.propertyName || activeMission.unitNumber || 'Property Location');
+                const addressDetail = String(activeMission.address || activeMission.serviceLocationDetail || 'UAE Field Site');
+                const remainingSla = getSlaTimeRemaining(activeMission);
+
+                let phaseTone = ui.blue;
+                let phaseBadge = 'PHASE 1: EN ROUTE (LIVE GPS 🚗)';
+                let phaseTitle = 'En Route to Property — Live GPS Streaming';
+                let phaseHelper = 'GPS coordinates are streaming live to the tenant. Drive safely to the location.';
+                let actionLabel = 'VIEW MISSION & CONFIRM ARRIVAL 📍';
+
+                if (isArrived) {
+                    phaseTone = ui.gold;
+                    phaseBadge = 'PHASE 2: ARRIVED ON SITE 📍';
+                    phaseTitle = 'Arrived at Property — GPS Verified';
+                    phaseHelper = 'GPS arrival was verified within 100m. Next: Inspect fault, capture before photos, and start labor timer.';
+                    actionLabel = 'START WORK & CAPTURE BEFORE PHOTOS 📸';
+                } else if (isInProgress) {
+                    phaseTone = ui.green;
+                    phaseBadge = 'PHASE 3: WORK IN PROGRESS ⏱️';
+                    phaseTitle = 'Work in Progress — Official Labor Timer Active';
+                    phaseHelper = 'Repair underway. When done, capture after-work evidence photo, record parts used, and submit for tenant sign-off.';
+                    actionLabel = 'COMPLETE WORK & ATTACH PROOF ✅';
+                } else if (!isEnRoute) {
+                    phaseTone = ui.gold;
+                    phaseBadge = 'DISPATCH READY 📋';
+                    phaseTitle = 'Mission Assigned — Ready for Departure';
+                    phaseHelper = 'Accept mission to begin departure route and start streaming arrival tracking.';
+                    actionLabel = 'OPEN MISSION & COMMENCE ROUTE 🚗';
+                }
+
+                return (
+                    <SectionCard sx={{ mb: 3.5, border: `2px solid ${phaseTone}`, bgcolor: '#FFFFFF', boxShadow: '0 12px 30px rgba(17,24,39,0.08)' }}>
+                        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 2 }}>
+                            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+                                <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(phaseTone, 0.12), color: phaseTone, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                    {isEnRoute ? <Car size={24} /> : isArrived ? <MapPin size={24} /> : isInProgress ? <Timer size={24} /> : <Briefcase size={24} />}
+                                </Box>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                        <Chip size="small" label={phaseBadge} sx={{ bgcolor: alpha(phaseTone, 0.15), color: phaseTone, fontWeight: 950, fontSize: 11 }} />
+                                        {isEmergency && <Chip size="small" label="EMERGENCY SOS" sx={{ bgcolor: alpha(ui.red, 0.15), color: ui.red, fontWeight: 950, fontSize: 11 }} />}
+                                        <Chip size="small" label={`SLA: ${remainingSla}`} sx={{ bgcolor: alpha(remainingSla === 'SLA BREACHED' ? ui.red : ui.muted, 0.12), color: remainingSla === 'SLA BREACHED' ? ui.red : ui.ink, fontWeight: 900, fontSize: 11 }} />
+                                    </Stack>
+                                    <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, mt: 0.5, letterSpacing: '-0.02em' }}>
+                                        {categoryTitle} — {locationTitle}
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>
+                                        {addressDetail}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                            <Button
+                                variant="contained"
+                                onClick={() => navigate(`/technician/job/${activeMission.id}`)}
+                                sx={{ bgcolor: phaseTone === ui.blue ? ui.blue : phaseTone === ui.green ? ui.green : ui.gold, color: phaseTone === ui.gold ? '#111827' : '#FFFFFF', fontWeight: 950, px: 3, py: 1.2, borderRadius: 2, flexShrink: 0, alignSelf: { xs: 'stretch', md: 'auto' } }}
+                            >
+                                {actionLabel}
+                            </Button>
+                        </Stack>
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        <Box sx={{ mt: 1.5, p: 2, bgcolor: ui.soft, borderRadius: 2.5, border: `1px solid ${ui.line}` }}>
+                            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, display: 'block', mb: 1 }}>
+                                WORK LIFECYCLE PROGRESSION & TIMESTAMPS
+                            </Typography>
+                            <Grid container spacing={1.5}>
+                                <Grid item xs={6} sm={3}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: ui.green, color: '#fff', display: 'grid', placeItems: 'center' }}><Check size={14} /></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>1. ASSIGNED</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>Confirmed</Typography></Box>
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isEnRoute || isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isEnRoute || isArrived || isInProgress ? <Check size={14} /> : '2'}</Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>2. EN ROUTE</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isEnRoute ? 'Live GPS 🚗' : isArrived || isInProgress ? 'Passed' : 'Pending'}</Typography></Box>
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isArrived || isInProgress ? <Check size={14} /> : '3'}</Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>3. ARRIVED</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isArrived ? 'On Site 📍' : isInProgress ? 'Verified' : 'Pending'}</Typography></Box>
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isInProgress ? <Check size={14} /> : '4'}</Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>4. EXECUTION</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isInProgress ? 'In Progress ⏱️' : 'Before proof'}</Typography></Box>
+                                    </Stack>
+                                </Grid>
+                            </Grid>
+                            <Typography variant="body2" sx={{ color: ui.ink, fontWeight: 750, mt: 1.5 }}>
+                                • {phaseHelper}
+                            </Typography>
+                        </Box>
+                    </SectionCard>
+                );
+            })()}
+
+            <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
+                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                        <Box sx={{ p: 1.5, bgcolor: alpha(ui.gold, 0.15), borderRadius: 2, color: ui.gold }}><Clock size={30} /></Box>
+                        <Box>
+                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>STATUTORY OVERTIME & WORK HOURS PROOF</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink }}>
+                                UAE Labor Law Multi-Point Proof Engine
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>
+                                Federal Decree-Law No. 33 of 2021 (Art. 19): Daily overtime is capped at 120 minutes (2 hours). Every minute is verified with GPS arrival, shift timestamps, and before/after photos.
+                            </Typography>
+                        </Box>
+                    </Stack>
+                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                        <Chip label={`Max Overtime: 120 min/day`} sx={{ bgcolor: '#FFFFFF', color: ui.ink, border: `1px solid ${ui.line}`, fontWeight: 900 }} />
+                        <Chip label={`Clocked OT: ${Math.round(hoursSummary.clockedOvertimeMinutes)} min`} sx={{ bgcolor: '#FFFFFF', color: ui.blue, border: `1px solid ${alpha(ui.blue, 0.35)}`, fontWeight: 900 }} />
+                        <Chip label={`Payable OT: ${Math.round(hoursSummary.payableOvertimeMinutes)} min`} sx={{ bgcolor: '#FFFFFF', color: ui.green, border: `1px solid ${alpha(ui.green, 0.35)}`, fontWeight: 900 }} />
+                        <Button variant="outlined" onClick={() => navigate('/technician/hr#overtime')} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, bgcolor: '#FFFFFF' }}>
+                            VIEW PROOF & MY HOURS
+                        </Button>
+                    </Stack>
+                </Stack>
+            </SectionCard>
 
             <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">

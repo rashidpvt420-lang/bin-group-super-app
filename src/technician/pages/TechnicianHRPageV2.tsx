@@ -366,6 +366,34 @@ export default function TechnicianHRPageV2() {
           <TextField type="date" label={ht('End date')} value={leaveEnd} onChange={(e) => setLeaveEnd(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ '& .MuiInputBase-root': { color: '#111827' } }} />
           <Chip data-testid="leave-day-count" label={`${leaveDaysPreview} ${ht('days')}`} sx={{ alignSelf: 'center', fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} />
         </Stack>
+        {leaveType === 'sick_leave' && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 2.5, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 0.5, display: 'block', mb: 0.5 }}>
+              UAE STATUTORY SICK LEAVE TIERS (Federal Decree-Law No. 33 of 2021, Art. 31)
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mb: 1 }}>
+              Per service year: First 15 days at 100% Full Pay · Next 30 days at 50% Half Pay · Next 45 days at 0% Unpaid (Max 90 days statutory ceiling).
+            </Typography>
+            {leaveDaysPreview > 0 && (
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} flexWrap="wrap">
+                <Chip size="small" label={`Tier 1 (100% Full Pay): ${Math.min(leaveDaysPreview, 15)} days`} sx={{ bgcolor: 'rgba(16,185,129,0.15)', color: '#10b981', fontWeight: 900 }} />
+                {leaveDaysPreview > 15 && <Chip size="small" label={`Tier 2 (50% Half Pay): ${Math.min(leaveDaysPreview - 15, 30)} days`} sx={{ bgcolor: 'rgba(234,179,8,0.15)', color: '#eab308', fontWeight: 900 }} />}
+                {leaveDaysPreview > 45 && <Chip size="small" label={`Tier 3 (0% Unpaid): ${Math.min(leaveDaysPreview - 45, 45)} days`} sx={{ bgcolor: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 900 }} />}
+                {leaveDaysPreview > 90 && <Chip size="small" label="Over 90 days statutory cap" sx={{ bgcolor: 'rgba(239,68,68,0.25)', color: '#ef4444', fontWeight: 900 }} />}
+              </Stack>
+            )}
+          </Box>
+        )}
+        {leaveType === 'annual_leave' && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 2.5, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 0.5, display: 'block', mb: 0.5 }}>
+              UAE STATUTORY ANNUAL LEAVE ACCRUAL (Federal Decree-Law No. 33 of 2021, Art. 29)
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)' }}>
+              Accrues at 2 calendar days per month in Year 1 (up to 24 days), and 30 calendar days per year in Year 2 and beyond. Deductions are officially calculated and processed by HR upon approval.
+            </Typography>
+          </Box>
+        )}
         <TextField fullWidth multiline minRows={2} value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Reason (optional, any language)" sx={{ mt: 2, textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2 }} alignItems={{ md: 'center' }}>
           <Button component="label" variant="outlined" startIcon={<CloudUpload size={18} />} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.24)', fontWeight: 900 }}>
