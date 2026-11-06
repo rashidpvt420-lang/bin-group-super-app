@@ -119,7 +119,9 @@ export function buildDesignExecutionDetails(input: {
   const designStyle = text(input.designStyle, 'Modern');
   const designObjective = text(input.designObjective, 'redesign');
   const finishTier = text(input.finishTier, 'Premium');
-  const dimensions = Number(input.dimensions || 0);
+  const parsedDimensions = Number(input.dimensions);
+  const dimensions = Number.isFinite(parsedDimensions) && parsedDimensions > 0 ? Math.round(parsedDimensions) : 0;
+  const areaLabel = dimensions > 0 ? `${dimensions} sq ft` : 'area not set';
   const quoteTotal = Number(input.quoteTotal || 0);
   const mobilizationAmount = Number(input.mobilizationAmount || (quoteTotal > 0 ? getDepositAmount(quoteTotal, 15) : 0));
   const plumbing = requiresPlumbing(zoneType);
@@ -129,7 +131,7 @@ export function buildDesignExecutionDetails(input: {
     { category: 'Lighting', items: [`${designStyle} ambient lighting layout for ${zoneType}.`, 'Feature lighting for focal wall, seating zone, or circulation path.', 'Warm LED and dimming provision subject to site wiring.'] },
     { category: 'Ceiling', items: [`${finishTier} ceiling treatment with clean junctions.`, 'Optional gypsum cove, recessed light detail, or access panel where site clearance allows.', 'Final paint and ceiling line to match approved concept.'] },
     { category: 'Walls & paint', items: ['Surface preparation, primer, crack filling, and final paint system.', `${designStyle} feature wall or texture treatment for main visual angle.`, 'Moisture-resistant treatment where site condition requires it.'] },
-    { category: 'Flooring', items: [`${finishTier} flooring allowance for ${Math.max(1, Math.round(dimensions || 1))} sq ft.`, 'Skirting, threshold, and edge transition alignment.', 'Substrate repair subject to inspection.'] },
+    { category: 'Flooring', items: [`${finishTier} flooring allowance for ${areaLabel}.`, 'Skirting, threshold, and edge transition alignment.', 'Substrate repair subject to inspection.'] },
     { category: 'Furniture', items: ['Furniture layout based on circulation, access, and room function.', `${finishTier} furniture or built-in allowance based on approved scope.`, 'Final fabric, finish, and model approval before procurement.'] },
     { category: 'Curtains & soft furnishings', items: ['Curtains, blinds, rugs, cushions, or upholstery coordinated with the palette.', 'Privacy and daylight control considered in selection.', 'Site measurements required before ordering.'] },
     { category: 'Decor & accessories', items: ['Artwork, mirrors, planters, decorative pieces, or majlis accessories as relevant.', 'Accessory package aligned with lighting and furniture materials.', 'Owner approval required before final purchase.'] },
@@ -141,7 +143,7 @@ export function buildDesignExecutionDetails(input: {
     { category: 'Materials grade', items: [`Quote assumes ${finishTier} material grade.`, 'Final materials locked after sample approval and supplier confirmation.', 'Equivalent approved alternatives may be used if selected stock is unavailable.'] },
     { category: 'Site protection', items: ['Protect floors, walls, lifts, and access routes during execution.', 'Dust control and waste removal per building rules.', 'Working hours subject to property management approval.'] },
     { category: 'Timeline stages', items: ['Stage 1: approval, site verification, final scope lock.', 'Stage 2: 15% mobilization, procurement, scheduling.', 'Stage 3: execution, photo evidence, inspection, handover.'] },
-    { category: 'Assumptions', items: [`Area assumption: ${Math.max(1, Math.round(dimensions || 1))} sq ft.`, `Objective: ${designObjective}.`, input.notes ? `Client note: ${text(input.notes).slice(0, 240)}` : 'No extra client note declared.', 'Final execution price depends on site verification and material selection.'] },
+    { category: 'Assumptions', items: [`Area assumption: ${areaLabel}.`, `Objective: ${designObjective}.`, input.notes ? `Client note: ${text(input.notes).slice(0, 240)}` : 'No extra client note declared.', 'Final execution price depends on site verification and material selection.'] },
     { category: 'Exclusions', items: ['Hidden structural, waterproofing, pest, mold, electrical, or authority issues excluded until inspected.', 'Major layout changes and landlord/authority variation costs require separate approval.', 'No execution starts before approval, confirmed scope, and mobilization/payment.'] },
     { category: 'Payment / 15% mobilization', items: [`Estimated execution quote: AED ${money(quoteTotal)}.`, `15% mobilization: AED ${money(mobilizationAmount)}.`, 'Remaining payment path follows approved BIN GROUP owner/tenant workflow.'] },
   ];
@@ -167,6 +169,7 @@ export function buildDesignConcepts(input: {
   uploadedImageUrl?: string;
   notes?: string;
   finishTier?: string;
+  dimensions?: number;
   quoteTotal?: number;
   mobilizationAmount?: number;
 }): DesignConcept[] {

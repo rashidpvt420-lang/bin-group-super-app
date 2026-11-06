@@ -133,16 +133,11 @@ const hasCanonicalDispatchGeo = (property: any) => {
 
 export default function TenantRequestPage() {
     const { user } = useRole();
-    const { t, isRTL } = useLanguage();
+    const { tx: tt, isRTL } = useLanguage();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const clientRequestIdRef = useRef('');
     const previewUrlsRef = useRef<string[]>([]);
-
-    const tt = (key: string, fallback: string): string => {
-        const value = t(key);
-        return typeof value === 'string' && value.trim() && value.trim() !== key ? value : fallback;
-    };
 
     const [category, setCategory] = useState(normalizeCategoryPrefill(searchParams.get('category')));
     const [priority, setPriority] = useState('normal');
@@ -472,10 +467,10 @@ export default function TenantRequestPage() {
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
-                        {tt('dash.tenant.serviceLabel', 'SOVEREIGN SERVICE')}
+                        {tt('dash.tenant.serviceLabel', 'Service request')}
                     </Typography>
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#fff' }}>
-                        {tt('dash.tenant.newRequest', 'New Maintenance Request')}
+                        {tt('dash.tenant.newRequest', 'New maintenance request')}
                     </Typography>
                 </Box>
             </Stack>
@@ -588,7 +583,7 @@ export default function TenantRequestPage() {
 
                         <Box>
                             <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2 }}>
-                                <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}
+                                <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'Attach photos')}
                             </Typography>
                             {uploadingPhotos && <CircularProgress size={22} sx={{ color: binThemeTokens.gold, mb: 2 }} />}
                             <Grid container spacing={2}>
@@ -613,10 +608,10 @@ export default function TenantRequestPage() {
                             </Grid>
                         </Box>
 
-                        <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3 }}>
+                        <Box className="tenant-sla-note" data-testid="tenant-request-sla" sx={{ p: 2.5, bgcolor: '#FFFBEB', borderRadius: 3, border: '1px solid #FCD34D' }}>
                             <Stack direction="row" spacing={2} alignItems="flex-start">
-                                <AlertCircle size={20} color={binThemeTokens.gold} />
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.72)' }}>
+                                <AlertCircle size={20} color="#92400E" />
+                                <Typography variant="caption" sx={{ color: '#111827', fontWeight: 700 }}>
                                     {selectedSlaPolicy.label}: {selectedSlaMinutes} <Bi en={"minutes."} ar={"دقيقة."} /> {selectedSlaPolicy.tenantCopy}
                                 </Typography>
                             </Stack>
@@ -638,7 +633,7 @@ export default function TenantRequestPage() {
                             }
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4 }}
                         >
-                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST')}
+                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : tt('dash.tenant.dispatchRequest', 'Submit request')}
                         </Button>
                     </Stack>
                 </form>

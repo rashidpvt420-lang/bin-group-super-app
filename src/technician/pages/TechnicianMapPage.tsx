@@ -11,7 +11,7 @@ import { collection, doc, onSnapshot, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
-import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, getTechnicianLocation, getTicketJobLocation, isLocationStale } from '../../utils/liveTracking';
+import { calculateDistanceKm, estimateTicketArrivalMinutes, getStaleLabel, getTechnicianLocation, getTechnicianLocationUpdatedAt, getTicketJobLocation, isLocationStale, timestampMillis } from '../../utils/liveTracking';
 import { onSnapshotSplitIn } from '../../utils/queryUtils';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../utils/ticketConstants';
 import Bi from '../../components/Bi';
@@ -43,7 +43,9 @@ function buildSafeStaticMapUrl(jobLoc: any, techLoc: any) {
 }
 
 function locationTimestamp(location: any, fallback?: any) {
-  return location?.serverUpdatedAt || location?.updatedAt || location?.timestamp || fallback || null;
+  const ms = timestampMillis(location?.serverUpdatedAt) ?? timestampMillis(fallback) ?? timestampMillis(location?.updatedAt) ?? timestampMillis(location?.timestamp);
+  if (ms === null) return null;
+  return new Date(ms);
 }
 
 export default function TechnicianMapPage() {
@@ -167,10 +169,12 @@ export default function TechnicianMapPage() {
             const techLoc = getTechnicianLocation(job) || techProfile?.currentLocation || null;
             const jobLoc = getTicketJobLocation(job);
             const dist = calculateDistanceKm(techLoc, jobLoc);
-            const eta = calculateEtaMinutes(dist);
-            const isOnTheWay = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'].includes(String(job.status));
-            const jobLocationTimestamp = locationTimestamp(job.technicianLocation, job.technicianLocationUpdatedAt);
+            const visibleTravelStatuses = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'];
+            const travelKeys = [job.status, job.trackingStatus, job.dispatchStatus].map((value) => String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_'));
+            const isOnTheWay = visibleTravelStatuses.includes(String(job.status)) || travelKeys.some((value) => ['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING'].includes(value));
+            const jobLocationTimestamp = getTechnicianLocationUpdatedAt({ ...job, technicianLocation: job.technicianLocation || techProfile?.currentLocation }, techLoc);
             const locationStale = isLocationStale(jobLocationTimestamp, 2);
+            const eta = locationStale ? null : estimateTicketArrivalMinutes({ ...job, technicianLocation: techLoc || job.technicianLocation, technicianLocationUpdatedAt: jobLocationTimestamp });
             const staticMapUrl = buildSafeStaticMapUrl(jobLoc, techLoc);
 
             return (
@@ -183,7 +187,11 @@ export default function TechnicianMapPage() {
                           <Box component="img" src={staticMapUrl} alt="Static road-map preview of the verified job pin" sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.45 }} />
                         ) : null}
                         <Stack spacing={1.5} alignItems="center" sx={{ position: 'relative', zIndex: 1, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.94)', border: `1px solid ${MAP_READABLE.line}`, borderRadius: 4, px: 2.5, py: 2 }}>
-                          {resolved.hasExactCoordinates ? <Navigation size={44} color={MAP_READABLE.gold} /> : <ShieldAlert size={44} color={MAP_READABLE.red} />}
+                          {isOnTheWay && techLoc ? (
+                            <Box data-testid="technician-person-marker" aria-label="Technician location" sx={{ width: 44, height: 44, borderRadius: '50%', bgcolor: '#0F172A', color: '#67E8F9', display: 'grid', placeItems: 'center', fontWeight: 950 }}>
+                              <Navigation size={22} color="#67E8F9" />
+                            </Box>
+                          ) : resolved.hasExactCoordinates ? <Navigation size={44} color={MAP_READABLE.gold} /> : <ShieldAlert size={44} color={MAP_READABLE.red} />}
                           <Typography variant="h6" fontWeight="950" sx={{ color: MAP_READABLE.ink }}>{resolved.hasExactCoordinates ? 'Verified pin available' : 'Exact GPS pin missing'}</Typography>
                           {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Straight-line estimate ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#111827', fontWeight: 950, '& .MuiChip-icon': { color: '#111827' } }} />}
                           {dist !== null && <Typography variant="caption" sx={{ color: MAP_READABLE.muted, fontWeight: 700 }}>{dist.toFixed(1)} <Bi en={"km approximate straight-line distance · road routing not included"} ar={"كم مسافة تقريبية بخط مستقيم · لا تشمل مسار الطريق"} /></Typography>}

@@ -29,7 +29,7 @@ test('Phase 4 Owner journey exposes every operational surface', async () => {
   assert.match(properties, /where\('ownerId',\s*'==',\s*user\.uid\)/);
   assert.doesNotMatch(properties, /where\('ownerEmail',\s*'=='/);
   assert.match(properties, /data-testid="owner-register-property"/);
-  assert.match(properties, /navigate\('\/onboarding'\)/);
+  assert.match(properties, /navigate\('\/owner\/add-property'\)/);
   assert.match(properties, /prop\.status\?\.toUpperCase\(\) \|\| 'PENDING'/);
 });
 

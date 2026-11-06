@@ -9,6 +9,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { auth, functions, sendPasswordResetEmail } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { brokerPayoutDisplayEligible } from '../brokerReadiness';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -240,13 +241,13 @@ export default function BrokerProfilePage() {
               </Avatar>
               <Typography variant="h5" fontWeight="950" sx={{ mt: 2 }}>{displayName || label('Broker', 'الوسيط')}</Typography>
               <Typography variant="body2" sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{companyName || label('Brokerage partner', 'شريك وساطة')}</Typography>
-              <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: alpha(summary?.payout.eligible ? '#10b981' : '#f59e0b', 0.1) }}>
+              <Box data-testid="broker-payout-readiness" sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: alpha(brokerPayoutDisplayEligible(summary) ? '#10b981' : '#f59e0b', 0.1) }}>
                 <Typography variant="caption" fontWeight="950">{label('PAYOUT READINESS', 'جاهزية الدفع')}</Typography>
-                <Typography fontWeight="950" color={summary?.payout.eligible ? '#047857' : '#b45309'}>
-                  {summary?.payout.eligible ? label('ELIGIBLE', 'مؤهل') : label('BLOCKED', 'غير مؤهل')}
+                <Typography fontWeight="950" color={brokerPayoutDisplayEligible(summary) ? '#047857' : '#b45309'}>
+                  {brokerPayoutDisplayEligible(summary) ? label('ELIGIBLE', 'مؤهل') : label('NOT ELIGIBLE', 'غير مؤهل')}
                 </Typography>
               </Box>
-              {!summary?.payout.eligible && <Stack spacing={1} sx={{ mt: 2 }}>{(summary?.payout.blockReasons || []).map((reason) => <Chip key={reason} label={payoutReason(reason)} size="small" color="warning" />)}</Stack>}
+              {!brokerPayoutDisplayEligible(summary) && <Stack spacing={1} sx={{ mt: 2 }}>{(summary?.payout.blockReasons || []).map((reason) => <Chip key={reason} label={payoutReason(reason)} size="small" color="warning" />)}{Number(summary?.kyc.profileCompletionScore || 0) <= 0 && <Chip label={label('KYC readiness is 0%', 'جاهزية التحقق 0%')} size="small" color="warning" />}</Stack>}
             </Paper>
 
             <Paper sx={{ mt: 3, p: 4, borderRadius: 7, border: '1px solid #E5E7EB' }}>

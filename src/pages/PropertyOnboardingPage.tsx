@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography } from '@mui/material';
 import { initialOwnerSection } from '../components/onboarding/ownerAccountRules';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Languages, Save } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
@@ -24,13 +24,14 @@ const readable = (value: string | undefined, fallback: string) => (!value || val
 
 export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const { t, isRTL, lang, toggleLanguage } = useLanguage();
     const { user } = useRole();
     const { step, nextStep, prevStep, setStep, properties, addProperty, intakeId, ownerAccount } = useOnboardingStore();
     const signedInSession = Boolean(user?.uid) && !(user as { isAnonymous?: boolean } | null)?.isAnonymous;
     const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
-    const addPropertyIntent = searchParams.get('intent') === 'add-property';
+    const addPropertyIntent = searchParams.get('intent') === 'add-property' || location.pathname.endsWith('/add-property');
     const brokerUid = String(searchParams.get('broker') || '').trim();
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
@@ -70,8 +71,9 @@ export default function PropertyOnboardingPage() {
         if (!addPropertyIntent || addIntentAppliedRef.current || !signedInSession) return;
         addIntentAppliedRef.current = true;
         if (properties.length === 0) addProperty();
-        setStep(2);
-        setSection(0);
+        requestedSectionRef.current = 2;
+        if (Number(step) === 2) setSection(2);
+        else setStep(2);
     }, [addProperty, addPropertyIntent, properties.length, setStep, signedInSession]);
 
     // Auth resolves after mount: resume page 1 at the account section once, without fighting a later "Edit".
@@ -171,7 +173,7 @@ export default function PropertyOnboardingPage() {
         <Box className="white-platinum-onboarding" dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100dvh', bgcolor: '#FFFFFF', color: '#111827', py: { xs: 1.5, md: 4 } }}>
             <Container maxWidth="xl">
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
-                    <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate('/')} sx={{ color: '#7A5C12', fontWeight: 900, minWidth: 0 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
+                    <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate(addPropertyIntent ? '/owner/dashboard' : '/')} sx={{ color: '#7A5C12', fontWeight: 900, minWidth: 0 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
                         {intakeId && <Chip size="small" icon={<Save size={14} />} label={label('Saved', 'محفوظ')} color="success" variant="outlined" />}
                         <Button size="small" variant="outlined" onClick={toggleLanguage} startIcon={<Languages size={16} />} aria-label={label('Switch to Arabic', 'التبديل إلى الإنجليزية')} sx={{ minWidth: 0, fontWeight: 900, borderRadius: 99 }}>{lang === 'ar' ? 'EN' : 'عربي'}</Button>

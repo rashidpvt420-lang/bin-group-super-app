@@ -38,7 +38,7 @@ import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from 
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
-import { dubaiPayrollDateKey, payableShiftDocId, payableShiftPatch, type PayableShiftAction } from "./technicianPayableShift";
+import { SECOND_SAME_DAY_CLOCK_IN_MESSAGE, dubaiPayrollDateKey, legacyOpenShiftBackfill, payableShiftDocId, payableShiftPatch, type PayableShiftAction } from "./technicianPayableShift";
 import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
@@ -2924,6 +2924,9 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         updatedAt: now
     });
     const payable = await queuePayableShift(batch, techId, "CLOCK_IN");
+    if (payable.payableShift === "already_completed") {
+        throw new HttpsError("failed-precondition", SECOND_SAME_DAY_CLOCK_IN_MESSAGE);
+    }
 
     await batch.commit();
 
@@ -2949,6 +2952,38 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
 
     const redispatch = await redispatchAfterDutyChange(techId, "TECH_START_DUTY");
     return { success: true, shiftId, redispatch, ...payable };
+});
+
+/**
+ * Optional repair for a shift that was opened before payable staff_shifts existed.
+ * Copies technician_shifts.clockIn only. It does not invent a time and does not reopen a closed day.
+ */
+export const backfillRecordedDutyClock = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
+    const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
+    if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
+
+    const techId = request.auth.uid;
+    const userSnap = await db.collection("users").doc(techId).get();
+    const shiftId = String(userSnap.data()?.currentShiftId || "");
+    const recordedSnap = shiftId ? await db.collection("technician_shifts").doc(shiftId).get() : null;
+    const recordedClockIn = recordedSnap?.data()?.clockIn || recordedSnap?.data()?.startedAt || null;
+    const payableRef = db.collection("staff_shifts").doc(payableShiftDocId(techId));
+    const payableSnap = await payableRef.get();
+    const decision = legacyOpenShiftBackfill(payableSnap.exists ? payableSnap.data() || {} : null, recordedClockIn);
+    if (!decision.write) {
+        return { copied: false, reason: decision.reason };
+    }
+    await payableRef.set({
+        staffId: techId,
+        shiftDate: dubaiPayrollDateKey(),
+        status: "ACTIVE",
+        clockInTime: decision.clockInTime,
+        source: "RECORDED_DUTY_CLOCK_BACKFILL",
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { copied: true, reason: decision.reason, payableShiftId: payableRef.id };
 });
 
 /**

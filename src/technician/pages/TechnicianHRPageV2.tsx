@@ -12,6 +12,7 @@ import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngi
 import HrBi, { useHrText } from '../components/HrBi';
 import TechnicianLanguagePicker from '../components/TechnicianLanguagePicker';
 import MyHoursPanel from '../components/MyHoursPanel';
+import TechnicianOvertimeClaimCard from '../components/TechnicianOvertimeClaimCard';
 import MyPayslipsPanel from '../components/MyPayslipsPanel';
 
 const quickPrompts = [
@@ -349,6 +350,9 @@ export default function TechnicianHRPageV2() {
         </Grid>
       </Grid>
 
+      <Paper id="overtime" sx={{ p: 4, mt: 3, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 5 }}>
+        <TechnicianOvertimeClaimCard isRTL={isRTL} />
+      </Paper>
       <MyHoursPanel />
       <MyPayslipsPanel />
 

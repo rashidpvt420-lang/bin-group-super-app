@@ -58,6 +58,22 @@ describe('payroll records are server-only writes', () => {
   });
 });
 
+describe('hrProfiles salary fields are not client-writable', () => {
+  before(async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), 'hrProfiles/staff_a'), { uid: 'staff_a', displayName: 'Staff', shiftName: 'Day' });
+    });
+  });
+  it('HR manager can update a non-salary field and cannot write salary', async () => {
+    const db = ctx('hrm_salary', { role: 'hr_manager' });
+    await assertSucceeds(updateDoc(doc(db, 'hrProfiles/staff_a'), { shiftName: 'Night' }));
+    await assertFails(updateDoc(doc(db, 'hrProfiles/staff_a'), { baseSalary: 9000 }));
+    await assertFails(updateDoc(doc(db, 'hrProfiles/staff_a'), { basicSalary: 9000 }));
+    await assertFails(setDoc(doc(db, 'hrProfiles/new_salary'), { uid: 'new_salary', basicSalary: 1, displayName: 'New' }));
+    await assertSucceeds(setDoc(doc(db, 'hrProfiles/new_plain'), { uid: 'new_plain', displayName: 'New', shiftName: 'Day' }));
+  });
+});
+
 describe('staffDocuments reads: HR manager tier + own record only (Rashid, 4 Nov 2026)', () => {
   before(async () => {
     await env.withSecurityRulesDisabled(async (c) => {

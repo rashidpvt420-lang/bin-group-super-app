@@ -107,7 +107,7 @@ test('Portfolio and passport reads bind to canonical Owner UID, and controls nav
   assert.match(rendered.text, /Owner A property/);
   assert.equal(rendered.tree.props.sx.direction, 'rtl');
   rendered.nodes.find((node) => node.props['data-testid'] === 'owner-register-property').props.onClick();
-  assert.equal(page.navigations.at(-1), '/onboarding');
+  assert.equal(page.navigations.at(-1), '/owner/add-property');
 });
 
 test('Owner UID change hides previous rows before effects and while waiting for the new listener', async () => {

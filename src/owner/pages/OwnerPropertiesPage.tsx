@@ -124,7 +124,7 @@ export default function OwnerPropertiesPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.properties.title', 'My Portfolio')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.properties.register', 'Add property')}</Button>
+                    <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/owner/add-property')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.properties.register', 'Add property')}</Button>
                 </Stack>
             </Box>
 
@@ -133,7 +133,8 @@ export default function OwnerPropertiesPage() {
             {visibleProperties.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: '#FFFFFF', border: `1px dashed ${binThemeTokens.border}`, borderRadius: 6 }}>
                     <Building2 size={48} color="#D1D5DB" style={{ margin: '0 auto 16px' }} />
-                    <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.properties.empty', 'No properties are linked to your Owner account yet.')}</Typography>
+                    <Typography sx={{ color: '#111827', fontWeight: 800 }}>{tx('owner.properties.empty', 'No properties are linked to your Owner account yet.')}</Typography>
+                    <Typography sx={{ color: '#374151', fontWeight: 700, mt: 1 }}>{tx('owner.properties.emptyPin', 'Add a property and place the map pin so maintenance can find it.')}</Typography>
                 </Paper>
             ) : (
                 <Grid container spacing={4}>

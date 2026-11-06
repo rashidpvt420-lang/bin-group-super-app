@@ -31,8 +31,8 @@ const hardened = `    match /hrProfiles/{profileId} {
       // Private HR records can include Emirates ID, salary package and employment terms.
       // Operations/Finance/user-directory readers must not receive this full document.
       allow read: if isHrManagerTier() || (signedIn() && request.auth.uid == profileId);
-      allow create: if isHrManagerTier();
-      allow update: if isHrManagerTier();
+      allow create: if isHrManagerTier() && !request.resource.data.keys().hasAny(['baseSalary', 'basicSalary', 'salary', 'salaryPackage', 'housingAllowance', 'transportAllowance', 'foodAllowance', 'otherAllowance', 'netPay', 'grossPay']);
+      allow update: if isHrManagerTier() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['baseSalary', 'basicSalary', 'salary', 'salaryPackage', 'housingAllowance', 'transportAllowance', 'foodAllowance', 'otherAllowance', 'netPay', 'grossPay']);
       allow delete: if isHrManagerTier();
     }`;
 

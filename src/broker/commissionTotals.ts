@@ -1,12 +1,20 @@
 const VOID_MARKERS = ["VOID", "CANCEL", "REJECT"];
 
-export function commissionStatus(row: { status?: unknown; payoutStatus?: unknown }): string {
+function markerHit(value: unknown): boolean {
+  const status = String(value ?? "").trim().toUpperCase();
+  return VOID_MARKERS.some((marker) => status.includes(marker));
+}
+
+export function commissionStatus(row: { status?: unknown; payoutStatus?: unknown; settlementStatus?: unknown; voided?: unknown; isVoid?: unknown }): string {
+  if (row?.voided === true || row?.isVoid === true) return "VOID";
+  if (markerHit(row?.payoutStatus) || markerHit(row?.settlementStatus)) {
+    return String(row?.payoutStatus || row?.settlementStatus || "VOID").trim().toUpperCase();
+  }
   return String(row?.status || "").trim().toUpperCase();
 }
 
-export function isVoidOrClosedCommission(row: { status?: unknown }): boolean {
-  const status = commissionStatus(row);
-  return VOID_MARKERS.some((marker) => status.includes(marker));
+export function isVoidOrClosedCommission(row: { status?: unknown; payoutStatus?: unknown; settlementStatus?: unknown; voided?: unknown; isVoid?: unknown }): boolean {
+  return markerHit(commissionStatus(row)) || markerHit(row?.status) || markerHit(row?.payoutStatus) || markerHit(row?.settlementStatus) || row?.voided === true || row?.isVoid === true;
 }
 
 /** Pending settlement is status PENDING only. VOID, cancelled, rejected and paid rows are not money waiting. */
