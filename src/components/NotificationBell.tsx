@@ -122,8 +122,8 @@ export function NotificationBell({ formatText, label }: NotificationBellProps = 
 
     return (
         <>
-            <Tooltip title={`${unreadCount} unread alerts. This count is alerts, not approvals.`}>
-                <IconButton onClick={handleOpen} aria-label={unreadCount ? `${label || 'Alerts'} (${unreadCount} unread)` : (label || 'Alerts')} sx={{ color: '#111827', position: 'relative', gap: 0.5 }}>
+            <Tooltip title={label ? `${unreadCount} unread alerts. This count is alerts, not approvals.` : `${unreadCount} unread notifications`}>
+                <IconButton onClick={handleOpen} aria-label={unreadCount ? `${label || 'Notifications'} (${unreadCount} unread)` : (label || 'Notifications')} sx={{ color: '#111827', position: 'relative', gap: 0.5 }}>
                     {label && <Typography component="span" sx={{ fontSize: 12, fontWeight: 800, color: '#374151', lineHeight: 1 }}>{label}</Typography>}
                     <Badge badgeContent={unreadCount} color="error" max={99}>
                         {isRinging

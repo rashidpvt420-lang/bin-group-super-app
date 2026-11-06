@@ -42,7 +42,7 @@ import { notifyEmergency, notifyTicketCreated } from '../../services/notificatio
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import Bi from '../../components/Bi';
-import { selectTenantResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
+import { residenceDedupeKey, selectTenantResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
 
 const RESIDENCE_LOOKUP_TIMEOUT_MS = 12000;
 
@@ -200,76 +200,71 @@ export default function TenantRequestPage() {
                     snapshot.docs.forEach((unitDoc) => addUnit(unitDoc.id, unitDoc.data()));
                 };
 
-                const lookups = await Promise.allSettled([
-                    withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile'),
-                    queryUnits('tenantId', user.uid),
-                    queryUnits('tenantUid', user.uid),
-                    queryUnits('currentTenantId', user.uid),
-                    user.email ? queryUnits('tenantEmail', user.email.toLowerCase()) : Promise.resolve(),
-                ]);
-                const profileResult = lookups[0];
-                const profileSnap = profileResult.status === 'fulfilled' ? profileResult.value as { exists?: () => boolean; data?: () => any } : null;
-                const profile = profileSnap?.exists?.() ? profileSnap.data?.() || {} : {};
-                const profileUnitId = String((profile as any)?.unitId || (profile as any)?.assignedUnitId || '').trim();
+                const profileSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile');
+                const profile = profileSnap.exists() ? profileSnap.data() : {};
+                const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
                 if (profileUnitId) {
-                    try {
-                        const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
-                        if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
-                    } catch (error) {
-                        console.warn('Profile unit lookup failed:', error);
-                    }
+                    const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
+                    if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
                 }
 
-                const denied = lookups.some((result) => result.status === 'rejected' && String((result.reason as any)?.code || '').toLowerCase().includes('permission-denied'));
-                const timedOut = lookups.some((result) => result.status === 'rejected' && String((result.reason as any)?.message || '').startsWith('timeout:'));
+                await queryUnits('tenantId', user.uid);
+                await queryUnits('tenantUid', user.uid);
+                await queryUnits('currentTenantId', user.uid);
+                if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
                 if (cancelled) return;
-                if (unitCandidates.size === 0) {
-                    if (lookups.some((result) => result.status === 'rejected')) {
-                        setResidenceLoadError(
-                            denied
-                                ? 'Residence details could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
-                                : timedOut
-                                    ? 'Residence details could not be loaded in time. This is a data-loading failure, not confirmation that no unit is linked.'
-                                    : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked.',
-                        );
-                    }
-                    return;
-                }
 
-                const propertyById = new Map<string, any>();
-                await Promise.all([...unitCandidates.values()].map(async (unit) => {
+                const collapsed = new Map<string, ResidenceUnit>();
+                for (const unit of unitCandidates.values()) {
+                    const key = residenceDedupeKey(unit);
+                    const current = collapsed.get(key);
+                    const winner = selectTenantResidence(
+                        current ? [{ unit: current }, { unit }] : [{ unit }],
+                        profileUnitId,
+                    );
+                    if (winner) collapsed.set(key, winner);
+                }
+                unitCandidates.clear();
+                collapsed.forEach((unit) => unitCandidates.set(unit.id, unit));
+
+                let selectedUnit: ResidenceUnit | null = null;
+                let selectedProperty: any = null;
+                for (const unit of unitCandidates.values()) {
                     const propertyId = String(unit.propertyId || '').trim();
-                    if (!propertyId || propertyById.has(propertyId)) return;
-                    try {
-                        const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
-                        propertyById.set(propertyId, propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null);
-                    } catch (error) {
-                        console.warn('Property lookup failed:', error);
-                        propertyById.set(propertyId, null);
+                    if (!propertyId) {
+                        if (!selectedUnit) selectedUnit = unit;
+                        continue;
                     }
-                }));
-                if (cancelled) return;
-                const selectedUnit = selectTenantResidence(
-                    [...unitCandidates.values()].map((unit) => {
-                        const property = propertyById.get(String(unit.propertyId || '').trim());
-                        return { unit, propertyHasDispatchGeo: Boolean(property && hasCanonicalDispatchGeo(property)) };
-                    }),
-                    profileUnitId,
-                );
+                    const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
+                    const property = propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
+                    if (!selectedUnit) {
+                        selectedUnit = unit;
+                        selectedProperty = property;
+                    }
+                    if (property && hasCanonicalDispatchGeo(property)) {
+                        selectedUnit = unit;
+                        selectedProperty = property;
+                        break;
+                    }
+                }
                 if (!selectedUnit) return;
-                const selectedProperty = propertyById.get(String(selectedUnit.propertyId || '').trim()) || null;
+
                 setUnitData(selectedUnit);
+                if (!selectedProperty) return;
                 setPropertyData(selectedProperty);
             } catch (error: any) {
                 if (cancelled) return;
                 const code = String(error?.code || '').toLowerCase();
-                console.warn('Residence lookup failed:', { code });
+                const timedOut = String(error?.message || '').startsWith('timeout:');
+                console.warn('Residence lookup failed:', { code, timedOut });
                 setUnitData(null);
                 setPropertyData(null);
                 setResidenceLoadError(
                     code.includes('permission-denied')
                         ? 'Residence details could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
-                        : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
+                        : timedOut
+                            ? 'Residence details could not be loaded in time. This is a data-loading failure, not confirmation that no unit is linked.'
+                            : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
                 );
             } finally {
                 if (!cancelled) setResidenceChecked(true);

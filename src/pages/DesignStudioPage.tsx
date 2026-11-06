@@ -341,7 +341,7 @@ export default function DesignStudioPage() {
             <Chip label={tenantMode ? 'Your owner approves this' : 'Private to you'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
           {renderStatus === 'AI_RENDER_FAILED' && submitError && (
-            <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error" action={<Button color="inherit" onClick={() => void handleCreateConcept()}>Try again</Button>}>{submitError}</Alert>
+            <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error" action={<Button color="inherit" disabled={submitting} onClick={() => void handleCreateConcept()}>{submitting ? 'Creating…' : 'Try again'}</Button>}>{submitError}</Alert>
           )}
           {submitting && waitNote && (
             <Alert severity="warning" sx={{ mt: 2 }} data-testid="design-still-waiting" action={<Button color="inherit" onClick={stopWaitingForDesign}>Stop waiting</Button>}>

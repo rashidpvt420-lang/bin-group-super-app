@@ -79,11 +79,11 @@ export default function OwnerApprovalCenterPage() {
     ticketOlderPageLoadedRef.current = false;
     setOlderItems([]);
     setOlderSignOffs([]);
-    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(100));
+    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(REQUEST_PAGE_SIZE));
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
       if (!requestOlderPageLoadedRef.current) requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;
-      if (!requestOlderPageLoadedRef.current) setRequestsMayBeTruncated(snap.size >= 100);
+      if (!requestOlderPageLoadedRef.current) setRequestsMayBeTruncated(snap.size >= REQUEST_PAGE_SIZE);
       setItems(rows);
       setRequestsError('');
       setNotes((current) => {
@@ -208,7 +208,7 @@ export default function OwnerApprovalCenterPage() {
       </Stack>
       {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}><Bi en={"Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting:"} ar={"تعذر تحميل طلبات العروض والموافقات. قد تكون القائمة غير مكتملة، فلا تفترض عدم وجود طلبات:"} /> {requestsError}</Alert>}
       {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}><Bi en={"Ticket sign-offs could not be loaded. The list below may be incomplete:"} ar={"تعذر تحميل اعتمادات الطلبات. قد تكون القائمة غير مكتملة:"} /> {signOffsError}</Alert>}
-      {requestsMayBeTruncated && <Alert severity="warning" data-testid="owner-approval-requests-capped" sx={{ mb: 3 }}>At least 100 approval requests were returned. Use Load older approval requests to continue through the queue before treating it as clear. The count on Home uses this same first page.</Alert>}
+      {requestsMayBeTruncated && <Alert severity="warning" data-testid="owner-approval-requests-capped" sx={{ mb: 3 }}>At least 50 approval requests were returned. Use Load older approval requests to continue through the queue before treating it as clear.</Alert>}
       {signOffsMayBeTruncated && <Alert severity="warning" data-testid="owner-signoffs-capped" sx={{ mb: 3 }}>At least 150 maintenance tickets were returned. Use Load older ticket sign-offs to continue through the complete ticket queue.</Alert>}
       {notice && <Alert severity={notice.includes('Failed') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 

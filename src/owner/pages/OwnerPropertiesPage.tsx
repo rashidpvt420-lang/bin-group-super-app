@@ -124,7 +124,7 @@ export default function OwnerPropertiesPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.properties.title', 'My Portfolio')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/onboarding?intent=add-property')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.properties.register', 'Add property')}</Button>
+                    <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.properties.register', 'Add property')}</Button>
                 </Stack>
             </Box>
 
