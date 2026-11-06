@@ -57,7 +57,7 @@ const OwnerProfileWithReadiness = () => <><OwnerProfileReadinessCard /><OwnerPro
 const OwnerNotificationBell = () => {
     const { user } = useRole();
     const { formatPropertyText } = useOwnerPropertyLabels(user?.uid);
-    return <NotificationBell formatText={formatPropertyText} />;
+    return <NotificationBell formatText={formatPropertyText} label="Alerts" />;
 };
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
@@ -91,7 +91,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Stack>
                     ) : (
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                        <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
+                        <Button aria-label={label('nav.owner_approvals', 'Approvals')} onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         <OwnerNotificationBell />
                         <IconButton aria-label={label('nav.owner_profile', 'Owner profile')} onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
                         <PortalSessionControls role="owner" accent={binThemeTokens.goldHover} />

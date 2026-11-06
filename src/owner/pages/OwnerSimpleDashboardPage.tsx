@@ -13,10 +13,10 @@ import OwnerCommitteeRecordsCard from '../components/OwnerCommitteeRecordsCard';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import OwnerPropertyPassportCard from '../components/OwnerPropertyPassportCard';
 import OwnerSpendingLimitsCard from '../components/OwnerSpendingLimitsCard';
-import { Box, Button, Stack } from '@mui/material';
+import { Box, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
-import { AppHeader, EmptyState, ErrorState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
+import { AppHeader, EmptyState, ErrorState, ListRow, StatusChip, UiCard } from '../../components/ui';
 import { ui } from '../../theme/uiTokens';
 import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
@@ -24,6 +24,8 @@ import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
 import OwnerComplianceCalendarCard from '../components/OwnerComplianceCalendarCard';
 import OwnerKpiTiles from '../components/OwnerKpiTiles';
 import OwnerTrustMetricsCard from '../components/OwnerTrustMetricsCard';
+import OwnerPortfolioHomeCard from '../components/OwnerPortfolioHomeCard';
+import { tabRootBottomPadding } from '../../theme/uiTokens';
 
 /**
  * Redesigned owner home (REDESIGN.md R4): key numbers, one "Needs you today" list, live repairs, money.
@@ -65,7 +67,8 @@ export default function OwnerSimpleDashboardPage() {
   return (
     <Box data-testid="owner-home" sx={{ direction: isRTL ? 'rtl' : 'ltr', mx: { xs: -2, sm: 0 } }}>
       <AppHeader isRTL={isRTL} eyebrow={t('owner.home.eyebrow', 'Owner', 'المالك')} title={t('owner.home.title', 'My properties', 'عقاراتي')} />
-      <Stack spacing={1.75} sx={{ p: 2, bgcolor: ui.cream }}>
+      <Stack spacing={1.75} sx={{ p: 2, pb: tabRootBottomPadding, bgcolor: ui.cream, position: 'relative', zIndex: 2 }}>
+        <OwnerPortfolioHomeCard />
         <OwnerKpiTiles onNavigate={navigate} isRTL={isRTL} repairsLoading={loading} openRepairs={loading || failedSources.includes('tickets') || truncatedSources.includes('tickets') ? null : openMaintenance} />
         {failedSources.length > 0 && (
           <Box data-testid="owner-command-counts-failed">
@@ -92,11 +95,6 @@ export default function OwnerSimpleDashboardPage() {
 
         <OwnerFinancialTruthCard />
         <OwnerTrustMetricsCard />
-
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25}>
-          <UiButton tone="outline" onClick={() => navigate('/owner/tenants')}>{t('owner.home.invite', 'Invite tenant', 'دعوة مستأجر')}</UiButton>
-          <UiButton tone="primary" onClick={() => navigate('/owner/find-room-rent')}>{t('owner.home.list', 'List empty unit', 'عرض وحدة شاغرة')}</UiButton>
-        </Stack>
 
         <OwnerMaintenancePlansCard />
         <OwnerVendorScorecardsCard />

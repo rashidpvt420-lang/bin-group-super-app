@@ -7,6 +7,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import UnifiedDocumentVault from '../../components/UnifiedDocumentVault';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssIntentRouter';
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
+import { employmentJoinValue } from '../utils/employmentJoinDate';
 import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
 import HrBi, { useHrText } from '../components/HrBi';
 import TechnicianLanguagePicker from '../components/TechnicianLanguagePicker';
@@ -126,8 +127,18 @@ export default function TechnicianHRPageV2() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db, 'users', user.uid)).then((snap) => {
-      if (snap.exists()) setHrProfile(snap.data());
+    Promise.all([
+      getDoc(doc(db, 'hrProfiles', user.uid)),
+      getDoc(doc(db, 'users', user.uid)),
+    ]).then(([hrSnap, userSnap]) => {
+      const hrData = hrSnap.exists() ? hrSnap.data() : {};
+      const userData = userSnap.exists() ? userSnap.data() : {};
+      setHrProfile({
+        ...userData,
+        ...hrData,
+        joiningDate: employmentJoinValue(hrData, userData),
+        baseSalary: hrData.baseSalary || hrData.basicSalary || userData.baseSalary || userData.basicSalary || 0,
+      });
     }).catch((error) => console.warn('HR profile read failed:', error));
   }, [user?.uid]);
 
@@ -300,7 +311,7 @@ export default function TechnicianHRPageV2() {
 
   const eosbBaseSalary = Number(hrProfile?.baseSalary) || 0;
   const eosbJoiningDate = useMemo(
-    () => toJsDate(hrProfile?.joiningDate || hrProfile?.joinedAt || hrProfile?.hireDate || hrProfile?.createdAt),
+    () => toJsDate(hrProfile?.joiningDate || hrProfile?.joinedAt || hrProfile?.hireDate),
     [hrProfile]
   );
   const eosbEstimate = useMemo(() => {

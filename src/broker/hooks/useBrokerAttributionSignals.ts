@@ -1,6 +1,7 @@
 import React from 'react';
 import { addDoc, collection, db, limit, onSnapshot, query, serverTimestamp, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { pendingSettlementAmount } from '../commissionTotals';
 
 type BrokerAttributionSignals = {
   loading: boolean;
@@ -19,8 +20,6 @@ const brokerKey = (uid?: string, email?: string | null) => {
   const base = (uid || email || 'broker').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
   return `BIN-${base || 'BROKER'}`;
 };
-
-const moneyValue = (value: unknown) => Number(value || 0) || 0;
 
 export function useBrokerAttributionSignals(): BrokerAttributionSignals {
   const { user } = useRole();
@@ -61,17 +60,12 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
 
     unsubs.push(onSnapshot(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), limit(100)), (snap) => {
       let contractCount = 0;
-      let pendingAmount = 0;
-      snap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
+      const rows = snap.docs.map((docSnap) => docSnap.data());
+      rows.forEach((data) => {
         if (data.contractId || data.sourceContractId) contractCount += 1;
-        const status = String(data.status || '').toUpperCase();
-        if (!status.includes('PAID') && !status.includes('REJECTED')) {
-          pendingAmount += moneyValue(data.amount || data.commissionAmount);
-        }
       });
       setAttributedContracts(contractCount);
-      setPendingCommissionAmount(pendingAmount);
+      setPendingCommissionAmount(pendingSettlementAmount(rows));
       setError('');
       publishLoaded();
     }, (err) => {

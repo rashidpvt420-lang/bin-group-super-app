@@ -13,6 +13,13 @@ import Bi from '../../components/Bi';
 // management-fee rule as /owner/financials. Paid invoices and VERIFIED NOI are
 // shown alongside, never folded into the payable equation.
 const MANAGEMENT_FEE_RATE = 0.05;
+const truthChipSx = {
+  bgcolor: '#F8F4E8',
+  color: '#111827',
+  border: '1px solid #111827',
+  '& .MuiChip-label': { color: '#111827', fontWeight: 800 },
+  '& .MuiChip-icon': { color: '#111827' },
+};
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function OwnerFinancialTruthCard() {
@@ -85,7 +92,7 @@ export default function OwnerFinancialTruthCard() {
       data-source-count={summary.propertyCount}
       data-paid-invoice-count={summary.paidInvoiceCount}
       data-verified-noi-status={summary.verifiedNoiStatus}
-      sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 6, bgcolor: '#111827', color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.34)}` }}
+      sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 6, bgcolor: '#111827', color: '#F9FAFB', border: `1px solid ${alpha(binThemeTokens.gold, 0.34)}`, '&&': { bgcolor: '#111827', color: '#F9FAFB' } }}
     >
       <Stack spacing={2.25}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
@@ -125,12 +132,12 @@ export default function OwnerFinancialTruthCard() {
         )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-          <Chip icon={<SafeIcon icon={ReceiptText} size={14} />} label={`${copy.rentCollected}: ${money(summary.totalRevenue)}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' }} />
-          <Chip icon={<SafeIcon icon={Wallet} size={14} />} label={`${copy.verifiedNoi}: ${summary.verifiedNoi === null ? '—' : money(summary.verifiedNoi)}`} size="small" sx={{ bgcolor: alpha('#38bdf8', 0.14), color: '#E0F2FE' }} />
-          <Chip icon={<SafeIcon icon={ReceiptText} size={14} />} label={`${copy.paidInvoices}: ${money(summary.paidInvoiceTotal)} (${summary.paidInvoiceCount})`} size="small" sx={{ bgcolor: alpha('#10b981', 0.14), color: '#D1FAE5' }} />
-          <Chip icon={<SafeIcon icon={Calculator} size={14} />} label={`${copy.pending}: ${money(summary.pendingVerification)}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' }} />
-          <Chip icon={<SafeIcon icon={Calculator} size={14} />} label={copy.source} size="small" sx={{ maxWidth: '100%', height: 'auto', bgcolor: alpha(binThemeTokens.gold, 0.12), color: '#F8E7A6', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.7 } }} />
-          {refreshedAt && <Chip icon={<SafeIcon icon={Clock3} size={14} />} label={`${copy.refreshed}: ${refreshedAt.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE')}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' }} />}
+          <Chip icon={<SafeIcon icon={ReceiptText} size={14} />} label={`${copy.rentCollected}: ${money(summary.totalRevenue)}`} size="small" sx={truthChipSx} />
+          <Chip icon={<SafeIcon icon={Wallet} size={14} />} label={`${copy.verifiedNoi}: ${summary.verifiedNoi === null ? '—' : money(summary.verifiedNoi)}`} size="small" sx={truthChipSx} />
+          <Chip icon={<SafeIcon icon={ReceiptText} size={14} />} label={`${copy.paidInvoices}: ${money(summary.paidInvoiceTotal)} (${summary.paidInvoiceCount})`} size="small" sx={truthChipSx} />
+          <Chip icon={<SafeIcon icon={Calculator} size={14} />} label={`${copy.pending}: ${money(summary.pendingVerification)}`} size="small" sx={truthChipSx} />
+          <Chip icon={<SafeIcon icon={Calculator} size={14} />} label={copy.source} size="small" sx={{ ...truthChipSx, maxWidth: '100%', height: 'auto', '& .MuiChip-label': { color: '#111827', fontWeight: 800, whiteSpace: 'normal', py: 0.7 } }} />
+          {refreshedAt && <Chip icon={<SafeIcon icon={Clock3} size={14} />} label={`${copy.refreshed}: ${refreshedAt.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE')}`} size="small" sx={truthChipSx} />}
         </Stack>
       </Stack>
     </Paper>

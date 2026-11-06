@@ -208,6 +208,16 @@ function providerStatusColor(message: Message) {
   return '#f59e0b';
 }
 
+/** Show emphasis without leaving raw ** markers in the chat. */
+function renderChatText(text: string) {
+  return String(text || '').split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
 export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   role,
   onNavigate,
@@ -563,7 +573,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
                     sx={{ mb: 1.2, height: 20, bgcolor: alpha(providerStatusColor(msg), 0.14), color: providerStatusColor(msg), fontWeight: 950, fontSize: '0.62rem' }}
                   />
                 )}
-                <Typography variant="body2" sx={{ lineHeight: 1.6, whiteSpace: 'pre-line', color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>{msg.text}</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.6, whiteSpace: 'pre-line', color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>{renderChatText(msg.text)}</Typography>
                 {msg.citations && (
                   <Box sx={{ mt: 1.2, pt: 1, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
                     {msg.citations.containsEstimate && (

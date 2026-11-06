@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, Typography, alpha } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { Coffee, MapPin, Power } from 'lucide-react';
 import { db, doc, collection, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -39,6 +40,7 @@ function errorText(err: any, fallback: string): string {
 export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRTL?: boolean }) {
   const { user } = useRole();
   const { tx } = useLanguage();
+  const navigate = useNavigate();
   const [duty, setDuty] = useState<DutyState>(normalizeDutyState(user?.dutyStatus));
   const [activeJobCount, setActiveJobCount] = useState(0);
   const [updating, setUpdating] = useState(false);
@@ -131,9 +133,15 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
         </Stack>
         <Typography variant="body2" sx={{ color: '#475569' }}>
           {onDuty
-            ? tx('tech.duty.onDutyHelp', 'You can receive new jobs. While you have no active job, your location is shared with dispatch every few minutes.')
-            : tx('tech.duty.offDutyHelp', 'Activate duty to receive jobs. New complaints are only routed to on-duty technicians.')}
+            ? tx('tech.duty.onDutyHelp', 'You can receive new jobs. This button is also your paid clock. While you have no active job, your location is shared with dispatch every few minutes.')
+            : tx('tech.duty.offDutyHelp', 'Start your shift to receive jobs and to record paid hours. New complaints are only routed to technicians who are on duty.')}
         </Typography>
+        <Typography variant="body2" data-testid="technician-paid-clock-note" sx={{ color: '#111827', fontWeight: 700 }}>
+          {tx('tech.duty.payNote', 'Starting duty clocks you in for pay. Ending the shift clocks you out. Hours are counted from this clock.')}
+        </Typography>
+        <Button variant="text" onClick={() => navigate('/technician/hr')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 800, px: 0 }}>
+          {tx('tech.duty.paidHours', 'See paid hours')}
+        </Button>
         {onDuty && activeJobCount === 0 && !gpsError && gpsSharedAt && (
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" data-testid="technician-availability-gps-ok">
             <MapPin size={16} color="#047857" />

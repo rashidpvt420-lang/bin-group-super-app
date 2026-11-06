@@ -2396,6 +2396,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Monthly payroll rows (adminGeneratePayrollBatch / adminSettlePayrollRecord). Server-only writes.
+    // Reads stay on the existing admin catch-all. This block does not add new readers.
+    match /payroll/{payrollId} {
+      allow create, update, delete: if false;
+    }
+
     match /support_chats/{messageId} {
       allow read: if isAdmin() || isOwnerId(resource.data.get('chatId', null));
       allow create: if isAdmin() || (signedIn() &&
@@ -2655,6 +2661,9 @@ service cloud.firestore {
           'payments',
           'transactions',
           'payroll_entries',
+          'payroll',
+          'staffPayslips',
+          'salaryHistory',
           'invoices',
           'invoice_registry',
           'commissions',
@@ -2782,6 +2791,9 @@ service cloud.firestore {
           'payments',
           'transactions',
           'payroll_entries',
+          'payroll',
+          'staffPayslips',
+          'salaryHistory',
           'invoices',
           'invoice_registry',
           'commissions',

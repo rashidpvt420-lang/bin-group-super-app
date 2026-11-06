@@ -12,6 +12,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import Bi from '../../components/Bi';
+import { pendingSettlementAmount } from '../commissionTotals';
 
 type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 
@@ -50,7 +51,7 @@ export default function BrokerCommissionsPage() {
   const payableIds = useMemo(() => payableCommissions.map((commission) => commission.id).sort(), [payableCommissions]);
 
   const stats = useMemo(() => ({
-    pending: commissions.filter((item) => String(item.status || '').toLowerCase() === 'pending').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    pending: pendingSettlementAmount(commissions),
     approved: commissions.filter((item) => String(item.status || '').toLowerCase() === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0),
     totalPaid: commissions.filter((item) => String(item.status || '').toLowerCase() === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
   }), [commissions]);

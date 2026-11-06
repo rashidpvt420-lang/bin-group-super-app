@@ -29,9 +29,11 @@ type NotificationBellProps = {
      * passes one that swaps raw property document IDs for readable labels.
      */
     formatText?: (text: string) => string;
+    /** Visible name so the unread count is not mistaken for Approvals. */
+    label?: string;
 };
 
-export function NotificationBell({ formatText }: NotificationBellProps = {}) {
+export function NotificationBell({ formatText, label }: NotificationBellProps = {}) {
     const { user, enableNotifications } = useRole();
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState<BinNotification[]>([]);
@@ -120,8 +122,9 @@ export function NotificationBell({ formatText }: NotificationBellProps = {}) {
 
     return (
         <>
-            <Tooltip title={`${unreadCount} unread notifications`}>
-                <IconButton onClick={handleOpen} aria-label={unreadCount ? `Notifications (${unreadCount} unread)` : 'Notifications'} sx={{ color: '#111827', position: 'relative' }}>
+            <Tooltip title={`${unreadCount} unread alerts. This count is alerts, not approvals.`}>
+                <IconButton onClick={handleOpen} aria-label={unreadCount ? `${label || 'Alerts'} (${unreadCount} unread)` : (label || 'Alerts')} sx={{ color: '#111827', position: 'relative', gap: 0.5 }}>
+                    {label && <Typography component="span" sx={{ fontSize: 12, fontWeight: 800, color: '#374151', lineHeight: 1 }}>{label}</Typography>}
                     <Badge badgeContent={unreadCount} color="error" max={99}>
                         {isRinging
                             ? <SafeIcon icon={BellRing} size={22} color="#7A5C12" />

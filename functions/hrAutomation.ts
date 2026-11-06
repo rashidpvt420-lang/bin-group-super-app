@@ -1002,11 +1002,13 @@ function approvedLeaveRecords(docs: FirebaseFirestore.QueryDocumentSnapshot[], e
 }
 
 async function staffLeaveState(uid: string, excludeId = "") {
-    const [profileSnap, requestsSnap] = await Promise.all([
+    const [userSnap, hrSnap, requestsSnap] = await Promise.all([
         db.collection("users").doc(uid).get(),
+        db.collection("hrProfiles").doc(uid).get(),
         db.collection("staffRequests").where("uid", "==", uid).limit(500).get(),
     ]);
-    const joinDate = joinDateKey(profileSnap.data());
+    // HR saves joiningDate on hrProfiles. Account createdAt is not a joining date.
+    const joinDate = joinDateKey(hrSnap.data()) || joinDateKey(userSnap.data());
     const approved = approvedLeaveRecords(requestsSnap.docs, excludeId);
     return { joinDate, approved };
 }

@@ -42,6 +42,9 @@ import { notifyEmergency, notifyTicketCreated } from '../../services/notificatio
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import Bi from '../../components/Bi';
+import { selectTenantResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
+
+const RESIDENCE_LOOKUP_TIMEOUT_MS = 12000;
 
 const sanitizeStorageFileName = (name: string) =>
     name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
@@ -151,6 +154,7 @@ export default function TenantRequestPage() {
     const [unitData, setUnitData] = useState<any>(null);
     const [residenceChecked, setResidenceChecked] = useState(false);
     const [residenceLoadError, setResidenceLoadError] = useState('');
+    const [residenceAttempt, setResidenceAttempt] = useState(0);
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [failedTicketId, setFailedTicketId] = useState<string | null>(null);
@@ -167,64 +171,97 @@ export default function TenantRequestPage() {
     };
 
     useEffect(() => {
+        let cancelled = false;
+        const withTimeout = <T,>(promise: Promise<T>, label: string): Promise<T> => new Promise((resolve, reject) => {
+            const timer = window.setTimeout(() => reject(new Error(`timeout:${label}`)), RESIDENCE_LOOKUP_TIMEOUT_MS);
+            promise.then(
+                (value) => { window.clearTimeout(timer); resolve(value); },
+                (error) => { window.clearTimeout(timer); reject(error); },
+            );
+        });
         const fetchResidence = async () => {
             if (!user?.uid) {
                 setResidenceChecked(true);
                 return;
             }
+            setResidenceChecked(false);
             setResidenceLoadError('');
+            setUnitData(null);
+            setPropertyData(null);
             try {
-                const unitCandidates = new Map<string, any>();
+                const unitCandidates = new Map<string, ResidenceUnit>();
                 const addUnit = (id: string, data: any) => {
                     if (!id || unitCandidates.has(id)) return;
                     unitCandidates.set(id, { id, ...data });
                 };
                 const queryUnits = async (field: string, value: string) => {
                     if (!value) return;
-                    const snapshot = await getDocs(query(collection(db, 'units'), where(field, '==', value)));
+                    const snapshot = await withTimeout(getDocs(query(collection(db, 'units'), where(field, '==', value))), field);
                     snapshot.docs.forEach((unitDoc) => addUnit(unitDoc.id, unitDoc.data()));
                 };
 
-                const profileSnap = await getDoc(doc(db, 'users', user.uid));
-                const profile = profileSnap.exists() ? profileSnap.data() : {};
-                const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
+                const lookups = await Promise.allSettled([
+                    withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile'),
+                    queryUnits('tenantId', user.uid),
+                    queryUnits('tenantUid', user.uid),
+                    queryUnits('currentTenantId', user.uid),
+                    user.email ? queryUnits('tenantEmail', user.email.toLowerCase()) : Promise.resolve(),
+                ]);
+                const profileResult = lookups[0];
+                const profileSnap = profileResult.status === 'fulfilled' ? profileResult.value as { exists?: () => boolean; data?: () => any } : null;
+                const profile = profileSnap?.exists?.() ? profileSnap.data?.() || {} : {};
+                const profileUnitId = String((profile as any)?.unitId || (profile as any)?.assignedUnitId || '').trim();
                 if (profileUnitId) {
-                    const profileUnitSnap = await getDoc(doc(db, 'units', profileUnitId));
-                    if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
+                    try {
+                        const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
+                        if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
+                    } catch (error) {
+                        console.warn('Profile unit lookup failed:', error);
+                    }
                 }
 
-                await queryUnits('tenantId', user.uid);
-                await queryUnits('tenantUid', user.uid);
-                await queryUnits('currentTenantId', user.uid);
-                if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
+                const denied = lookups.some((result) => result.status === 'rejected' && String((result.reason as any)?.code || '').toLowerCase().includes('permission-denied'));
+                const timedOut = lookups.some((result) => result.status === 'rejected' && String((result.reason as any)?.message || '').startsWith('timeout:'));
+                if (cancelled) return;
+                if (unitCandidates.size === 0) {
+                    if (lookups.some((result) => result.status === 'rejected')) {
+                        setResidenceLoadError(
+                            denied
+                                ? 'Residence details could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
+                                : timedOut
+                                    ? 'Residence details could not be loaded in time. This is a data-loading failure, not confirmation that no unit is linked.'
+                                    : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked.',
+                        );
+                    }
+                    return;
+                }
 
-                let selectedUnit: any = null;
-                let selectedProperty: any = null;
-                for (const unit of unitCandidates.values()) {
+                const propertyById = new Map<string, any>();
+                await Promise.all([...unitCandidates.values()].map(async (unit) => {
                     const propertyId = String(unit.propertyId || '').trim();
-                    if (!propertyId) {
-                        if (!selectedUnit) selectedUnit = unit;
-                        continue;
+                    if (!propertyId || propertyById.has(propertyId)) return;
+                    try {
+                        const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
+                        propertyById.set(propertyId, propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null);
+                    } catch (error) {
+                        console.warn('Property lookup failed:', error);
+                        propertyById.set(propertyId, null);
                     }
-                    const propertySnap = await getDoc(doc(db, 'properties', propertyId));
-                    const property = propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
-                    if (!selectedUnit) {
-                        selectedUnit = unit;
-                        selectedProperty = property;
-                    }
-                    if (property && hasCanonicalDispatchGeo(property)) {
-                        selectedUnit = unit;
-                        selectedProperty = property;
-                        break;
-                    }
-                }
+                }));
+                if (cancelled) return;
+                const selectedUnit = selectTenantResidence(
+                    [...unitCandidates.values()].map((unit) => {
+                        const property = propertyById.get(String(unit.propertyId || '').trim());
+                        return { unit, propertyHasDispatchGeo: Boolean(property && hasCanonicalDispatchGeo(property)) };
+                    }),
+                    profileUnitId,
+                );
                 if (!selectedUnit) return;
-
+                const selectedProperty = propertyById.get(String(selectedUnit.propertyId || '').trim()) || null;
                 setUnitData(selectedUnit);
-                if (!selectedProperty) return;
                 setPropertyData(selectedProperty);
-
             } catch (error: any) {
+                if (cancelled) return;
                 const code = String(error?.code || '').toLowerCase();
                 console.warn('Residence lookup failed:', { code });
                 setUnitData(null);
@@ -235,11 +272,12 @@ export default function TenantRequestPage() {
                         : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
                 );
             } finally {
-                setResidenceChecked(true);
+                if (!cancelled) setResidenceChecked(true);
             }
         };
         void fetchResidence();
-    }, [user]);
+        return () => { cancelled = true; };
+    }, [user?.uid, user?.email, residenceAttempt]);
 
     useEffect(() => {
         const nextCategory = normalizeCategoryPrefill(searchParams.get('category'));
@@ -422,7 +460,7 @@ export default function TenantRequestPage() {
     if (residenceLoadError) {
         return (
             <Paper data-testid="tenant-residence-load-failed" sx={{ p: 5, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid #ef4444' }}>
-                <Alert severity="error">{residenceLoadError}</Alert>
+                <Alert severity="error" action={<Button color="inherit" onClick={() => setResidenceAttempt((attempt) => attempt + 1)}>Retry</Button>}>{residenceLoadError}</Alert>
             </Paper>
         );
     }
@@ -434,7 +472,7 @@ export default function TenantRequestPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textOnDarkMuted, transform: isRTL ? 'rotate(180deg)' : 'none' }}>
+                <IconButton aria-label={tt('nav.back', 'Back')} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textOnDarkMuted, transform: isRTL ? 'rotate(180deg)' : 'none' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>
