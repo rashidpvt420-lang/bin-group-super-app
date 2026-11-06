@@ -66,7 +66,7 @@ test('tenant report labels and owner chat emphasis are real words', async () => 
     read('src/tenant/pages/TenantRequestPage.tsx'),
   ]);
   for (const key of ['dash.tenant.newRequest', 'dash.tenant.serviceLabel', 'dash.tenant.specificLocation', 'dash.tenant.issueDesc', 'dash.tenant.attachPhotos', 'dash.tenant.dispatchRequest', 'dash.tenant.prioNormal', 'dash.tenant.catAc', 'dash.tenant.catElec']) {
-    assert.match(language, new RegExp(`'${key}': '`), key);
+    assert.ok(language.includes(`'${key}': '`), key);
   }
   assert.match(language, /'dash.tenant.newRequest': 'طلب صيانة جديد'/);
   assert.doesNotMatch(requestPage, /const tt = \(key: string, fallback: string\)/);
