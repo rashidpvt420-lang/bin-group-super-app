@@ -26,6 +26,7 @@ import { useAI } from '../context/AIContext';
 import { functions, httpsCallable } from '../lib/firebase';
 import { classifyPublicAssistantError, publicAssistantFallbackNote } from '../lib/publicAssistantErrors';
 import { generateSovereignAIResponse, type SovereignRole } from '../utils/propertyTruthIntelligence';
+import { splitInlineEmphasis } from '../utils/inlineEmphasis';
 
 export interface SovereignAIChatProps {
   role: SovereignRole;
@@ -208,14 +209,13 @@ function providerStatusColor(message: Message) {
   return '#f59e0b';
 }
 
-/** Show emphasis without leaving raw ** markers in the chat. */
+/** Show emphasis without leaving raw ** or __ markers in the chat. */
 function renderChatText(text: string) {
-  return String(text || '').split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
-    }
-    return <React.Fragment key={index}>{part}</React.Fragment>;
-  });
+  return splitInlineEmphasis(text).map((part, index) => (
+    part.strong
+      ? <strong key={index} style={{ fontWeight: 800 }}>{part.text}</strong>
+      : <React.Fragment key={index}>{part.text}</React.Fragment>
+  ));
 }
 
 export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({

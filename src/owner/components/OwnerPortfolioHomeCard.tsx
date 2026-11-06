@@ -6,7 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { EmptyState, ErrorState, ListRow, UiButton, UiCard } from '../../components/ui';
 
-export const ADD_PROPERTY_PATH = '/onboarding?intent=add-property';
+export const ADD_PROPERTY_PATH = '/owner/add-property';
 
 /**
  * Unlocked owners land on Home ("My properties"). The register button used to live only on

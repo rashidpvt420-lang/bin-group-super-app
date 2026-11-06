@@ -249,11 +249,19 @@ export function calculateEtaMinutes(distanceKm: number | null, averageSpeedKmh =
 export const ETA_MAX_LOCATION_AGE_MINUTES = 5;
 
 export function getTechnicianLocationUpdatedAt(ticket: any, techLocation: any = getTechnicianLocation(ticket)): any {
-    return ticket?.technicianLocationUpdatedAt ||
-        techLocation?.serverUpdatedAt ||
-        techLocation?.updatedAt ||
-        techLocation?.timestamp ||
-        null;
+    const serverStamp = freshestTimestamp([
+        ticket?.technicianLocationUpdatedAt,
+        ticket?.technicianLocation?.serverUpdatedAt,
+        ticket?.technicianLiveLocation?.serverUpdatedAt,
+        techLocation?.serverUpdatedAt,
+    ]);
+    if (serverStamp) return serverStamp;
+    return freshestTimestamp([
+        ticket?.technicianLocation?.updatedAt,
+        ticket?.technicianLocation?.timestamp,
+        techLocation?.updatedAt,
+        techLocation?.timestamp,
+    ]);
 }
 
 /**
@@ -323,13 +331,41 @@ export function buildGoogleMapsDirectionsUrl(techLocation: any, jobLocation: any
     return 'https://www.google.com/maps';
 }
 
-function timestampMillis(value: any): number | null {
-    if (!value) return null;
-    if (typeof value.toMillis === 'function') return value.toMillis();
-    if (Number.isFinite(value.seconds)) return Number(value.seconds) * 1000;
-    if (Number.isFinite(value)) return Number(value);
-    const parsed = Date.parse(String(value));
-    return Number.isFinite(parsed) ? parsed : null;
+export function timestampMillis(value: any): number | null {
+    if (value == null || value === '') return null;
+    if (value instanceof Date) {
+        const ms = value.getTime();
+        return Number.isFinite(ms) ? ms : null;
+    }
+    if (typeof value.toMillis === 'function') {
+        const ms = Number(value.toMillis());
+        return Number.isFinite(ms) ? ms : null;
+    }
+    if (typeof value === 'object') {
+        const seconds = value.seconds ?? value._seconds;
+        if (Number.isFinite(Number(seconds)) && (Object.prototype.hasOwnProperty.call(value, 'seconds') || Object.prototype.hasOwnProperty.call(value, '_seconds'))) {
+            return Number(seconds) * 1000;
+        }
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+function freshestTimestamp(values: any[]): any {
+    let best: any = null;
+    let bestMs = -1;
+    values.forEach((value) => {
+        const ms = timestampMillis(value);
+        if (ms !== null && ms >= bestMs) {
+            best = value;
+            bestMs = ms;
+        }
+    });
+    return best;
 }
 
 export function getStaleLabel(updatedAt: any): string {

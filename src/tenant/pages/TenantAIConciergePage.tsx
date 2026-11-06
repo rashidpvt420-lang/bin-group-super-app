@@ -14,6 +14,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 import Bi from '../../components/Bi';
+import { splitInlineEmphasis } from '../../utils/inlineEmphasis';
 
 // ── Conversation state machine ────────────────────────────────────────────────
 type Step = 'idle' | 'describe' | 'location' | 'photo' | 'confirm' | 'submitted' | 'error';
@@ -291,8 +292,10 @@ export default function TenantAIConciergePage() {
 
   const renderBotText = (text: string) =>
     text.split('\n').map((line, idx) => (
-      <Typography key={idx} variant="body2" sx={{ color: '#fff', fontWeight: line.startsWith('📋') || line.startsWith('📍') || line.startsWith('⚡') || line.startsWith('🖼️') ? 900 : 400, lineHeight: 1.7 }}>
-        {line.replace(/\*\*(.*?)\*\*/g, '$1')}
+      <Typography key={idx} variant="body2" sx={{ color: '#F8FAFC', fontWeight: line.startsWith('📋') || line.startsWith('📍') || line.startsWith('⚡') || line.startsWith('🖼️') ? 900 : 500, lineHeight: 1.7 }}>
+        {splitInlineEmphasis(line).map((part, partIndex) => part.strong
+          ? <strong key={partIndex} style={{ fontWeight: 800 }}>{part.text}</strong>
+          : <React.Fragment key={partIndex}>{part.text}</React.Fragment>)}
       </Typography>
     ));
 
@@ -431,11 +434,13 @@ export default function TenantAIConciergePage() {
               {['AC not cooling', 'Water leak', 'Power issue', 'Pest problem', 'Door lock broken'].map((suggestion) => (
                 <Chip
                   key={suggestion}
+                  className="tenant-ai-quick-reply"
+                  data-testid="tenant-ai-suggestion"
                   label={suggestion}
                   size="small"
                   icon={<Sparkles size={12} />}
                   onClick={() => { setInputValue(suggestion); }}
-                  sx={{ cursor: 'pointer', bgcolor: '#1E293B', color: '#F8FAFC', border: '1px solid #F8FAFC', fontWeight: 700, '& .MuiChip-label': { color: '#F8FAFC' }, '& .MuiChip-icon': { color: '#F8FAFC' }, '&:hover': { bgcolor: '#334155', color: '#F8FAFC' } }}
+                  sx={{ cursor: 'pointer', bgcolor: '#111827', color: '#F8FAFC', border: '1px solid #F8FAFC', fontWeight: 800, '& .MuiChip-label': { color: '#F8FAFC' }, '& .MuiChip-icon': { color: '#F8FAFC' }, '&:hover': { bgcolor: '#1F2937', color: '#F8FAFC' } }}
                 />
               ))}
             </Stack>
@@ -445,6 +450,8 @@ export default function TenantAIConciergePage() {
           {step !== 'confirm' && step !== 'photo' && step !== 'submitted' && (
             <Stack direction="row" spacing={1.5} alignItems="flex-end">
               <TextField
+                className="tenant-ai-composer"
+                data-testid="tenant-ai-input"
                 fullWidth
                 multiline
                 maxRows={4}
@@ -458,13 +465,15 @@ export default function TenantAIConciergePage() {
                 }
                 sx={{
                   '& .MuiOutlinedInput-root': {
-                    color: '#fff',
-                    bgcolor: 'rgba(255,255,255,0.04)',
+                    color: '#111827',
+                    bgcolor: '#FFFFFF',
                     borderRadius: 4,
-                    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-                    '&:hover fieldset': { borderColor: alpha(binThemeTokens.gold, 0.4) },
-                    '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
+                    '& fieldset': { borderColor: '#111827' },
+                    '&:hover fieldset': { borderColor: '#92400E' },
+                    '&.Mui-focused fieldset': { borderColor: '#92400E' },
                   },
+                  '& .MuiInputBase-input': { color: '#111827', fontWeight: 700 },
+                  '& .MuiInputBase-input::placeholder': { color: '#374151', opacity: 1 },
                 }}
               />
               <IconButton

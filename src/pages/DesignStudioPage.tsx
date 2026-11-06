@@ -128,9 +128,9 @@ function DetailList({ details }: { details: DesignExecutionDetail[] }) {
   return (
     <Stack spacing={1.25}>
       {details.map((group) => (
-        <Paper key={group.category} sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(198,167,94,0.14)', borderRadius: 2 }}>
+        <Paper key={group.category} className="design-studio-detail" sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(229,231,235,0.35)', borderRadius: 2 }}>
           <Typography fontWeight={950} sx={{ color: binThemeTokens.gold }}>{group.category}</Typography>
-          <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.4, color: binThemeTokens.adaptiveTextMuted }}>
+          <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.4, color: '#E5E7EB' }}>
             {group.items.map((item) => <li key={item}><Typography variant="body2" sx={{ lineHeight: 1.55 }}>{item}</Typography></li>)}
           </Box>
         </Paper>
@@ -190,9 +190,10 @@ export default function DesignStudioPage() {
     uploadedImageUrl: referenceImages[0]?.previewUrl,
     notes: scopeDescription,
     finishTier: scope.finishTier,
+    dimensions: scope.dimensions,
     quoteTotal: displayedQuoteTotal,
     mobilizationAmount: displayedMobilization,
-  }), [scope.zoneType, scope.finishTier, designStyle, designObjective, referenceImages, scopeDescription, displayedQuoteTotal, displayedMobilization]);
+  }), [scope.zoneType, scope.finishTier, scope.dimensions, designStyle, designObjective, referenceImages, scopeDescription, displayedQuoteTotal, displayedMobilization]);
 
   const concepts = renderedConcepts.length ? renderedConcepts : fallbackConcepts;
 
@@ -384,7 +385,7 @@ export default function DesignStudioPage() {
             <TextField multiline rows={4} fullWidth label={labels.objective} placeholder={labels.objectivePlaceholder} value={scopeDescription} onChange={(event) => setScopeDescription(event.target.value)} sx={{ mt: 3 }} />
           </Paper>
 
-          <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <Paper className="design-studio-panel" sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: '#161618', border: '1px solid rgba(255,255,255,0.16)' }}>
             <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Home color={binThemeTokens.gold} /> Property design scope</Typography>
             <Stack spacing={2.5}>
               <TextField select label={labels.zone} value={scope.zoneType} onChange={(event) => setScope({ ...scope, zoneType: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{DESIGN_SPACE_TYPES.map((zone) => <MenuItem key={zone} value={zone}>{zone}</MenuItem>)}</TextField>
@@ -392,7 +393,7 @@ export default function DesignStudioPage() {
               <TextField select label={labels.style} value={designStyle} onChange={(event) => setDesignStyle(event.target.value)} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{DESIGN_STYLES.map((style) => <MenuItem key={style} value={style}>{style}</MenuItem>)}</TextField>
               <TextField select label="Finish tier" value={scope.finishTier} onChange={(event) => setScope({ ...scope, finishTier: event.target.value as DesignScope['finishTier'] })} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{['Standard', 'Premium', 'Luxury'].map((tier) => <MenuItem key={tier} value={tier}>{tier}</MenuItem>)}</TextField>
               <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Ruler size={14} /> Area: {scope.dimensions} sq ft</Typography>
+                <Typography variant="caption" data-testid="design-area-label" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#F9FAFB' }}><Ruler size={14} /> Area: {scope.dimensions} sq ft</Typography>
                 <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, value) => setScope({ ...scope, dimensions: value as number })} sx={{ color: binThemeTokens.gold }} />
               </Box>
             </Stack>

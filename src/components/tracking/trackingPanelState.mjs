@@ -132,7 +132,16 @@ export function resolveTrackingPhase(ticket) {
   }
   // A technician is assigned: never claim the ticket is awaiting assignment.
   if ((phase === 'open' || phase === 'scheduled') && assigned) {
-    return phase === 'scheduled' ? 'scheduled' : 'accepted';
+    phase = phase === 'scheduled' ? 'scheduled' : 'accepted';
+  }
+  // Travel can be recorded on trackingStatus/dispatch while status is still Assigned.
+  // Show On The Way for that case. A completed ticket already returned above.
+  if (phase === 'accepted' && ['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING'].includes(trackingKey)) {
+    return 'on_the_way';
+  }
+  const dispatchKey = normalizeTrackingStatusKey(ticket?.dispatchStatus);
+  if (phase === 'accepted' && ['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING'].includes(dispatchKey)) {
+    return 'on_the_way';
   }
   return phase;
 }

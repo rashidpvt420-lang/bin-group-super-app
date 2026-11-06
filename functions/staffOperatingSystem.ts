@@ -264,6 +264,17 @@ export const submitStaffQuickAction = onCall(CALLABLE_OPTIONS, async (request) =
       shiftDate: todayStr,
       updatedAt: timestamp,
     }, { merge: true });
+    const dutyPatch = {
+      onDuty: true,
+      isAvailable: true,
+      available: true,
+      dutyStatus: "ON_DUTY",
+      dutyStartedAt: timestamp,
+      updatedAt: timestamp,
+    };
+    await db.collection("users").doc(uid).set(dutyPatch, { merge: true });
+    const technicianRef = db.collection("technicians").doc(uid);
+    if ((await technicianRef.get()).exists) await technicianRef.set(dutyPatch, { merge: true });
     resultMessage = "Clock-in recorded.";
   }
 
@@ -761,7 +772,11 @@ export const triggerStaffShiftFinish = onCall(CALLABLE_OPTIONS, async (request) 
   const auditRef = db.collection("audit_logs").doc();
 
   await db.runTransaction(async (transaction) => {
+    const userRef = db.collection("users").doc(uid);
+    const technicianRef = db.collection("technicians").doc(uid);
     const liveShift = await transaction.get(shiftRef);
+    const liveUser = await transaction.get(userRef);
+    const liveTechnician = await transaction.get(technicianRef);
     if (!liveShift.exists || !["ACTIVE", "ON_BREAK"].includes(upper(liveShift.data()?.status))) {
       throw new HttpsError("failed-precondition", "Shift state changed before completion.");
     }
@@ -787,6 +802,27 @@ export const triggerStaffShiftFinish = onCall(CALLABLE_OPTIONS, async (request) 
       dailySummaryRef: summaryRef.id,
       updatedAt: timestamp,
     }, { merge: true });
+
+    const dutyOff = {
+      onDuty: false,
+      isAvailable: false,
+      available: false,
+      dutyStatus: "OFF_DUTY",
+      dutyEndedAt: timestamp,
+      currentShiftId: admin.firestore.FieldValue.delete(),
+      updatedAt: timestamp,
+    };
+    transaction.set(userRef, dutyOff, { merge: true });
+    if (liveTechnician.exists) transaction.set(technicianRef, dutyOff, { merge: true });
+    const openShiftId = String(liveUser.data()?.currentShiftId || "");
+    if (openShiftId) {
+      transaction.set(db.collection("technician_shifts").doc(openShiftId), {
+        status: "CLOSED",
+        clockOut: timestamp,
+        endedAt: timestamp,
+        updatedAt: timestamp,
+      }, { merge: true });
+    }
 
     transaction.set(auditRef, {
       action: "STAFF_SHIFT_FINISHED",

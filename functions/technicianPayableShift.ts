@@ -3,7 +3,13 @@
  * Home duty also keeps technician_shifts for dispatch breaks and the current shift id.
  * This helper decides the staff_shifts patch. It never reopens a completed day and never
  * invents a clock-in time that was not recorded.
+ *
+ * Shifts that were opened before the payable clock shipped can be copied onto staff_shifts
+ * only when technician_shifts already stored a real clockIn. If that timestamp is missing,
+ * nothing is written and no hours are invented. A COMPLETED day is never reopened.
  */
+export const SECOND_SAME_DAY_CLOCK_IN_MESSAGE =
+  "Today's paid shift is already closed. Starting duty again today is not a new paid clock-in. Ask HR if the closed day must be corrected. No hours were added.";
 export type PayableShiftAction = "CLOCK_IN" | "BREAK" | "RESUME" | "CLOCK_OUT";
 
 export type PayableShiftDecision = {
@@ -67,4 +73,20 @@ export function payableShiftPatch(existing: Record<string, unknown> | null | und
 
   if (!open) return none("no_open_shift");
   return { write: true, reason: "clocked_out", fields: { status: "COMPLETED" }, setClockIn: false, setClockOut: true };
+}
+
+/**
+ * Copy an already recorded clock-in onto today's payable shift.
+ * Returns write:false when the day is closed or no real clock-in exists.
+ */
+export function legacyOpenShiftBackfill(existing: Record<string, unknown> | null | undefined, recordedClockIn: unknown): {
+  write: boolean;
+  reason: string;
+  clockInTime?: unknown;
+} {
+  const status = upper(existing?.status);
+  if (status === "COMPLETED") return { write: false, reason: "already_completed" };
+  if (existing?.clockInTime) return { write: false, reason: "clock_already_recorded" };
+  if (!recordedClockIn) return { write: false, reason: "no_recorded_clock_in" };
+  return { write: true, reason: "copied_recorded_clock_in", clockInTime: recordedClockIn };
 }

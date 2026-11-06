@@ -1,0 +1,55 @@
+/* Beat the global white-chip / white-text overrides on the dark concierge and design studio surfaces. */
+
+.tenant-ai-quick-reply.MuiChip-root {
+  background-color: #111827 !important;
+  color: #F8FAFC !important;
+  border: 1px solid #F8FAFC !important;
+}
+
+.tenant-ai-quick-reply .MuiChip-label,
+.tenant-ai-quick-reply .MuiChip-icon {
+  color: #F8FAFC !important;
+}
+
+.tenant-ai-composer .MuiInputBase-root,
+.tenant-ai-composer .MuiOutlinedInput-root {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+}
+
+.tenant-ai-composer .MuiInputBase-input,
+.tenant-ai-composer textarea {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+.tenant-ai-composer .MuiInputBase-input::placeholder,
+.tenant-ai-composer textarea::placeholder {
+  color: #374151 !important;
+  opacity: 1 !important;
+}
+
+.tenant-sla-note {
+  background: #FFFBEB !important;
+  color: #111827 !important;
+}
+
+.tenant-sla-note .MuiTypography-root {
+  color: #111827 !important;
+}
+
+.design-studio-panel,
+.design-studio-detail {
+  background-color: #161618 !important;
+  color: #F9FAFB !important;
+}
+
+.design-studio-panel .MuiTypography-root,
+.design-studio-detail .MuiTypography-root {
+  color: #F9FAFB !important;
+}
+
+.design-studio-panel .MuiInputBase-input,
+.design-studio-panel .MuiSelect-select {
+  color: #F9FAFB !important;
+}

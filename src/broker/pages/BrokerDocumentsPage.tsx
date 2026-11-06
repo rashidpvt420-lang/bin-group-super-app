@@ -13,6 +13,7 @@ import { openUnifiedDocument } from '../../services/unifiedDocumentVault';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { brokerDocumentLevelLabel, type BrokerDocumentState } from '../brokerReadiness';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import { STATUS_TONES } from '../../theme/statusColors';
 import Bi from '../../components/Bi';
@@ -105,6 +106,7 @@ export default function BrokerDocumentsPage() {
         { type: 'bank_details', title: 'Institutional IBAN', desc: 'Certified bank letter for automated commission settlement.' },
         { type: 'broker_agreement', title: 'Sovereign Agreement', desc: 'Signed partnership terms with BIN Group.' }
     ];
+    const documentLevel = brokerDocumentLevelLabel(requiredDocs.map((req) => getDocStatus(req.type).status as BrokerDocumentState));
 
     return (
         <BrokerPageFrame
@@ -116,7 +118,7 @@ export default function BrokerDocumentsPage() {
                     <ShieldCheck size={20} color="#10b981" />
                     <Box>
                         <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block' }}>COMPLIANCE STATUS</Typography>
-                        <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
+                        <Typography variant="body2" data-testid="broker-document-level" sx={{ color: documentLevel === 'LEVEL 2 VERIFIED' ? '#047857' : '#92400E', fontWeight: 900 }}>{documentLevel}</Typography>
                     </Box>
                 </Box>
             }

@@ -25,6 +25,7 @@ import { detectContractMode, canSeeMaintenance } from '../utils/ownerServiceMode
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
+import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
 import {
   OWNER_OPEN_TICKET_QUERY_VALUES,
@@ -382,7 +383,7 @@ export default function OwnerDashboardResolvedPage() {
   const [tenantCount, setTenantCount] = useState(0);
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
-  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const pendingApprovals = useOwnerCommandCounts().pendingCostApprovals;
   const [hasVerifiedIban, setHasVerifiedIban] = useState(false);
   const [permissionWarning, setPermissionWarning] = useState('');
   const [rentDialogOpen, setRentDialogOpen] = useState(false);
@@ -590,31 +591,6 @@ export default function OwnerDashboardResolvedPage() {
       liveUnsubs.current.push(unsubPay);
     } catch (e) {
       console.warn('[OwnerDashboard] Could not attach live payment listener:', e);
-    }
-
-    // Live pending owner-approval count.
-    // Mirrors OwnerApprovalCenterPage (the actual /owner/approvals consumer), which queries
-    // by ownerId only and shows every request. "Pending" here means no decision has been
-    // recorded yet (decision is only ever set by submitOwnerApprovalDecision).
-    try {
-      const approvalQuery = query(
-        collection(db, 'owner_approval_requests'),
-        where('ownerId', '==', authUid)
-      );
-      const unsubApprovals = onSnapshot(
-        approvalQuery,
-        (snap) => {
-          const pending = snap.docs.filter((d) => !d.data()?.decision).length;
-          setPendingApprovals(pending);
-        },
-        (err) => {
-          if (isPermDenied(err)) warnLiveDenied('approval count');
-          else console.warn('[OwnerDashboard] Live approval count error:', err);
-        }
-      );
-      liveUnsubs.current.push(unsubApprovals);
-    } catch (e) {
-      console.warn('[OwnerDashboard] Could not attach live approval listener:', e);
     }
 
     return () => {

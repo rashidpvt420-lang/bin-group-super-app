@@ -139,9 +139,14 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
         <Typography variant="body2" data-testid="technician-paid-clock-note" sx={{ color: '#111827', fontWeight: 700 }}>
           {tx('tech.duty.payNote', 'Starting duty clocks you in for pay. Ending the shift clocks you out. Hours are counted from this clock.')}
         </Typography>
-        <Button variant="text" onClick={() => navigate('/technician/hr')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 800, px: 0 }}>
-          {tx('tech.duty.paidHours', 'See paid hours')}
-        </Button>
+        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1}>
+          <Button variant="text" onClick={() => navigate('/technician/hr')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 800, px: 0 }}>
+            {tx('tech.duty.paidHours', 'See paid hours')}
+          </Button>
+          <Button data-testid="technician-overtime-link" variant="text" onClick={() => navigate('/technician/hr#overtime')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 800, px: 0 }}>
+            {tx('tech.duty.overtime', 'Claim overtime')}
+          </Button>
+        </Stack>
         {onDuty && activeJobCount === 0 && !gpsError && gpsSharedAt && (
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" data-testid="technician-availability-gps-ok">
             <MapPin size={16} color="#047857" />

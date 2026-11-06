@@ -9,6 +9,7 @@ import './styles/onboardingReadable.css';
 import './ess-white-platinum.css';
 import './styles/whitePlatinumAuthenticated.css';
 import './styles/publicMarketingCleanup.css';
+import './styles/auditContrast.css';
 
 setupSovereignAlertInterceptor();
 

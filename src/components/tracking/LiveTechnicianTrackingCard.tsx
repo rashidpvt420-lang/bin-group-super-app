@@ -47,6 +47,7 @@ import {
     calculateEtaMinutes,
     getStaleLabel,
     getTechnicianLocation,
+    getTechnicianLocationUpdatedAt,
     getTicketJobLocation,
     isLocationStale,
     isTrackingActive,
@@ -85,11 +86,7 @@ function getProgressValue(step: TrackingTimelineStep): number {
 }
 
 function locationTimestamp(ticket: any, techLocation: any) {
-    return ticket?.technicianLocationUpdatedAt ||
-        techLocation?.serverUpdatedAt ||
-        techLocation?.updatedAt ||
-        techLocation?.timestamp ||
-        null;
+    return getTechnicianLocationUpdatedAt(ticket, techLocation);
 }
 
 function getStatusMessage(
@@ -283,8 +280,12 @@ function LiveTrackingMap({
                     spacing={1.5}
                     sx={{ minHeight: { xs: 300, md: 360 }, px: 3, textAlign: 'center' }}
                 >
-                    <MapPin size={34} color={binThemeTokens.gold} />
-                    <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>
+                    {technicianLocation ? (
+                        <Box data-testid="technician-person-marker" sx={{ width: 44, height: 44 }} aria-label="Technician location">
+                            <Box component="img" alt="Technician" src={svgDataUrl(TECHNICIAN_MARKER_SVG)} sx={{ width: 44, height: 44 }} />
+                        </Box>
+                    ) : <MapPin size={34} color={binThemeTokens.gold} />}
+                    <Typography variant="body2" sx={{ color: '#F8FAFC', fontWeight: 900 }}>
                         {jobLocation
                             ? 'Embedded map is unavailable right now.'
                             : 'Verified job coordinates are unavailable.'}

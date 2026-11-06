@@ -35,6 +35,11 @@ export function ticketLifecycleStage(ticket: Record<string, any> | null | undefi
   if (CANCELLED.has(status)) return result('CANCELLED', 'Cancelled', 'default');
   if (SOLVED.has(status)) return result('SOLVED', 'Solved', 'success');
   if (AWAITING_APPROVAL.has(status)) return result('AWAITING_APPROVAL', 'Completed – awaiting approval', 'info');
+  const tracking = key(data.trackingStatus);
+  const travel = new Set(['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING']);
+  if (travel.has(status) || travel.has(tracking) || travel.has(dispatchStatus)) {
+    return result('IN_PROGRESS', 'On the way', 'warning');
+  }
   if (IN_PROGRESS.has(status)) return result('IN_PROGRESS', 'In progress', 'warning');
   if (ASSIGNED.has(status) || assigned) return result('ASSIGNED', 'Assigned', 'info');
   if (dispatchStatus === 'PENDING_MANUAL_DISPATCH') {

@@ -77,6 +77,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         <NotificationBell />
                         <PortalHeaderMenu role="technician" items={[
                             { key: 'jobs', label: label('tech.quick.jobs', 'Jobs', 'المهام'), onClick: () => navigate('/technician/jobs') },
+                            { key: 'hr', label: label('tech.quick.hr', 'HR & overtime', 'الموارد والعمل الإضافي'), onClick: () => navigate('/technician/hr#overtime') },
                             { key: 'offline', label: label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال'), onClick: () => navigate('/technician/offline') },
                             { key: 'proof', label: label('tech.proof', 'Proof readiness', 'جاهزية الإثبات'), onClick: () => navigate('/technician/proof-readiness') },
                             { key: 'profile', label: label('nav.profile', 'Technician profile', 'ملف الفني'), onClick: () => navigate('/technician/profile'), icon: User },
@@ -85,6 +86,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     ) : (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
+                        <Button data-testid="technician-nav-overtime" onClick={() => navigate('/technician/hr#overtime')} sx={quickButtonSx}>{label('tech.quick.hr', 'HR & overtime', 'الموارد والعمل الإضافي')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
                         <NotificationBell />
                         <Button aria-label={label('tech.proof', 'Proof readiness', 'جاهزية الإثبات')} onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('tech.proof', 'Proof', 'الإثبات')}</Button>
