@@ -36,6 +36,10 @@ test('the real public root keeps every customer role CTA and legal route wired',
     '/terms',
     '/admin',
   ]) assert.ok(page.includes(route), `missing public route ${route}`);
+  assert.match(page, /data-testid="landing-register-property"/);
+  assert.match(page, /data-testid="landing-owner-register-property"/);
+  assert.match(page, /onClick=\{\(\) => navigate\('\/onboarding'\)\}/);
+  assert.match(page, /publicPath: '\/onboarding'/);
   assert.match(page, /data-testid="language-toggle"/);
   assert.match(page, /setLang\(ar \? 'en' : 'ar'\)/);
   assert.match(page, /[\u0600-\u06FF]/);

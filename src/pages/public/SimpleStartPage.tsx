@@ -24,6 +24,7 @@ type PageContent = {
   heading: string;
   subline: string;
   getStarted: string;
+  registerProperty: string;
   whatsappUs: string;
   trustLabel: string;
   trust: string[];
@@ -54,6 +55,7 @@ const content: Record<'en' | 'ar', PageContent> = {
     heading: 'Property maintenance & management across the UAE',
     subline: 'Licensed, verified technicians. Fixed prices, photo proof on every job, and you can track it all in one app.',
     getStarted: 'Get started',
+    registerProperty: 'Register your property',
     whatsappUs: 'WhatsApp us',
     trustLabel: 'Why you can trust us',
     trust: ['Licensed in Abu Dhabi', 'CASH and CHEQUE only, receipt every time', 'Response targets from 1 hour', 'Arabic & English'],
@@ -87,6 +89,7 @@ const content: Record<'en' | 'ar', PageContent> = {
     heading: 'صيانة وإدارة العقارات في جميع أنحاء الإمارات',
     subline: 'فنيون مرخصون وموثّقون. أسعار ثابتة، وصور إثبات لكل عمل، وتتابع كل شيء من تطبيق واحد.',
     getStarted: 'ابدأ الآن',
+    registerProperty: 'سجّل عقارك',
     whatsappUs: 'راسلنا على واتساب',
     trustLabel: 'لماذا تثق بنا',
     trust: ['مرخصة في أبوظبي', 'نقداً أو بشيك فقط، مع إيصال في كل مرة', 'أهداف استجابة تبدأ من ساعة واحدة', 'العربية والإنجليزية'],
@@ -126,6 +129,9 @@ type RoleCard = {
   icon: React.ElementType;
   ctaEn: string;
   ctaAr: string;
+  publicCtaEn?: string;
+  publicCtaAr?: string;
+  publicPath?: string;
 };
 
 // One plain sentence and one button per role.
@@ -153,12 +159,15 @@ const cards: RoleCard[] = [
   {
     titleEn: 'Landlord / Owner',
     titleAr: 'المالك',
-    sentenceEn: 'See your properties, contracts, payments and maintenance proof in one place.',
-    sentenceAr: 'اطّلع على عقاراتك وعقودك ومدفوعاتك وإثبات الصيانة في مكان واحد.',
+    sentenceEn: 'Register your property in public, then see contracts, payments and maintenance proof in one place.',
+    sentenceAr: 'سجّل عقارك من الصفحة العامة، ثم اطّلع على عقودك ومدفوعاتك وإثبات الصيانة في مكان واحد.',
     path: '/login?intendedRole=owner',
     icon: Home,
     ctaEn: 'Open Owner Portal',
     ctaAr: 'فتح بوابة المالك',
+    publicCtaEn: 'Register your property',
+    publicCtaAr: 'سجّل عقارك',
+    publicPath: '/onboarding',
   },
   {
     titleEn: 'Real Estate Broker',
@@ -254,6 +263,9 @@ export default function SimpleStartPage() {
                 {c.subline}
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                <Button data-testid="landing-register-property" variant="contained" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={() => navigate('/onboarding')} sx={{ bgcolor: gold, color: ink, fontWeight: 950, borderRadius: 3, py: 1.3, px: 3, '&:hover': { bgcolor: binThemeTokens.goldHover || gold } }}>
+                  {c.registerProperty}
+                </Button>
                 <Button data-testid="landing-get-started" variant="contained" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={scrollToRoles} sx={{ bgcolor: ink, color: gold, fontWeight: 950, borderRadius: 3, py: 1.3, px: 3, '&:hover': { bgcolor: '#000' } }}>
                   {c.getStarted}
                 </Button>
@@ -309,9 +321,16 @@ export default function SimpleStartPage() {
                   </Stack>
                   <Typography sx={{ color: body, fontWeight: 600, lineHeight: 1.65 }}>{ar ? card.sentenceAr : card.sentenceEn}</Typography>
                 </Stack>
-                <Button fullWidth variant="outlined" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={() => navigate(card.path)} sx={{ mt: 2.5, borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.2, '&:hover': { bgcolor: alpha(gold, 0.05) } }}>
-                  {ar ? card.ctaAr : card.ctaEn}
-                </Button>
+                <Stack spacing={1} sx={{ mt: 2.5 }}>
+                  {card.publicPath && (
+                    <Button fullWidth variant="contained" data-testid="landing-owner-register-property" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={() => navigate(card.publicPath!)} sx={{ bgcolor: gold, color: ink, fontWeight: 950, borderRadius: 3, py: 1.2, '&:hover': { bgcolor: binThemeTokens.goldHover || gold } }}>
+                      {ar ? card.publicCtaAr : card.publicCtaEn}
+                    </Button>
+                  )}
+                  <Button fullWidth variant="outlined" endIcon={<ArrowRight size={16} style={{ transform: isRTL ? 'scaleX(-1)' : undefined }} />} onClick={() => navigate(card.path)} sx={{ borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.2, '&:hover': { bgcolor: alpha(gold, 0.05) } }}>
+                    {ar ? card.ctaAr : card.ctaEn}
+                  </Button>
+                </Stack>
               </Paper>
             </Grid>
           ))}
