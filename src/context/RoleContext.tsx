@@ -388,10 +388,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
+                const authName = String(currentUser.displayName || '').trim();
+                const usableName = authName && authName.toLowerCase() !== 'new user' ? authName : '';
                 const newProfile = {
                     uid: currentUser.uid,
                     email: (currentUser.email || '').toLowerCase(),
-                    displayName: currentUser.displayName || "New User",
+                    ...(usableName ? { displayName: usableName } : {}),
                     status: 'role_required',
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
