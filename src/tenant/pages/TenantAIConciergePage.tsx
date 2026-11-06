@@ -473,7 +473,6 @@ export default function TenantAIConciergePage() {
                     '&.Mui-focused fieldset': { borderColor: '#92400E' },
                   },
                   '& .MuiInputBase-input': { color: '#111827', fontWeight: 700 },
-                  '& .MuiInputBase-input::placeholder': { color: '#374151', opacity: 1 },
                 }}
               />
               <IconButton

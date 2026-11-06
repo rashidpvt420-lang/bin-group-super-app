@@ -169,8 +169,9 @@ export default function TechnicianMapPage() {
             const techLoc = getTechnicianLocation(job) || techProfile?.currentLocation || null;
             const jobLoc = getTicketJobLocation(job);
             const dist = calculateDistanceKm(techLoc, jobLoc);
+            const visibleTravelStatuses = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'];
             const travelKeys = [job.status, job.trackingStatus, job.dispatchStatus].map((value) => String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_'));
-            const isOnTheWay = travelKeys.some((value) => ['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING'].includes(value));
+            const isOnTheWay = visibleTravelStatuses.includes(String(job.status)) || travelKeys.some((value) => ['EN_ROUTE', 'ON_THE_WAY', 'LIVE_TRACKING'].includes(value));
             const jobLocationTimestamp = getTechnicianLocationUpdatedAt({ ...job, technicianLocation: job.technicianLocation || techProfile?.currentLocation }, techLoc);
             const locationStale = isLocationStale(jobLocationTimestamp, 2);
             const eta = locationStale ? null : estimateTicketArrivalMinutes({ ...job, technicianLocation: techLoc || job.technicianLocation, technicianLocationUpdatedAt: jobLocationTimestamp });
