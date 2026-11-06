@@ -31,7 +31,7 @@ const requiredWorkflowBindings = [
   'phase1-manual',
   'Verify Phase 1 manual Cash/Cheque production policy',
   'phase1-manual-payment-proof.json',
-  'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+  'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
   'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
   'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
   "E2E_REQUIRE_FOUNDER_MFA: 'true'",
@@ -55,7 +55,7 @@ for (const forbidden of [
 }
 
 for (const binding of [
-  'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+  'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
   'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
   'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
   "E2E_REQUIRE_FOUNDER_MFA: 'true'",

@@ -6,8 +6,8 @@
   "indexScriptAssetCount": 2,
   "indexScriptAssets": [
     {
-      "path": "static/js/main.1fe0d935.js",
-      "size": 148758
+      "path": "static/js/main.242e951a.js",
+      "size": 148760
     },
     {
       "path": "admin-init-recovery.js",
@@ -21,36 +21,36 @@
       "size": 202928
     },
     {
+      "path": "static/js/411.5dacfaff.chunk.js",
+      "size": 281329
+    },
+    {
       "path": "static/js/455.1103bc91.chunk.js",
       "size": 139972
     },
     {
-      "path": "static/js/519.13d9c226.chunk.js",
-      "size": 685832
+      "path": "static/js/527.b8de9a5f.chunk.js",
+      "size": 1913405
     },
     {
-      "path": "static/js/613.1e09d967.chunk.js",
-      "size": 1904399
+      "path": "static/js/611.944fecc3.chunk.js",
+      "size": 901753
     },
     {
       "path": "static/js/614.63ade29d.chunk.js",
       "size": 1186
     },
     {
-      "path": "static/js/67.66ad6d57.chunk.js",
-      "size": 235838
-    },
-    {
       "path": "static/js/940.5312f669.chunk.js",
       "size": 721314
     },
     {
-      "path": "static/js/977.0c911d0d.chunk.js",
-      "size": 29315
+      "path": "static/js/977.e75088cf.chunk.js",
+      "size": 27172
     },
     {
-      "path": "static/js/main.1fe0d935.js",
-      "size": 148758
+      "path": "static/js/main.242e951a.js",
+      "size": 148760
     }
   ],
   "firebaseProjectId": "bin-group-57c60",
