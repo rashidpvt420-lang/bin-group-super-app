@@ -57,7 +57,7 @@ test('Sovereign AI exposes healthy, degraded, and callable-error states honestly
   assert.match(rootChat, /AI SERVICE ERROR — NO LIVE ANSWER/);
   assert.match(rootChat, /DEGRADED AI - LOCAL RULE GUIDANCE ONLY/);
   assert.match(rootChat, /LOCAL GUIDANCE — NOT AI OR AUTHORITATIVE/);
-  assert.match(rootChat, /ADVISORY ASSISTANT .* PROVIDER STATUS SHOWN/);
+  assert.match(rootChat, /App help\. Each reply shows whether it is live\./);
   assert.match(rootChat, /AUTHENTICATED SESSION .* STATUS SHOWN/);
   assert.match(rootChat, /LOCAL GUIDANCE ONLY .* SIGN IN FOR LIVE AI/);
   assert.doesNotMatch(rootChat, /LIVE PROPERTY TRUTH ASSISTANT/);

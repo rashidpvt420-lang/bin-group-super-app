@@ -21,6 +21,7 @@ test('HR AI case creation is server-authoritative and no longer direct Firestore
   assert.match(functions, /const existing = await tx\.get\(requestRef\)/);
   assert.match(functions, /hrEscalations/);
   assert.match(functions, /acknowledgementRequired: true/);
+  assert.match(functions, /This chat does not create a payable overtime claim, and no hours were saved/);
   assert.match(page, /httpsCallable\(functions, 'createStaffHrCase'\)/);
   assert.doesNotMatch(page, /classifyBlueCollarEssIntent\(text\)/);
   assert.doesNotMatch(page, /addDoc\(collection\(db, 'hrAiConversations'\)/);

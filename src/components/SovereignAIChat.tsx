@@ -551,8 +551,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         <Stack direction="row" spacing={2} alignItems="center">
           <Avatar sx={{ bgcolor: binThemeTokens.gold, width: 40, height: 40 }}><Sparkles color="#000" size={24} /></Avatar>
           <Box>
-            <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>SOVEREIGN AI</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>ADVISORY ASSISTANT · PROVIDER STATUS SHOWN</Typography>
+            <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>BIN Assistant</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', letterSpacing: 0.2 }}>App help. Each reply shows whether it is live.</Typography>
           </Box>
         </Stack>
         <IconButton type="button" data-testid="sovereign-ai-close" aria-label="Close Sovereign AI chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
