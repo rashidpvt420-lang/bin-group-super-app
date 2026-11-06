@@ -214,7 +214,7 @@ export default function AdminSecurityProfilePage() {
 
         {error && <Alert severity="error">{error}</Alert>}
         {success && <Alert severity="success">{success}</Alert>}
-        {mfaEnrollmentRequired && <Alert severity="warning" data-testid="admin-mfa-enrollment-required">{copy('Admin access is restricted until Firebase MFA enrollment is completed.', 'يقتصر وصول المسؤول حتى اكتمال تسجيل المصادقة متعددة العوامل.')}</Alert>}
+        {mfaEnrollmentRequired && <Alert severity="warning" data-testid="admin-mfa-enrollment-required">{copy('The admin menu stays locked until you add a phone check on this page. Dashboard and the other modules open after that.', 'تبقى قائمة المسؤول مغلقة حتى تضيف تحقق الهاتف في هذه الصفحة. تفتح لوحة التحكم وبقية الأقسام بعد ذلك.')}</Alert>}
 
         {(profile || mfaEnrollmentRequired) && (
           <AdminMfaEnrollmentCard enrolled={profile?.mfa.enrolled === true} currentPhone={profile?.phoneNumber || ''} currentRole={profile?.role || user?.role || ''} isRTL={isRTL} onEnrolled={loadProfile} />

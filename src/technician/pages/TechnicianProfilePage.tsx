@@ -116,9 +116,12 @@ export default function TechnicianProfilePage() {
                 const snap = await getDoc(doc(db, 'users', user.uid));
                 const data = snap.exists() ? snap.data() : {};
                 setTechData(data);
-                setDisplayName(data.displayName || user.displayName || '');
+                const named = [data.displayName, data.fullName, user.displayName]
+                    .map((value) => String(value || '').trim())
+                    .find((value) => value && value.toLowerCase() !== 'new user') || '';
+                setDisplayName(named);
                 setPhone(data.phoneNumber || data.phone || user.phoneNumber || '');
-                setTrade(data.requestedTrade || data.trade || data.specialty || data.primaryTrade || label('General Maintenance', 'صيانة عامة'));
+                setTrade(data.requestedTrade || data.trade || data.specialty || data.primaryTrade || '');
                 setServiceZone(data.serviceZonePreference || '');
                 setEmergencyName(data.emergencyContact?.name || '');
                 setEmergencyPhone(data.emergencyContact?.phone || '');
@@ -257,10 +260,10 @@ export default function TechnicianProfilePage() {
                 <Stack direction="column" spacing={3} alignItems="center" sx={{ mb: 4 }}>
                     <Avatar src={profilePhoto || undefined} sx={{ width: 108, height: 108, bgcolor: binThemeTokens.gold, color: '#000', border: `4px solid ${binThemeTokens.gold}`, boxShadow: '0 18px 42px rgba(0,0,0,0.45)' }}>{displayName?.charAt(0) || <User size={40} />}</Avatar>
                     <Box sx={{ textAlign: 'center', maxWidth: '100%' }}>
-                        <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Technician', 'الفني')}</Typography>
+                        <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Name not set', 'الاسم غير محدد')}</Typography>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Mail size={16} /><Typography variant="body2">{techData?.email || user?.email}</Typography></Stack>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Wrench size={16} /><Typography variant="body2">{trade || label('General Maintenance', 'صيانة عامة')}</Typography></Stack>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Wrench size={16} /><Typography variant="body2">{trade || label('Trade not set', 'التخصص غير محدد')}</Typography></Stack>
                         {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
                     </Box>
                 </Stack>

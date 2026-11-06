@@ -74,7 +74,7 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     await expect(drawer).toBeVisible();
     const panel = drawer.locator('.MuiDrawer-paper');
     await expect(panel).toHaveCSS('width', isMobile ? `${page.viewportSize()?.width}px` : '400px');
-    await expect(drawer.getByText('SOVEREIGN AI', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('BIN Assistant', { exact: true })).toBeVisible();
 
     const message = `phase-1-send-${testInfo.project.name}`;
     const input = page.getByTestId('sovereign-ai-input');
