@@ -49,10 +49,10 @@ on:
         type: boolean
         default: false
       deployment_payload_json:
-        description: 'JSON containing incident and hard-clearance fields; legacy Stripe proof IDs must remain empty'
+        description: 'JSON containing incident, frozen-release hard-clearance, and run fields; legacy Stripe proof IDs must remain empty'
         required: false
         type: string
-        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"","hard_clearance_run_id":"","hard_clearance_control_plane_sha":"","frozen_hard_clearance_release_sha":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
 
 permissions:
   contents: read
@@ -68,6 +68,9 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ${{ secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY }}
+  # Public www.bin-groups.com builds use reCAPTCHA Enterprise. The site key
+  # embedded in the web bundle is FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY.
+  VITE_APP_CHECK_PROVIDER: enterprise
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
@@ -88,7 +91,7 @@ env:
 jobs:
   validate-production-build:
     name: Validate production build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Enforce production dispatch gates
         env:
@@ -102,8 +105,17 @@ jobs:
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
           PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || '' }}
+          FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
+          INCIDENT_ATTESTATION_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_attestation || '' }}
+          INCIDENT_EVIDENCE_REFS_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_evidence_refs || '' }}
+          INCIDENT_ACTIVE_JSON_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_active_json || '' }}
+          INCIDENT_REQUIRES_ROLLBACK_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_requires_rollback || 'false' }}
+          INCIDENT_ROLLBACK_REASON_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_rollback_reason || '' }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed || 'false' }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed_at || '' }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
@@ -121,6 +133,31 @@ jobs:
             || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
           [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
             || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+          [[ -n "${INCIDENT_EVIDENCE_REFS_INPUT// }" ]] \
+            || fail "incident_evidence_refs is required and cannot be empty."
+          [[ "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR" || "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS" ]] \
+            || fail "incident_attestation must be ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS."
+          if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
+            [[ "$INCIDENT_EVIDENCE_REFS_INPUT" != *"ADMIN_MFA_BOOTSTRAP_HOSTING"* ]] \
+              || fail "ADMIN_MFA_BOOTSTRAP_HOSTING is not permitted as incident evidence in public mode."
+          fi
+          if [[ "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR" ]]; then
+            [[ -z "$INCIDENT_ACTIVE_JSON_INPUT" || "$INCIDENT_ACTIVE_JSON_INPUT" == "[]" ]] \
+              || fail "CLEAR incident attestation forbids active incidents."
+            [[ "$INCIDENT_REQUIRES_ROLLBACK_INPUT" == "false" ]] \
+              || fail "CLEAR incident attestation forbids rollback hold."
+            [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT" == "false" ]] \
+              || fail "CLEAR incident attestation forbids failed last deployment."
+          else
+            if [[ "$INCIDENT_REQUIRES_ROLLBACK_INPUT" == "true" ]]; then
+              [[ -n "${INCIDENT_ROLLBACK_REASON_INPUT// }" ]] \
+                || fail "INCIDENT_ROLLBACK_REASON is required when INCIDENT_REQUIRES_ROLLBACK is true."
+            fi
+            if [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT" == "true" ]]; then
+              [[ -n "${INCIDENT_LAST_DEPLOYMENT_FAILED_AT_INPUT// }" ]] \
+                || fail "INCIDENT_LAST_DEPLOYMENT_FAILED_AT is required when INCIDENT_LAST_DEPLOYMENT_FAILED is true."
+            fi
+          fi
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -133,6 +170,12 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
+            [[ "$FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+              || fail "Public mode requires the frozen hard-clearance release SHA."
+            if [[ -n "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" ]]; then
+              [[ "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+                || fail "hard_clearance_control_plane_sha must be a full lowercase 40-character SHA."
+            fi
           else
             [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
               || fail "launch_mode must be bank-pilot or public."
@@ -170,6 +213,8 @@ jobs:
         run: npm run test:stability
 
       - name: Launch honesty and hard-launch control regressions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
 
       - name: TypeScript check
@@ -182,7 +227,11 @@ jobs:
         run: npm run build --workspace=@bin/shared
 
       - name: Build unified public app
-        run: npm run build
+        run: |
+          set -euo pipefail
+          unset VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+          unset FIREBASE_APPCHECK_DEBUG_TOKEN
+          npm run build
 
       - name: Build dedicated admin panel
         run: npm run build:admin
@@ -194,7 +243,6 @@ jobs:
 
       - name: Build Firebase Functions
         run: npm run build:functions
-
       - name: Measure Functions discovery load
         run: npm run measure:functions-load
 
@@ -211,7 +259,7 @@ jobs:
 
   deploy-firebase-production-stack:
     name: Deploy Firebase production stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: validate-production-build
     environment: production
     env:
@@ -269,8 +317,17 @@ jobs:
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
           PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || '' }}
+          FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
+          INCIDENT_ATTESTATION_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_attestation || '' }}
+          INCIDENT_EVIDENCE_REFS_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_evidence_refs || '' }}
+          INCIDENT_ACTIVE_JSON_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_active_json || '' }}
+          INCIDENT_REQUIRES_ROLLBACK_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_requires_rollback || 'false' }}
+          INCIDENT_ROLLBACK_REASON_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_rollback_reason || '' }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed || 'false' }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT_INPUT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed_at || '' }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
@@ -288,6 +345,31 @@ jobs:
             || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
           [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
             || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+          [[ -n "${INCIDENT_EVIDENCE_REFS_INPUT// }" ]] \
+            || fail "incident_evidence_refs is required and cannot be empty."
+          [[ "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR" || "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS" ]] \
+            || fail "incident_attestation must be ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS."
+          if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
+            [[ "$INCIDENT_EVIDENCE_REFS_INPUT" != *"ADMIN_MFA_BOOTSTRAP_HOSTING"* ]] \
+              || fail "ADMIN_MFA_BOOTSTRAP_HOSTING is not permitted as incident evidence in public mode."
+          fi
+          if [[ "$INCIDENT_ATTESTATION_INPUT" == "ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR" ]]; then
+            [[ -z "$INCIDENT_ACTIVE_JSON_INPUT" || "$INCIDENT_ACTIVE_JSON_INPUT" == "[]" ]] \
+              || fail "CLEAR incident attestation forbids active incidents."
+            [[ "$INCIDENT_REQUIRES_ROLLBACK_INPUT" == "false" ]] \
+              || fail "CLEAR incident attestation forbids rollback hold."
+            [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT" == "false" ]] \
+              || fail "CLEAR incident attestation forbids failed last deployment."
+          else
+            if [[ "$INCIDENT_REQUIRES_ROLLBACK_INPUT" == "true" ]]; then
+              [[ -n "${INCIDENT_ROLLBACK_REASON_INPUT// }" ]] \
+                || fail "INCIDENT_ROLLBACK_REASON is required when INCIDENT_REQUIRES_ROLLBACK is true."
+            fi
+            if [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED_INPUT" == "true" ]]; then
+              [[ -n "${INCIDENT_LAST_DEPLOYMENT_FAILED_AT_INPUT// }" ]] \
+                || fail "INCIDENT_LAST_DEPLOYMENT_FAILED_AT is required when INCIDENT_LAST_DEPLOYMENT_FAILED is true."
+            fi
+          fi
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -300,6 +382,12 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
+            [[ "$FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+              || fail "Public mode requires the frozen hard-clearance release SHA."
+            if [[ -n "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" ]]; then
+              [[ "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+                || fail "hard_clearance_control_plane_sha must be a full lowercase 40-character SHA."
+            fi
           else
             [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
               || fail "launch_mode must be bank-pilot or public."
@@ -309,6 +397,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js 22
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -368,6 +458,85 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Narrow legacy Directions API and repair exact Admin and WebView Maps referrers
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          required_admin_referrer='https://bin-group-admin-panel.web.app/*'
+          required_webview_referrer='https://localhost/*'
+          key_resource="$(gcloud services api-keys lookup "$VITE_GOOGLE_MAPS_API_KEY" --format='value(name)')"
+          [[ "$key_resource" =~ ^projects/[0-9]+/locations/global/keys/[A-Za-z0-9_-]+$ ]] \
+            || fail "Maps key lookup did not return a canonical API Keys resource."
+
+          project_number="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+          [[ "$project_number" =~ ^[0-9]+$ ]] \
+            || fail "Unable to resolve the Google Cloud project number."
+          [[ "$key_resource" == "projects/$project_number/locations/global/keys/"* ]] \
+            || fail "Maps key does not belong to the configured production project."
+
+          if node scripts/verify-google-maps-api-key-restrictions.mjs; then
+            echo "Required Maps referrers already present and the full restriction verifier passes; no mutation required."
+          else
+            MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true \
+            MAPS_ALLOW_KNOWN_LEGACY_API_REPAIR=true \
+              node scripts/verify-google-maps-api-key-restrictions.mjs
+
+            key_json="$(gcloud services api-keys describe "$key_resource" --format=json)"
+            jq -e --arg key "$key_resource" '.name == $key' <<<"$key_json" >/dev/null \
+              || fail "Maps key changed between REST-backed validation and protected repair."
+            has_known_legacy_api="$(jq -r '
+              [.restrictions.apiTargets[]?.service]
+              | any(. == "directions-backend.googleapis.com" or . == "places.googleapis.com")
+            ' <<<"$key_json")"
+            if [[ "$has_known_legacy_api" == 'true' ]]; then
+              jq -e '
+                ([.restrictions.apiTargets[]?.service] | unique) as $services |
+                (["maps-backend.googleapis.com", "places-backend.googleapis.com",
+                  "geocoding-backend.googleapis.com", "static-maps-backend.googleapis.com"]) as $required |
+                (["directions-backend.googleapis.com", "places.googleapis.com"]) as $legacy |
+                (($required - $services) | length) == 0 and
+                (($services - ($required + $legacy)) | length) == 0 and
+                (($services - $required) | length) >= 1 and
+                (all(.restrictions.apiTargets[]; ((.methods // []) | length) == 0)) and
+                ((.restrictions.browserKeyRestrictions.allowedReferrers | type) == "array") and
+                ((.restrictions.browserKeyRestrictions.allowedReferrers | length) > 0) and
+                (all(.restrictions.browserKeyRestrictions.allowedReferrers[]; (type == "string") and (contains(",") | not)))
+              ' <<<"$key_json" >/dev/null \
+                || fail "Legacy Maps key differs from the exact known repair contract."
+              referrers_csv="$(jq -r --arg admin "$required_admin_referrer" --arg webview "$required_webview_referrer" \
+                '[.restrictions.browserKeyRestrictions.allowedReferrers[], $admin, $webview] | unique | join(",")' <<<"$key_json")"
+              [[ -n "$referrers_csv" ]] || fail "Maps browser referrers could not be preserved."
+              gcloud services api-keys update "$key_resource" \
+                --allowed-referrers="$referrers_csv" \
+                --api-target=service=maps-backend.googleapis.com \
+                --api-target=service=places-backend.googleapis.com \
+                --api-target=service=geocoding-backend.googleapis.com \
+                --api-target=service=static-maps-backend.googleapis.com \
+                --project="$GCP_PROJECT_ID" \
+                --quiet
+              echo "Removed only the known legacy Directions/Places API targets, preserving browser referrers and adding the two exact origins."
+            else
+              gcloud services api-keys update "$key_resource" \
+                --append \
+                --allowed-referrers="$required_admin_referrer,$required_webview_referrer" \
+                --project="$GCP_PROJECT_ID" \
+                --quiet
+              echo "Added only the exact Admin Hosting and local WebView referrers after REST-backed fail-closed validation."
+            fi
+          fi
+
+          # The relaxed verifier is never sufficient evidence. The final strict
+          # verifier must pass in the same protected step before deployment continues.
+          node scripts/verify-google-maps-api-key-restrictions.mjs
+
+      - name: Verify Google Maps production key restrictions and enabled APIs
+        run: node scripts/verify-google-maps-api-key-restrictions.mjs
+
       - name: Verify Firebase project billing and Cloud Functions deployment access
         run: node scripts/verify-firebase-deployment-readiness.mjs
 
@@ -382,15 +551,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           run_json="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
-          jq -e --arg sha "$EXPECTED_SHA" '
+          jq -e --arg sha "$EXPECTED_CONTROL_PLANE_SHA" '
             .name == "Live Role Smoke Tests" and
             .event == "workflow_dispatch" and
             .head_branch == "main" and
@@ -399,11 +569,13 @@ jobs:
             .conclusion == "success"' \
             <<<"$run_json" >/dev/null
 
-      - name: Download predeploy exact-SHA hard-clearance evidence
+      - name: Download predeploy exact-SHA hard-clearance evidence for frozen release
         if: ${{ inputs.launch_mode == 'public' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: hard-public-launch-clearance-${{ github.sha }}
+          # The former single-SHA contract used hard-public-launch-clearance-${{ github.sha }}.
+          # Public deploys now consume the separately supplied frozen release below.
+          name: hard-public-launch-clearance-${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           path: predeploy_hard_clearance
           github-token: ${{ github.token }}
           run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
@@ -412,9 +584,34 @@ jobs:
         if: ${{ inputs.launch_mode == 'public' }}
         env:
           HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
-          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_COMMIT_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
         run: node scripts/verify-hard-clearance-artifact.mjs
+
+      - name: Verify predeploy dual-SHA production revalidation binding
+        if: ${{ inputs.launch_mode == 'public' }}
+        env:
+          HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
+          proof=''
+          for candidate in \
+            "$HARD_CLEARANCE_DIRECTORY/hard-clearance-production-revalidation.json" \
+            "$HARD_CLEARANCE_DIRECTORY/launch_package/hard-clearance-production-revalidation.json"; do
+            if [[ -f "$candidate" ]]; then
+              [[ -z "$proof" ]] || { echo "::error::Hard-clearance artifact contains duplicate production revalidation proofs."; exit 1; }
+              proof="$candidate"
+            fi
+          done
+          [[ -n "$proof" ]] || { echo "::error::Hard-clearance artifact is missing hard-clearance-production-revalidation.json."; exit 1; }
+          jq -e --arg release "$FROZEN_RELEASE_SHA" --arg control "$CONTROL_PLANE_SHA" '
+            .releaseCommitSha == $release and
+            .controlPlaneCommitSha == $control and
+            .controlPlaneScopeVerified == true
+          ' "$proof" >/dev/null || { echo "::error::Hard-clearance production revalidation dual-SHA binding is invalid."; exit 1; }
 
       - name: Create production incidents artifact from protected workflow attestation
         env:
@@ -426,6 +623,7 @@ jobs:
           INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed }}
           INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed_at }}
           INCIDENT_EVIDENCE_REFS: ${{ fromJSON(inputs.deployment_payload_json).incident_evidence_refs }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
         run: node scripts/create-production-incidents-attestation.mjs
 
       - name: Create signed founder authorization
@@ -475,6 +673,8 @@ jobs:
         id: build_public
         run: |
           set -euo pipefail
+          unset VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+          unset FIREBASE_APPCHECK_DEBUG_TOKEN
           npm run build
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
@@ -592,9 +792,12 @@ jobs:
           DEPLOYMENT_ENVIRONMENT: production
           PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION: DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP
           CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ceo@bin-groups.com
+          E2E_FINANCE_APPROVER_EMAIL: ${{ secrets.E2E_FINANCE_APPROVER_EMAIL }}
         run: node scripts/delete-obsolete-privileged-accounts-production.mjs --execute
 
       - name: Deploy and verify Firebase production stack
+        # Script self-limits at FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS (12600s = 210 min); 15 min headroom.
+        timeout-minutes: 225
         env:
           DEPLOYMENT_ENVIRONMENT: production
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
@@ -636,6 +839,9 @@ jobs:
 
       - name: Seed or repair E2E role accounts
         run: npm run seed:e2e:auth
+
+      - name: Verify Finance Admin TOTP sign-in and protected evidence credential
+        run: node scripts/verify-finance-approver-totp-signin.mjs
 
       - name: Seed current-commit five-role fixtures
         run: npm run seed:e2e:live-data
@@ -730,7 +936,7 @@ jobs:
 
   public-release-clearance:
     name: Postdeploy public release gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: deploy-firebase-production-stack
     if: ${{ inputs.run_public_release_gate == true }}
     environment: production
@@ -777,6 +983,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js 22
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -870,11 +1078,32 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: production-deployment-${{ github.sha }}
-          # Upload paths already include launch_package/. Downloading into that
-          # directory would nest launch_package/launch_package and make the
-          # same-run verifier read missing files.
+          # The uploaded paths share launch_package/ as their common prefix,
+          # so the artifact archive contains these files at its root. Download
+          # to the repository root first; restore the verifier's expected paths
+          # explicitly in the next step. Never accept a cross-run orphan artifact.
           path: .
-          # Same-workflow-run only: never accept a cross-run orphan artifact.
+
+      - name: Restore production deployment metadata paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          for file in \
+            production-deployment.json \
+            production-deployment-verify.log \
+            predeploy-approval.json \
+            production-incidents.json \
+            hard-launch-authorization.json \
+            hard-launch-decision.json \
+            launch-evidence-batch.json \
+            launch-status.json; do
+            if [[ -f "$file" ]]; then
+              cp -- "$file" "launch_package/$file"
+            fi
+          done
+          # Required-file enforcement and exact run/SHA/attempt/digest checks
+          # remain in the fail-closed verifier immediately below.
 
       - name: Verify downloaded deployment artifact is bound to this run and SHA
         env:
@@ -889,17 +1118,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           run_json="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
           jq -e \
-            --arg sha "$EXPECTED_SHA" \
-            '.path == ".github/workflows/live-role-smoke.yml" and
+            --arg sha "$EXPECTED_CONTROL_PLANE_SHA" \
+            '.name == "Live Role Smoke Tests" and
+             .path == ".github/workflows/live-role-smoke.yml" and
              .event == "workflow_dispatch" and
              .head_branch == "main" and
              .head_sha == $sha and
@@ -907,13 +1138,44 @@ jobs:
              .conclusion == "success"' \
             <<<"$run_json" >/dev/null
 
-      - name: Download exact-SHA hard-clearance evidence
+      - name: Download frozen-release hard-clearance evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: hard-public-launch-clearance-${{ github.sha }}
+          name: hard-public-launch-clearance-${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           path: hard_clearance
           github-token: ${{ github.token }}
           run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+
+      - name: Verify postdeploy frozen-release hard-clearance artifact
+        env:
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
+          EXPECTED_COMMIT_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+        run: node scripts/verify-hard-clearance-artifact.mjs
+
+      - name: Verify postdeploy dual-SHA production revalidation binding
+        env:
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
+          proof=''
+          for candidate in \
+            "$HARD_CLEARANCE_DIRECTORY/hard-clearance-production-revalidation.json" \
+            "$HARD_CLEARANCE_DIRECTORY/launch_package/hard-clearance-production-revalidation.json"; do
+            if [[ -f "$candidate" ]]; then
+              [[ -z "$proof" ]] || { echo "::error::Hard-clearance artifact contains duplicate production revalidation proofs."; exit 1; }
+              proof="$candidate"
+            fi
+          done
+          [[ -n "$proof" ]] || { echo "::error::Hard-clearance artifact is missing hard-clearance-production-revalidation.json."; exit 1; }
+          jq -e --arg release "$FROZEN_RELEASE_SHA" --arg control "$CONTROL_PLANE_SHA" '
+            .releaseCommitSha == $release and
+            .controlPlaneCommitSha == $control and
+            .controlPlaneScopeVerified == true
+          ' "$proof" >/dev/null || { echo "::error::Hard-clearance production revalidation dual-SHA binding is invalid."; exit 1; }
 
       - name: Restore pilot incident evidence
         run: |
@@ -954,6 +1216,9 @@ jobs:
           set -euo pipefail
           npm run test:gate12:appcheck
           echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install Playwright Chromium for Gate 11 smoke
+        run: npx playwright install --with-deps chromium
 
       - name: Run Gate 11 authenticated production smoke
         # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
@@ -1026,6 +1291,10 @@ jobs:
           POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
           POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
           POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: |
           set -euo pipefail
           node scripts/postdeploy-release-gate.mjs
@@ -1040,7 +1309,24 @@ jobs:
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           PAYMENT_POLICY: ${{ inputs.payment_policy }}
           POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: npm run hard-launch:decision
+
+      - name: Upload failed postdeploy diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: postdeploy-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload public release clearance artifact
         if: always()

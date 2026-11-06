@@ -106,12 +106,33 @@ if (attestation !== CLEAR_PHRASE && attestation !== HOLDS_PHRASE) {
   );
 }
 
-const evidenceReferences = evidenceRefsRaw
-  .split(',')
-  .map((part) => part.trim())
-  .filter(Boolean);
+const rawParts = evidenceRefsRaw.split(',').map((part) => part.trim());
+if (rawParts.length === 0 || rawParts.some((part) => part.length === 0)) {
+  fail('INCIDENT_EVIDENCE_REFS must not contain empty or whitespace-only reference entries');
+}
+
+const evidenceReferences = rawParts;
 if (evidenceReferences.length === 0) {
   fail('INCIDENT_EVIDENCE_REFS must include at least one non-empty reference');
+}
+
+const PLACEHOLDER_RE = /(?:YOUR_|REPLACE(?:_ME)?|CHANGE_ME|CHANGEME|TODO|XXX+|<[A-Z0-9_-]+>)/i;
+for (const [index, refItem] of evidenceReferences.entries()) {
+  if (PLACEHOLDER_RE.test(refItem)) {
+    fail(`INCIDENT_EVIDENCE_REFS[${index}] contains placeholder value: "${refItem}"`);
+  }
+}
+
+const VALID_EVIDENCE_REF_RE = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s"'<>]+|GITHUB_PRODUCTION_RUN_[1-9]\d*|ADMIN_MFA_BOOTSTRAP_HOSTING)$/;
+for (const [index, refItem] of evidenceReferences.entries()) {
+  if (!VALID_EVIDENCE_REF_RE.test(refItem)) {
+    fail(`INCIDENT_EVIDENCE_REFS[${index}] is not a valid evidence reference format: "${refItem}"`);
+  }
+}
+
+const launchMode = optional('LAUNCH_MODE');
+if (launchMode === 'public' && evidenceReferences.includes('ADMIN_MFA_BOOTSTRAP_HOSTING')) {
+  fail('ADMIN_MFA_BOOTSTRAP_HOSTING is not permitted as incident evidence in public launch mode');
 }
 
 let activeIncidents;
