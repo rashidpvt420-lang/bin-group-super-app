@@ -38,6 +38,7 @@ import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from 
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
+import { dubaiPayrollDateKey, payableShiftDocId, payableShiftPatch, type PayableShiftAction } from "./technicianPayableShift";
 import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
@@ -203,6 +204,36 @@ export const submitOwnerOnboarding = onCall({ cors: true, enforceAppCheck: true 
 
 // ─── LEGACY TECHNICIAN DUTY REMOVED IN FAVOR OF STAGE 10 ─────────────────
 
+/**
+ * Home duty and the full-dashboard duty buttons share these callables.
+ * technician_shifts remains the dispatch break log. staff_shifts is the payable clock
+ * read by overtime, payslips and missed clock-out. A completed payable day is not reopened.
+ */
+async function queuePayableShift(
+    batch: FirebaseFirestore.WriteBatch,
+    uid: string,
+    action: PayableShiftAction,
+): Promise<{ payableShiftId: string; payableShift: string }> {
+    const shiftDate = dubaiPayrollDateKey();
+    const payableShiftId = payableShiftDocId(uid);
+    const ref = db.collection("staff_shifts").doc(payableShiftId);
+    const snap = await ref.get();
+    const decision = payableShiftPatch(snap.exists ? (snap.data() || {}) : null, action);
+    if (!decision.write) return { payableShiftId, payableShift: decision.reason };
+    const timestamp = FieldValue.serverTimestamp();
+    const fields: Record<string, unknown> = {
+        staffId: uid,
+        shiftDate,
+        updatedAt: timestamp,
+        source: "TECHNICIAN_DUTY",
+        ...decision.fields,
+    };
+    if (decision.setClockIn) fields.clockInTime = timestamp;
+    if (decision.setClockOut) fields.clockOutTime = timestamp;
+    batch.set(ref, fields, { merge: true });
+    return { payableShiftId, payableShift: decision.reason };
+}
+
 export const takeTechnicianBreak = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     await assertApprovedTechnicianAccount(request.auth);
@@ -224,10 +255,11 @@ export const takeTechnicianBreak = onCall({ cors: true, enforceAppCheck: true },
         breaks: FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
         updatedAt: now
     });
+    const payable = await queuePayableShift(batch, uid, "BREAK");
 
     await batch.commit();
-    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_TAKE_BREAK", targetType: "technician_shift", targetId: shiftId });
-    return { status: "SUCCESS" };
+    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_TAKE_BREAK", targetType: "technician_shift", targetId: shiftId, metadata: payable });
+    return { status: "SUCCESS", ...payable };
 });
 
 export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -259,11 +291,12 @@ export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }
         breaks,
         updatedAt: now
     });
+    const payable = await queuePayableShift(batch, uid, "RESUME");
 
     await batch.commit();
-    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_RESUME_DUTY", targetType: "technician_shift", targetId: shiftId });
+    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_RESUME_DUTY", targetType: "technician_shift", targetId: shiftId, metadata: payable });
     const redispatch = await redispatchAfterDutyChange(uid, "TECH_RESUME_DUTY");
-    return { status: "SUCCESS", redispatch };
+    return { status: "SUCCESS", redispatch, ...payable };
 });
 
 export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -2890,6 +2923,7 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         lastSeenAt: now,
         updatedAt: now
     });
+    const payable = await queuePayableShift(batch, techId, "CLOCK_IN");
 
     await batch.commit();
 
@@ -2914,7 +2948,7 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
     }
 
     const redispatch = await redispatchAfterDutyChange(techId, "TECH_START_DUTY");
-    return { success: true, shiftId, redispatch };
+    return { success: true, shiftId, redispatch, ...payable };
 });
 
 /**
@@ -2960,6 +2994,7 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
             updatedAt: now
         }, { merge: true });
     }
+    const payable = await queuePayableShift(batch, techId, "CLOCK_OUT");
 
     await batch.commit();
 
@@ -2972,7 +3007,7 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
         metadata: { shiftId: shiftId || null }
     });
 
-    return { success: true, shiftId: shiftId || null };
+    return { success: true, shiftId: shiftId || null, ...payable };
 });
 
 /**

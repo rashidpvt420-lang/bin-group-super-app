@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
+import { isPendingOwnerCostApproval } from '../utils/ownerPendingApprovals';
 import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
 import Bi from '../../components/Bi';
 
@@ -67,7 +68,7 @@ export default function OwnerApprovalCenterPage() {
   const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
   const { ticketPropertyLabel } = useOwnerPropertyLabels(ownerId);
-  const visibleItems = React.useMemo(() => Array.from(new Map<string, ApprovalRequest>([...items, ...olderItems].map((row) => [row.id, row] as const)).values()), [items, olderItems]);
+  const visibleItems = React.useMemo(() => Array.from(new Map<string, ApprovalRequest>([...items, ...olderItems].map((row) => [row.id, row] as const)).values()).filter((row) => isPendingOwnerCostApproval(row)), [items, olderItems]);
   const visibleSignOffs = React.useMemo(() => Array.from(new Map<string, SignOffTicket>([...signOffs, ...olderSignOffs].map((row) => [row.id, row] as const)).values()), [signOffs, olderSignOffs]);
 
   React.useEffect(() => {
@@ -78,7 +79,7 @@ export default function OwnerApprovalCenterPage() {
     ticketOlderPageLoadedRef.current = false;
     setOlderItems([]);
     setOlderSignOffs([]);
-    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), limit(REQUEST_PAGE_SIZE));
+    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(REQUEST_PAGE_SIZE));
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
       if (!requestOlderPageLoadedRef.current) requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;

@@ -51,7 +51,7 @@ export default function BrokerAttributionQuickStartCard({
     { id: 'referral', label: 'Referral link', value: referralLinkReady ? 'Ready' : 'Set up', icon: <Link2 size={20} />, route: '/broker/referrals' },
     { id: 'qr', label: 'QR lead capture', value: qrReady ? 'Ready' : 'Generate', icon: <QrCode size={20} />, route: '/broker/leads' },
     { id: 'contracts', label: 'Attributed contracts', value: String(attributedContracts), icon: <FileCheck2 size={20} />, route: '/broker/attribution' },
-    { id: 'commission', label: 'Pending commission', value: `AED ${Number(pendingCommissionAmount || 0).toLocaleString()}`, icon: <WalletCards size={20} />, route: '/broker/commissions' },
+    { id: 'commission', label: 'Pending settlement', value: `AED ${Number(pendingCommissionAmount || 0).toLocaleString()}`, icon: <WalletCards size={20} />, route: '/broker/commissions' },
   ];
 
   return (

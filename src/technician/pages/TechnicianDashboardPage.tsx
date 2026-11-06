@@ -325,7 +325,10 @@ export default function TechnicianDashboardPage() {
     const shift = readable(raw.shiftName, raw.shift, raw.workSchedule, raw.workingHours, 'Day Shift');
     const baseLocation = readable(raw.baseLocation, raw.serviceZone, raw.zone, raw.area, raw.emirate, 'UAE field operations');
     const contractType = readable(raw.contractType, raw.employmentType, raw.staffType, 'Full-time staff');
-    const joiningDate = formatUiDate(raw.joiningDate || raw.joinedAt || raw.createdAt);
+    const joiningDate = formatUiDate(
+      profileSources.hrProfile?.joiningDate || profileSources.hrProfile?.hireDate || profileSources.hrProfile?.joinedAt
+      || raw.joiningDate || raw.hireDate || raw.joinedAt,
+    );
     const visaExpiry = formatUiDate(raw.visaExpiry || raw.visaExpiryDate || raw.residencyExpiry);
     const idExpiry = formatUiDate(raw.emiratesIdExpiry || raw.eidExpiry || raw.idExpiry);
     const medicalExpiry = formatUiDate(profile.medicalCardExpiry || raw.medicalExpiry || raw.healthCardExpiry);

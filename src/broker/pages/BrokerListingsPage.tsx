@@ -36,7 +36,7 @@ export default function BrokerListingsPage() {
       setState('LOADING');
       setError('');
       try {
-        const call = httpsCallable(functions, 'getBrokerVerifiedListings');
+        const call = httpsCallable(functions, 'getBrokerVerifiedListings', { timeout: 20000 });
         const result: any = await call({});
         if (cancelled) return;
         const listings = Array.isArray(result?.data?.listings) ? result.data.listings as Listing[] : [];
@@ -48,7 +48,12 @@ export default function BrokerListingsPage() {
         setRows([]);
         setState('FAILED');
         setError(
-          code.includes('failed-precondition')
+          code.includes('deadline-exceeded') || code.includes('timeout')
+            ? label(
+                'Verified listings took too long to load. This is a loading failure, not an empty inventory result.',
+                'استغرق تحميل العقارات الموثقة وقتاً طويلاً. هذا فشل في التحميل وليس دليلاً على عدم وجود عقارات.',
+              )
+            : code.includes('failed-precondition')
             ? label(
                 'Verified Broker KYC/RERA approval is required before listing access.',
                 'يلزم اعتماد تحقق الوسيط ورخصة ريرا قبل الوصول إلى العقارات.',

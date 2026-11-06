@@ -27,9 +27,10 @@ export default function PropertyOnboardingPage() {
     const [searchParams] = useSearchParams();
     const { t, isRTL, lang, toggleLanguage } = useLanguage();
     const { user } = useRole();
-    const { step, nextStep, prevStep, setStep, properties, intakeId, ownerAccount } = useOnboardingStore();
+    const { step, nextStep, prevStep, setStep, properties, addProperty, intakeId, ownerAccount } = useOnboardingStore();
     const signedInSession = Boolean(user?.uid) && !(user as { isAnonymous?: boolean } | null)?.isAnonymous;
     const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
+    const addPropertyIntent = searchParams.get('intent') === 'add-property';
     const brokerUid = String(searchParams.get('broker') || '').trim();
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
@@ -62,6 +63,16 @@ export default function PropertyOnboardingPage() {
         setGuardError('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
+
+    // Signed-in owners adding another property start on the property and map-pin page.
+    const addIntentAppliedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!addPropertyIntent || addIntentAppliedRef.current || !signedInSession) return;
+        addIntentAppliedRef.current = true;
+        if (properties.length === 0) addProperty();
+        setStep(2);
+        setSection(0);
+    }, [addProperty, addPropertyIntent, properties.length, setStep, signedInSession]);
 
     // Auth resolves after mount: resume page 1 at the account section once, without fighting a later "Edit".
     const autoResumedRef = React.useRef(false);

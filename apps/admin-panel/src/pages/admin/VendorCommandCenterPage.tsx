@@ -2,7 +2,17 @@ import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
 
-type Vendor = { id: string; name?: string; trade?: string; emirate?: string; status?: string; licenseNumber?: string; insuranceStatus?: string; slaRatePct?: number; repeatFaultRatePct?: number; proofCoveragePct?: number };
+function vendorRateLabel(prefix: string, value: unknown, sampleCount?: unknown): string {
+  const samples = Number(sampleCount);
+  const measuredSamples = Number.isFinite(samples) && samples > 0;
+  const rate = Number(value);
+  const measuredRate = Number.isFinite(rate) && rate > 0;
+  if (!measuredSamples && !measuredRate) return `${prefix}: not enough data`;
+  const shown = Number.isFinite(rate) ? Math.round(rate) : 0;
+  return `${prefix} ${shown}%`;
+}
+
+type Vendor = { id: string; name?: string; trade?: string; emirate?: string; status?: string; licenseNumber?: string; insuranceStatus?: string; slaRatePct?: number; repeatFaultRatePct?: number; proofCoveragePct?: number; completedJobs?: number; sampleCount?: number };
 const trades = ['AC', 'Plumbing', 'Electrical', 'Handyman', 'Pest control', 'Civil works', 'General maintenance'];
 const emirates = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
 
@@ -62,7 +72,7 @@ export default function VendorCommandCenterPage() {
       </Grid></CardContent></Card>
       <Grid container spacing={2}>{vendors.map((vendor) => <Grid item xs={12} md={6} key={vendor.id}><Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)' }}><CardContent>
         <Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{vendor.name}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.6)' }}>{vendor.trade} · {vendor.emirate} · License {vendor.licenseNumber}</Typography></Box><Chip label={vendor.status || 'pending'} /></Stack>
-        <Grid container spacing={1.5} sx={{ mt: 2 }}><Grid item xs={4}><Chip label={`SLA ${vendor.slaRatePct || 0}%`} variant="outlined" sx={{ color: '#fff' }} /></Grid><Grid item xs={4}><Chip label={`Repeat ${vendor.repeatFaultRatePct || 0}%`} variant="outlined" sx={{ color: '#fff' }} /></Grid><Grid item xs={4}><Chip label={`Proof ${vendor.proofCoveragePct || 0}%`} variant="outlined" sx={{ color: '#fff' }} /></Grid></Grid>
+        <Grid container spacing={1.5} sx={{ mt: 2 }}><Grid item xs={4}><Chip label={vendorRateLabel('SLA', vendor.slaRatePct, vendor.completedJobs ?? vendor.sampleCount)} variant="outlined" sx={{ color: '#F9FAFB', borderColor: '#F9FAFB', '& .MuiChip-label': { color: '#F9FAFB' } }} /></Grid><Grid item xs={4}><Chip label={vendorRateLabel('Repeat', vendor.repeatFaultRatePct, vendor.completedJobs ?? vendor.sampleCount)} variant="outlined" sx={{ color: '#F9FAFB', borderColor: '#F9FAFB', '& .MuiChip-label': { color: '#F9FAFB' } }} /></Grid><Grid item xs={4}><Chip label={vendorRateLabel('Proof', vendor.proofCoveragePct, vendor.completedJobs ?? vendor.sampleCount)} variant="outlined" sx={{ color: '#F9FAFB', borderColor: '#F9FAFB', '& .MuiChip-label': { color: '#F9FAFB' } }} /></Grid></Grid>
         <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}><Button variant="outlined" onClick={() => setVendorStatus(vendor, 'verified')} sx={{ color: '#10b981', borderColor: '#10b981' }}>Verify</Button><Button variant="outlined" onClick={() => setVendorStatus(vendor, 'suspended')} sx={{ color: '#ef4444', borderColor: '#ef4444' }}>Suspend</Button></Stack>
       </CardContent></Card></Grid>)}</Grid>
     </Box>

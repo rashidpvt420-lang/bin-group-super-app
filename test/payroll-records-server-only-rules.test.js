@@ -18,6 +18,18 @@ const writers = [
   ['hr_staff', { role: 'hr_staff' }], ['hr_manager', { role: 'hr_manager' }], ['hr_admin', { role: 'hr_admin' }],
   ['finance_staff', { role: 'finance_staff' }], ['finance_admin', { role: 'finance_admin' }], ['admin', { role: 'admin', admin: true }],
 ];
+describe('payroll collection is not client-writable through the admin catch-all', () => {
+  const mfaAdmin = { role: 'admin', admin: true, firebase: { sign_in_provider: 'password', sign_in_second_factor: 'phone' } };
+  it('MFA admin cannot create, update or delete payroll, payslips or salary history', async () => {
+    const db = ctx('mfa_admin_payroll', mfaAdmin);
+    await assertFails(setDoc(doc(db, 'payroll/tech_2026-11'), { staffId: 'staff_a', netPay: 1, month: '2026-11' }));
+    await assertFails(setDoc(doc(db, 'staffPayslips/mfa_new'), { staffId: 'staff_a', netPay: 1 }));
+    await assertFails(updateDoc(doc(db, 'staffPayslips/slip_a'), { netPay: 1 }));
+    await assertFails(setDoc(doc(db, 'salaryHistory/mfa_new'), { staffId: 'staff_a', basic: 1 }));
+    await assertFails(updateDoc(doc(db, 'salaryHistory/hist_a'), { basic: 1 }));
+  });
+});
+
 describe('payroll records are server-only writes', () => {
   it('no client role can create, update or delete payslips or salary history', async () => {
     for (const [name, claims] of writers) {

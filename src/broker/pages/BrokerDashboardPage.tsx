@@ -9,6 +9,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import Bi from '../../components/Bi';
+import { paidCommissionAmount, pendingSettlementAmount } from '../commissionTotals';
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
@@ -44,15 +45,7 @@ export default function BrokerDashboardPage() {
 
     const refreshCommissions = () => {
       const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('broker_commissions:')).flatMap(([, value]) => value));
-      let pending = 0;
-      let paid = 0;
-      rows.forEach((row: any) => {
-        const amount = Number(row.amount || row.commissionAmount || 0);
-        const status = String(row.status || '').toLowerCase();
-        if (status === 'paid') paid += amount;
-        else pending += amount;
-      });
-      setStats((prev) => ({ ...prev, commissionPending: pending, commissionPaid: paid }));
+      setStats((prev) => ({ ...prev, commissionPending: pendingSettlementAmount(rows), commissionPaid: paidCommissionAmount(rows) }));
     };
 
     const bind = (collectionName: string, refresh: () => void, max = 25) => {
@@ -85,7 +78,7 @@ export default function BrokerDashboardPage() {
   const statCards = useMemo(() => [
     { label: tx('broker.dash.active_leads', 'Active Leads'), value: stats.leadsActive, icon: <Users size={22} />, route: '/broker/leads', tone: '#10b981' },
     { label: tx('broker.dash.pending_referrals', 'Pending Referrals'), value: stats.referralsPending, icon: <Briefcase size={22} />, route: '/broker/referrals', tone: binThemeTokens.gold },
-    { label: tx('broker.dash.pending_payout', 'Pending Payout'), value: money(stats.commissionPending), icon: <DollarSign size={22} />, route: '/broker/commissions', tone: '#f59e0b' },
+    { label: tx('broker.dash.pending_payout', 'Pending settlement'), value: money(stats.commissionPending), icon: <DollarSign size={22} />, route: '/broker/commissions', tone: '#f59e0b' },
     { label: tx('broker.dash.lifetime_paid', 'Lifetime Paid'), value: money(stats.commissionPaid), icon: <TrendingUp size={22} />, route: '/broker/commissions', tone: '#3b82f6' },
   ], [stats, tx]);
 

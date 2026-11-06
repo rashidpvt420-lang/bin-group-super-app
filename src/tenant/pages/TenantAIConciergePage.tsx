@@ -435,7 +435,7 @@ export default function TenantAIConciergePage() {
                   size="small"
                   icon={<Sparkles size={12} />}
                   onClick={() => { setInputValue(suggestion); }}
-                  sx={{ cursor: 'pointer', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', fontWeight: 700, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold } }}
+                  sx={{ cursor: 'pointer', bgcolor: '#1E293B', color: '#F8FAFC', border: '1px solid #F8FAFC', fontWeight: 700, '& .MuiChip-label': { color: '#F8FAFC' }, '& .MuiChip-icon': { color: '#F8FAFC' }, '&:hover': { bgcolor: '#334155', color: '#F8FAFC' } }}
                 />
               ))}
             </Stack>

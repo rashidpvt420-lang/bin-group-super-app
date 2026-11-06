@@ -24,6 +24,7 @@ export default function BottomNav({ role }: { role: NavRole }) {
             <ButtonBase key={tab.key} onClick={() => navigate(tab.path)} aria-current={on ? 'page' : undefined} sx={{ flex: 1, minHeight: ui.bottomNavHeight, display: 'flex', flexDirection: 'column', gap: 0.25, color: on ? ui.goldText : ui.muted, '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
               <SafeIcon icon={ICONS[tab.icon]} size={22} />
               <Typography component="span" sx={{ fontSize: 12, fontWeight: on ? 800 : 500, color: 'inherit' }}>{lang === 'ar' ? tab.ar : tab.en}</Typography>
+              {role === 'technician' && tab.key === 'home' && <Typography component="span" sx={{ fontSize: 10, fontWeight: 800, color: 'inherit', lineHeight: 1 }}>{lang === 'ar' ? 'الساعة' : 'Paid clock'}</Typography>}
             </ButtonBase>
           );
         })}

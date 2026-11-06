@@ -42,6 +42,9 @@ import { notifyEmergency, notifyTicketCreated } from '../../services/notificatio
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import Bi from '../../components/Bi';
+import { residenceDedupeKey, selectTenantResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
+
+const RESIDENCE_LOOKUP_TIMEOUT_MS = 12000;
 
 const sanitizeStorageFileName = (name: string) =>
     name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
@@ -151,6 +154,7 @@ export default function TenantRequestPage() {
     const [unitData, setUnitData] = useState<any>(null);
     const [residenceChecked, setResidenceChecked] = useState(false);
     const [residenceLoadError, setResidenceLoadError] = useState('');
+    const [residenceAttempt, setResidenceAttempt] = useState(0);
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [failedTicketId, setFailedTicketId] = useState<string | null>(null);
@@ -167,29 +171,40 @@ export default function TenantRequestPage() {
     };
 
     useEffect(() => {
+        let cancelled = false;
+        const withTimeout = <T,>(promise: Promise<T>, label: string): Promise<T> => new Promise((resolve, reject) => {
+            const timer = window.setTimeout(() => reject(new Error(`timeout:${label}`)), RESIDENCE_LOOKUP_TIMEOUT_MS);
+            promise.then(
+                (value) => { window.clearTimeout(timer); resolve(value); },
+                (error) => { window.clearTimeout(timer); reject(error); },
+            );
+        });
         const fetchResidence = async () => {
             if (!user?.uid) {
                 setResidenceChecked(true);
                 return;
             }
+            setResidenceChecked(false);
             setResidenceLoadError('');
+            setUnitData(null);
+            setPropertyData(null);
             try {
-                const unitCandidates = new Map<string, any>();
+                const unitCandidates = new Map<string, ResidenceUnit>();
                 const addUnit = (id: string, data: any) => {
                     if (!id || unitCandidates.has(id)) return;
                     unitCandidates.set(id, { id, ...data });
                 };
                 const queryUnits = async (field: string, value: string) => {
                     if (!value) return;
-                    const snapshot = await getDocs(query(collection(db, 'units'), where(field, '==', value)));
+                    const snapshot = await withTimeout(getDocs(query(collection(db, 'units'), where(field, '==', value))), field);
                     snapshot.docs.forEach((unitDoc) => addUnit(unitDoc.id, unitDoc.data()));
                 };
 
-                const profileSnap = await getDoc(doc(db, 'users', user.uid));
+                const profileSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile');
                 const profile = profileSnap.exists() ? profileSnap.data() : {};
                 const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
                 if (profileUnitId) {
-                    const profileUnitSnap = await getDoc(doc(db, 'units', profileUnitId));
+                    const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
                     if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
                 }
 
@@ -197,8 +212,22 @@ export default function TenantRequestPage() {
                 await queryUnits('tenantUid', user.uid);
                 await queryUnits('currentTenantId', user.uid);
                 if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
+                if (cancelled) return;
 
-                let selectedUnit: any = null;
+                const collapsed = new Map<string, ResidenceUnit>();
+                for (const unit of unitCandidates.values()) {
+                    const key = residenceDedupeKey(unit);
+                    const current = collapsed.get(key);
+                    const winner = selectTenantResidence(
+                        current ? [{ unit: current }, { unit }] : [{ unit }],
+                        profileUnitId,
+                    );
+                    if (winner) collapsed.set(key, winner);
+                }
+                unitCandidates.clear();
+                collapsed.forEach((unit) => unitCandidates.set(unit.id, unit));
+
+                let selectedUnit: ResidenceUnit | null = null;
                 let selectedProperty: any = null;
                 for (const unit of unitCandidates.values()) {
                     const propertyId = String(unit.propertyId || '').trim();
@@ -206,7 +235,7 @@ export default function TenantRequestPage() {
                         if (!selectedUnit) selectedUnit = unit;
                         continue;
                     }
-                    const propertySnap = await getDoc(doc(db, 'properties', propertyId));
+                    const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
                     const property = propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
                     if (!selectedUnit) {
                         selectedUnit = unit;
@@ -223,23 +252,27 @@ export default function TenantRequestPage() {
                 setUnitData(selectedUnit);
                 if (!selectedProperty) return;
                 setPropertyData(selectedProperty);
-
             } catch (error: any) {
+                if (cancelled) return;
                 const code = String(error?.code || '').toLowerCase();
-                console.warn('Residence lookup failed:', { code });
+                const timedOut = String(error?.message || '').startsWith('timeout:');
+                console.warn('Residence lookup failed:', { code, timedOut });
                 setUnitData(null);
                 setPropertyData(null);
                 setResidenceLoadError(
                     code.includes('permission-denied')
                         ? 'Residence details could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
-                        : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
+                        : timedOut
+                            ? 'Residence details could not be loaded in time. This is a data-loading failure, not confirmation that no unit is linked.'
+                            : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
                 );
             } finally {
-                setResidenceChecked(true);
+                if (!cancelled) setResidenceChecked(true);
             }
         };
         void fetchResidence();
-    }, [user]);
+        return () => { cancelled = true; };
+    }, [user?.uid, user?.email, residenceAttempt]);
 
     useEffect(() => {
         const nextCategory = normalizeCategoryPrefill(searchParams.get('category'));
@@ -422,7 +455,7 @@ export default function TenantRequestPage() {
     if (residenceLoadError) {
         return (
             <Paper data-testid="tenant-residence-load-failed" sx={{ p: 5, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid #ef4444' }}>
-                <Alert severity="error">{residenceLoadError}</Alert>
+                <Alert severity="error" action={<Button color="inherit" onClick={() => setResidenceAttempt((attempt) => attempt + 1)}>Retry</Button>}>{residenceLoadError}</Alert>
             </Paper>
         );
     }
@@ -434,7 +467,7 @@ export default function TenantRequestPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textOnDarkMuted, transform: isRTL ? 'rotate(180deg)' : 'none' }}>
+                <IconButton aria-label={tt('nav.back', 'Back')} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textOnDarkMuted, transform: isRTL ? 'rotate(180deg)' : 'none' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -66,6 +66,13 @@ type SnackbarState = {
 };
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
+const designSelectSx = {
+  '& .MuiInputLabel-root': { color: '#F9FAFB', backgroundColor: '#161618', px: 0.5, lineHeight: 1.2 },
+  '& .MuiInputLabel-root.Mui-focused': { color: '#E5C86B' },
+  '& .MuiSelect-select': { color: '#F9FAFB' },
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(249,250,251,0.45)' },
+};
+const DESIGN_WAIT_NOTE_MS = 45_000;
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REFERENCE_IMAGES = 1;
@@ -147,6 +154,8 @@ export default function DesignStudioPage() {
   const [designStyle, setDesignStyle] = useState('Modern');
   const [designObjective, setDesignObjective] = useState('refresh');
   const [submitting, setSubmitting] = useState(false);
+  const [waitNote, setWaitNote] = useState(false);
+  const stoppedWaitingRef = useRef(false);
   const [renderStatus, setRenderStatus] = useState('REFERENCE_IMAGE_REQUIRED');
   const [renderedConcepts, setRenderedConcepts] = useState<DesignConcept[]>([]);
   const [serverQuote, setServerQuote] = useState<ServerQuote | null>(null);
@@ -235,6 +244,23 @@ export default function DesignStudioPage() {
     await handleImageFiles(files.slice(0, MAX_REFERENCE_IMAGES));
   };
 
+  useEffect(() => {
+    if (!submitting) {
+      setWaitNote(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setWaitNote(true), DESIGN_WAIT_NOTE_MS);
+    return () => window.clearTimeout(timer);
+  }, [submitting]);
+
+  const stopWaitingForDesign = () => {
+    stoppedWaitingRef.current = true;
+    setSubmitting(false);
+    setWaitNote(false);
+    setRenderStatus('AI_RENDER_FAILED');
+    setSubmitError('Stopped waiting. No design image was shown. If a request was saved, open your design requests before trying again.');
+  };
+
   const handleCreateConcept = async () => {
     if (!user?.uid) {
       setSnackbar({ open: true, message: 'Please sign in before submitting a design request.', severity: 'error' });
@@ -246,8 +272,10 @@ export default function DesignStudioPage() {
       return;
     }
 
+    stoppedWaitingRef.current = false;
     setSubmitting(true);
     setSubmitError('');
+    setWaitNote(false);
     setRenderStatus('AI_RENDER_IN_PROGRESS');
     try {
       const requestId = createDesignRequestId();
@@ -267,7 +295,17 @@ export default function DesignStudioPage() {
         notes: scopeDescription,
       });
       const data = (result?.data || {}) as SubmitDesignResponse;
-      setRenderedConcepts(Array.isArray(data.concepts) ? data.concepts : []);
+      const concepts = Array.isArray(data.concepts) ? data.concepts : [];
+      const hasImage = concepts.some((concept) => Boolean(concept.afterImageUrl));
+      if (!hasImage) {
+        setRenderedConcepts([]);
+        setRenderStatus('AI_RENDER_FAILED');
+        setSubmitError('The design service did not return an image. Nothing was invented. Try again, or open your design requests if one was saved.');
+        setSnackbar({ open: true, message: 'No design image came back. Nothing was invented.', severity: 'error' });
+        return;
+      }
+      if (stoppedWaitingRef.current) setSubmitting(false);
+      setRenderedConcepts(concepts);
       setServerQuote(data.quote || null);
       setRenderStatus(data.renderStatus || 'AI_RENDER_COMPLETE');
       setSnackbar({
@@ -303,7 +341,12 @@ export default function DesignStudioPage() {
             <Chip label={tenantMode ? 'Your owner approves this' : 'Private to you'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
           {renderStatus === 'AI_RENDER_FAILED' && submitError && (
-            <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error">{submitError}</Alert>
+            <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error" action={<Button color="inherit" disabled={submitting} onClick={() => void handleCreateConcept()}>{submitting ? 'Creating…' : 'Try again'}</Button>}>{submitError}</Alert>
+          )}
+          {submitting && waitNote && (
+            <Alert severity="warning" sx={{ mt: 2 }} data-testid="design-still-waiting" action={<Button color="inherit" onClick={stopWaitingForDesign}>Stop waiting</Button>}>
+              Still waiting for a real design image. This can take a few minutes. No image is shown until one is created. You can stop waiting and try again.
+            </Alert>
           )}
         </Box>
 
@@ -344,10 +387,10 @@ export default function DesignStudioPage() {
           <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Home color={binThemeTokens.gold} /> Property design scope</Typography>
             <Stack spacing={2.5}>
-              <TextField select label={labels.zone} value={scope.zoneType} onChange={(event) => setScope({ ...scope, zoneType: event.target.value })} fullWidth>{DESIGN_SPACE_TYPES.map((zone) => <MenuItem key={zone} value={zone}>{zone}</MenuItem>)}</TextField>
-              <TextField select label="Objective" value={designObjective} onChange={(event) => setDesignObjective(event.target.value)} fullWidth>{DESIGN_OBJECTIVES.map((objective) => <MenuItem key={objective} value={objective}>{objective}</MenuItem>)}</TextField>
-              <TextField select label={labels.style} value={designStyle} onChange={(event) => setDesignStyle(event.target.value)} fullWidth>{DESIGN_STYLES.map((style) => <MenuItem key={style} value={style}>{style}</MenuItem>)}</TextField>
-              <TextField select label="Finish tier" value={scope.finishTier} onChange={(event) => setScope({ ...scope, finishTier: event.target.value as DesignScope['finishTier'] })} fullWidth>{['Standard', 'Premium', 'Luxury'].map((tier) => <MenuItem key={tier} value={tier}>{tier}</MenuItem>)}</TextField>
+              <TextField select label={labels.zone} value={scope.zoneType} onChange={(event) => setScope({ ...scope, zoneType: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{DESIGN_SPACE_TYPES.map((zone) => <MenuItem key={zone} value={zone}>{zone}</MenuItem>)}</TextField>
+              <TextField select label="Objective" value={designObjective} onChange={(event) => setDesignObjective(event.target.value)} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{DESIGN_OBJECTIVES.map((objective) => <MenuItem key={objective} value={objective}>{objective}</MenuItem>)}</TextField>
+              <TextField select label={labels.style} value={designStyle} onChange={(event) => setDesignStyle(event.target.value)} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{DESIGN_STYLES.map((style) => <MenuItem key={style} value={style}>{style}</MenuItem>)}</TextField>
+              <TextField select label="Finish tier" value={scope.finishTier} onChange={(event) => setScope({ ...scope, finishTier: event.target.value as DesignScope['finishTier'] })} fullWidth InputLabelProps={{ shrink: true }} sx={designSelectSx}>{['Standard', 'Premium', 'Luxury'].map((tier) => <MenuItem key={tier} value={tier}>{tier}</MenuItem>)}</TextField>
               <Box>
                 <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Ruler size={14} /> Area: {scope.dimensions} sq ft</Typography>
                 <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, value) => setScope({ ...scope, dimensions: value as number })} sx={{ color: binThemeTokens.gold }} />

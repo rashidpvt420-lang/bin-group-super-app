@@ -7,6 +7,7 @@ import {
   isOwnerOpenTicket,
 } from '../utils/ownerTicketAttentionCounts';
 import { countOwnerPendingSignOffs } from '../utils/ownerPendingSignOff';
+import { isPendingOwnerCostApproval } from '../utils/ownerPendingApprovals';
 
 type OwnerCommandCounts = {
   loading: boolean;
@@ -24,8 +25,6 @@ type OwnerCommandCounts = {
   /** Sources at their query limit; counts below may be understated. */
   truncatedSources?: string[];
 };
-
-const PENDING_APPROVAL_STATUSES = new Set(['PENDING', 'pending', 'REQUESTED', 'requested', 'OPEN', 'open']);
 
 function toMillis(value: any): number | null {
   if (!value) return null;
@@ -115,7 +114,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
       unsubs.push(onSnapshot(query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(100)), (snap) => {
         if (snap.size >= 100) truncated.add('approvals');
         else truncated.delete('approvals');
-        partial._pendingCostRequests = snap.docs.filter((docSnap) => PENDING_APPROVAL_STATUSES.has(String(docSnap.data()?.status || 'PENDING'))).length;
+        partial._pendingCostRequests = snap.docs.filter((docSnap) => isPendingOwnerCostApproval(docSnap.data())).length;
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] approval requests listener failed:', err);

@@ -1,7 +1,10 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
-import { auth, collection, db, doc, functions, getDoc, getDocs, httpsCallable, limit, query, ref, storage, uploadBytes, where } from '../lib/firebase';
+import { useNavigate } from 'react-router-dom';
+import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, limit, query, ref, storage, uploadBytes, where } from '../lib/firebase';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
+import { ADD_PROPERTY_PATH } from '../owner/components/OwnerPortfolioHomeCard';
 
 type Project = { id: string; status: string; scope: string; propertyId: string; quoteVersion?: number; approvedQuoteVersion?: number | null; warranty?: { months: number }; completionAcceptance?: { acceptedBy: string } | null };
 type Quote = {
@@ -67,9 +70,11 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 export default function PaintingProjectsPage() {
+  const navigate = useNavigate();
   const { isRTL, lang } = useLanguage();
+  const { user } = useRole();
   const t = (en: string, ar: string) => (lang === 'ar' ? ar : en);
-  const uid = auth.currentUser?.uid;
+  const uid = user?.uid || '';
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [properties, setProperties] = React.useState<{ id: string; name: string }[]>([]);
   const [quotes, setQuotes] = React.useState<Record<string, Quote>>({});
@@ -90,7 +95,12 @@ export default function PaintingProjectsPage() {
   const [otpState, setOtpState] = React.useState<Record<string, { otpId: string; quoteVersion: number; code: string }>>({});
 
   const load = React.useCallback(async () => {
-    if (!uid) return;
+    if (!uid) {
+      setProjects([]);
+      setProperties([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [ps, props] = await Promise.all([
@@ -237,7 +247,8 @@ export default function PaintingProjectsPage() {
       <Card sx={{ mb: 3 }}><CardContent>
         <Typography fontWeight={700} gutterBottom>{t('Request a painting survey', 'طلب معاينة للدهان')}</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <TextField select fullWidth size="small" label={t('Property', 'العقار')} value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
+          <TextField select fullWidth size="small" label={t('Property', 'العقار')} value={propertyId} onChange={(e) => setPropertyId(e.target.value)} InputLabelProps={{ shrink: true }} data-testid="painting-property-picker">
+            {properties.length === 0 && <MenuItem value="" disabled>{t('No property yet — add one first', 'لا يوجد عقار بعد — أضف عقاراً أولاً')}</MenuItem>}
             {properties.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
           </TextField>
           <TextField select fullWidth size="small" label={t('Scope', 'النطاق')} value={scope} onChange={(e) => setScope(e.target.value)}>
@@ -284,6 +295,12 @@ export default function PaintingProjectsPage() {
             <Button variant="outlined" onClick={() => setAreas((l) => [...l, emptyArea()])} disabled={areas.length >= 300}>{t('Add room / floor / unit', 'إضافة غرفة / طابق / وحدة')}</Button>
           </Stack>
           <TextField multiline minRows={2} size="small" label={t('Notes for the surveyor (optional)', 'ملاحظات للمعاين (اختياري)')} value={notes} onChange={(e) => setNotes(e.target.value.slice(0, 2000))} />
+          {!loading && properties.length === 0 && (
+            <Alert severity="info" data-testid="painting-no-properties">
+              {t('The property list is empty because no property is linked to this owner account.', 'قائمة العقارات فارغة لأنه لا يوجد عقار مرتبط بحساب المالك.')}{' '}
+              <Button size="small" onClick={() => navigate(ADD_PROPERTY_PATH)}>{t('Add property', 'إضافة عقار')}</Button>
+            </Alert>
+          )}
           <Box><Button variant="contained" disabled={!propertyId || busy === 'new' || !areaValid} onClick={requestProject}>{t('Request survey', 'طلب المعاينة')}</Button></Box>
         </Stack>
       </CardContent></Card>
