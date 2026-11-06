@@ -2,8 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Paper, Grid, Button, alpha, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert } from '@mui/material';
 import { db, collection, query, getDocs, orderBy, limit, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { isVoidCommission, pendingSettlementAmount } from '../../lib/brokerCommissionPending';
 
 const commissionStatus = (value: unknown) => String(value || '').trim().toUpperCase();
+
+const commissionStats = (data: any[]) => {
+    let approved = 0;
+    let paid = 0;
+    data.forEach((row) => {
+        if (isVoidCommission(row)) return;
+        const amount = Number(row.amount || 0);
+        const status = commissionStatus(row.status);
+        if (status === 'APPROVED') approved += amount;
+        else if (status === 'PAID') paid += amount;
+    });
+    return { pending: pendingSettlementAmount(data), approved, paid };
+};
 
 export default function BrokerCommissionHubPage() {
     const [commissions, setCommissions] = useState<any[]>([]);
@@ -23,16 +37,7 @@ export default function BrokerCommissionHubPage() {
                 const snap = await getDocs(q);
                 const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 setCommissions(data);
-
-                let p = 0; let a = 0; let paid = 0;
-                data.forEach((c: any) => {
-                    const amount = Number(c.amount || 0);
-                    const status = commissionStatus(c.status);
-                    if (status === 'PENDING') p += amount;
-                    else if (status === 'APPROVED') a += amount;
-                    else if (status === 'PAID') paid += amount;
-                });
-                setStats({ pending: p, approved: a, paid: paid });
+                setStats(commissionStats(data));
             } catch (err) {
                 console.error("Commission fetch error:", err);
             } finally {
@@ -42,17 +47,7 @@ export default function BrokerCommissionHubPage() {
         fetchCommissions();
     }, []);
 
-    const recalcStats = (data: any[]) => {
-        let p = 0; let a = 0; let paid = 0;
-        data.forEach((c: any) => {
-            const amount = Number(c.amount || 0);
-            const status = commissionStatus(c.status);
-            if (status === 'PENDING') p += amount;
-            else if (status === 'APPROVED') a += amount;
-            else if (status === 'PAID') paid += amount;
-        });
-        setStats({ pending: p, approved: a, paid });
-    };
+    const recalcStats = (data: any[]) => setStats(commissionStats(data));
 
     const handleApprove = async (id: string) => {
         setBusyId(id);
@@ -169,7 +164,7 @@ export default function BrokerCommissionHubPage() {
                                         {Number(c.amount || 0).toLocaleString()}
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="center">
-                                        {commissionStatus(c.status) === 'PENDING' && (
+                                        {commissionStatus(c.status) === 'PENDING' && !isVoidCommission(c) && (
                                             <Button size="small" disabled={busyId === c.id} onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>APPROVE</Button>
                                         )}
                                         {commissionStatus(c.status) === 'APPROVED' && (

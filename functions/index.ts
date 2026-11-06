@@ -38,7 +38,7 @@ import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from 
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
-import { SECOND_SAME_DAY_CLOCK_IN_MESSAGE, dubaiPayrollDateKey, legacyOpenShiftBackfill, payableShiftDocId, payableShiftPatch, type PayableShiftAction } from "./technicianPayableShift";
+import { SECOND_SAME_DAY_CLOCK_IN_MESSAGE, dubaiPayrollDateKey, legacyOpenShiftBackfill, payableDutyWrite, payableShiftDocId, sameDayRecordedClock, type PayableShiftAction } from "./technicianPayableShift";
 import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
@@ -213,12 +213,13 @@ async function queuePayableShift(
     batch: FirebaseFirestore.WriteBatch,
     uid: string,
     action: PayableShiftAction,
+    recordedClockIn?: unknown,
 ): Promise<{ payableShiftId: string; payableShift: string }> {
     const shiftDate = dubaiPayrollDateKey();
     const payableShiftId = payableShiftDocId(uid);
     const ref = db.collection("staff_shifts").doc(payableShiftId);
     const snap = await ref.get();
-    const decision = payableShiftPatch(snap.exists ? (snap.data() || {}) : null, action);
+    const decision = payableDutyWrite(snap.exists ? (snap.data() || {}) : null, action, recordedClockIn, shiftDate);
     if (!decision.write) return { payableShiftId, payableShift: decision.reason };
     const timestamp = FieldValue.serverTimestamp();
     const fields: Record<string, unknown> = {
@@ -228,7 +229,8 @@ async function queuePayableShift(
         source: "TECHNICIAN_DUTY",
         ...decision.fields,
     };
-    if (decision.setClockIn) fields.clockInTime = timestamp;
+    if (decision.recordedClockIn) fields.clockInTime = decision.recordedClockIn;
+    else if (decision.setClockIn) fields.clockInTime = timestamp;
     if (decision.setClockOut) fields.clockOutTime = timestamp;
     batch.set(ref, fields, { merge: true });
     return { payableShiftId, payableShift: decision.reason };
@@ -2888,12 +2890,26 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
     }
     const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
-    const gstDate = new Date(nowDate.getTime() + (4 * 60 * 60 * 1000));
-    const dateKey = `${gstDate.getUTCFullYear()}${String(gstDate.getUTCMonth() + 1).padStart(2, "0")}${String(gstDate.getUTCDate()).padStart(2, "0")}`;
+    const todayKey = dubaiPayrollDateKey(nowDate);
+    const dateKey = todayKey.replace(/-/g, "");
     const existingShiftId = String(techData.currentShiftId || "");
-    const shiftId = existingShiftId || `${techId}_${dateKey}_${nowDate.getTime()}`;
+    const existingShiftSnap = existingShiftId
+        ? await db.collection("technician_shifts").doc(existingShiftId).get()
+        : null;
+    const recordedClockIn = existingShiftSnap?.exists
+        ? (existingShiftSnap.data()?.clockIn || existingShiftSnap.data()?.startedAt || null)
+        : null;
+    const reuseShift = Boolean(existingShiftId && sameDayRecordedClock(recordedClockIn, todayKey));
+    const shiftId = reuseShift ? existingShiftId : `${techId}_${dateKey}_${nowDate.getTime()}`;
     const shiftRef = db.collection("technician_shifts").doc(shiftId);
     const batch = db.batch();
+    if (existingShiftId && !reuseShift) {
+        batch.set(db.collection("technician_shifts").doc(existingShiftId), {
+            status: "CLOSED",
+            closeReason: "NEXT_DUTY_DAY_WITHOUT_RECORDED_CLOCK_OUT",
+            updatedAt: now,
+        }, { merge: true });
+    }
 
     const shiftPayload: Record<string, any> = {
         shiftId,
@@ -2903,13 +2919,15 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         displayName: techData.displayName || techData.fullName || "Technician",
         dateKey,
         status: "ACTIVE",
-        clockIn: admin.firestore.Timestamp.fromDate(nowDate),
-        startedAt: admin.firestore.Timestamp.fromDate(nowDate),
         source: "TECHNICIAN_DUTY_CALLABLE",
-        createdAt: now,
         updatedAt: now
     };
-    if (!existingShiftId) shiftPayload.breaks = [];
+    if (!reuseShift) {
+        shiftPayload.clockIn = admin.firestore.Timestamp.fromDate(nowDate);
+        shiftPayload.startedAt = admin.firestore.Timestamp.fromDate(nowDate);
+        shiftPayload.createdAt = now;
+        shiftPayload.breaks = [];
+    }
 
     batch.set(shiftRef, shiftPayload, { merge: true });
 
@@ -2923,7 +2941,7 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         lastSeenAt: now,
         updatedAt: now
     });
-    const payable = await queuePayableShift(batch, techId, "CLOCK_IN");
+    const payable = await queuePayableShift(batch, techId, "CLOCK_IN", reuseShift ? recordedClockIn : null);
     if (payable.payableShift === "already_completed") {
         throw new HttpsError("failed-precondition", SECOND_SAME_DAY_CLOCK_IN_MESSAGE);
     }
@@ -3009,6 +3027,10 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
     const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
     const shiftId = String(techData.currentShiftId || "");
+    const recordedShift = shiftId ? await db.collection("technician_shifts").doc(shiftId).get() : null;
+    const recordedClockIn = recordedShift?.exists
+        ? (recordedShift.data()?.clockIn || recordedShift.data()?.startedAt || null)
+        : null;
     const batch = db.batch();
 
     batch.update(techDoc.ref, {
@@ -3029,7 +3051,7 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
             updatedAt: now
         }, { merge: true });
     }
-    const payable = await queuePayableShift(batch, techId, "CLOCK_OUT");
+    const payable = await queuePayableShift(batch, techId, "CLOCK_OUT", recordedClockIn);
 
     await batch.commit();
 

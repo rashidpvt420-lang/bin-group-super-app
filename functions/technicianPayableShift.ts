@@ -90,3 +90,65 @@ export function legacyOpenShiftBackfill(existing: Record<string, unknown> | null
   if (!recordedClockIn) return { write: false, reason: "no_recorded_clock_in" };
   return { write: true, reason: "copied_recorded_clock_in", clockInTime: recordedClockIn };
 }
+
+export function timestampToDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  if (typeof value === "object") {
+    const stamp = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof stamp.toDate === "function") {
+      const date = stamp.toDate();
+      return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+    }
+    const seconds = stamp.seconds ?? stamp._seconds;
+    if (typeof seconds === "number" && Number.isFinite(seconds)) {
+      const date = new Date(seconds * 1000);
+      return Number.isFinite(date.getTime()) ? date : null;
+    }
+  }
+  return null;
+}
+
+/** A technician_shifts clock-in counts only on the payable day it actually happened. */
+export function sameDayRecordedClock(recordedClockIn: unknown, payableDateKey: string): unknown | null {
+  const date = timestampToDate(recordedClockIn);
+  if (!date || !payableDateKey) return null;
+  return dubaiPayrollDateKey(date) === payableDateKey ? recordedClockIn : null;
+}
+
+export type PayableDutyWrite = PayableShiftDecision & { recordedClockIn?: unknown };
+
+/**
+ * Home duty and the advanced Clock In share this decision.
+ * A same-day clock already stored on technician_shifts is copied onto staff_shifts.
+ * A clock from another day is ignored, and a completed payable day is not reopened.
+ */
+export function payableDutyWrite(
+  existing: Record<string, unknown> | null | undefined,
+  action: PayableShiftAction,
+  recordedClockIn: unknown,
+  payableDateKey: string,
+): PayableDutyWrite {
+  const decision = payableShiftPatch(existing, action);
+  if (decision.setClockIn) {
+    const recorded = sameDayRecordedClock(recordedClockIn, payableDateKey);
+    if (recorded) {
+      return { ...decision, setClockIn: false, reason: "clocked_in_from_recorded_shift", recordedClockIn: recorded };
+    }
+  }
+  if (!decision.write && action === "CLOCK_OUT") {
+    const recorded = sameDayRecordedClock(recordedClockIn, payableDateKey);
+    const backfill = legacyOpenShiftBackfill(existing, recorded);
+    if (backfill.write) {
+      return {
+        write: true,
+        reason: "clocked_out_from_recorded_shift",
+        fields: { status: "COMPLETED" },
+        setClockIn: false,
+        setClockOut: true,
+        recordedClockIn: backfill.clockInTime,
+      };
+    }
+  }
+  return decision;
+}

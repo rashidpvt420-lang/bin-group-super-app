@@ -31,6 +31,7 @@ const BODY_TEXT = '#F3F4F6';
 const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED', 'EXECUTION_READY', 'CHOICE_REVISION_PENDING'];
 const LOCKABLE_STATUSES = ['AI_CONCEPT_READY', 'AWAITING_OWNER_APPROVAL', 'PENDING_OWNER_NOC', 'DEPOSIT_PENDING', 'OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'PAYMENT_PENDING', 'PAID', 'CHOICE_REVISION_PENDING'];
 const PRIVATE_MEDIA_REFRESH_MS = 10 * 60 * 1000;
+const MEDIA_LOAD_TIMEOUT_MS = 20_000;
 
 type ProtectedMedia = {
     referenceImages: string[];
@@ -146,8 +147,14 @@ function DesignRequestDetailContent() {
         const refreshMedia = async () => {
             setMediaLoading(true);
             try {
-                const getMedia = httpsCallable(functions, 'getAIDesignRequestMedia');
-                const result: any = await getMedia({ requestId: id });
+                const getMedia = httpsCallable(functions, 'getAIDesignRequestMedia', { timeout: MEDIA_LOAD_TIMEOUT_MS });
+                let timeoutId = 0;
+                const result: any = await Promise.race([
+                    getMedia({ requestId: id }),
+                    new Promise((_, reject) => {
+                        timeoutId = window.setTimeout(() => reject(Object.assign(new Error('Design images did not load in time.'), { code: 'deadline-exceeded' })), MEDIA_LOAD_TIMEOUT_MS);
+                    }),
+                ]).finally(() => window.clearTimeout(timeoutId));
                 const data = result?.data || {};
                 if (data.found === false && timer !== undefined) {
                     window.clearInterval(timer);
@@ -335,7 +342,7 @@ function DesignRequestDetailContent() {
                                     <Stack spacing={2} alignItems="center">
                                         <ImageIcon size={48} color="rgba(255,255,255,0.35)" />
                                         <Typography variant="h6" fontWeight={950} sx={{ color: BODY_TEXT }}>DESIGN IMAGES NOT READY</Typography>
-                                        <Typography variant="body2" sx={{ color: LABEL_TEXT, maxWidth: 420 }}>{mediaLoading ? 'Loading your design images…' : 'No generated design image is available for this request. Nothing is charged. Please create a new design request.'}</Typography>
+                                        <Typography variant="body2" sx={{ color: LABEL_TEXT, maxWidth: 420 }}>{mediaLoading ? 'Loading your design images…' : actionError ? 'The design image did not load. Nothing was invented. Retry from this page before creating another request.' : 'No generated design image is available for this request. Nothing is charged. Please create a new design request.'}</Typography>
                                     </Stack>
                                 </Box>
                             )}

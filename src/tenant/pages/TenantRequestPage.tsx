@@ -27,6 +27,7 @@ import {
     getDocs,
     getDownloadURL,
     httpsCallable,
+    limit,
     query,
     ref,
     serverTimestamp,
@@ -42,7 +43,7 @@ import { notifyEmergency, notifyTicketCreated } from '../../services/notificatio
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import Bi from '../../components/Bi';
-import { residenceDedupeKey, selectTenantResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
+import { chooseDispatchResidence, type ResidenceUnit } from '../utils/selectTenantResidence';
 
 const RESIDENCE_LOOKUP_TIMEOUT_MS = 12000;
 
@@ -167,8 +168,14 @@ export default function TenantRequestPage() {
 
     useEffect(() => {
         let cancelled = false;
+        const lookupStarted = Date.now();
         const withTimeout = <T,>(promise: Promise<T>, label: string): Promise<T> => new Promise((resolve, reject) => {
-            const timer = window.setTimeout(() => reject(new Error(`timeout:${label}`)), RESIDENCE_LOOKUP_TIMEOUT_MS);
+            const remaining = RESIDENCE_LOOKUP_TIMEOUT_MS - (Date.now() - lookupStarted);
+            if (remaining <= 0) {
+                reject(new Error(`timeout:${label}`));
+                return;
+            }
+            const timer = window.setTimeout(() => reject(new Error(`timeout:${label}`)), remaining);
             promise.then(
                 (value) => { window.clearTimeout(timer); resolve(value); },
                 (error) => { window.clearTimeout(timer); reject(error); },
@@ -191,62 +198,52 @@ export default function TenantRequestPage() {
                 };
                 const queryUnits = async (field: string, value: string) => {
                     if (!value) return;
-                    const snapshot = await withTimeout(getDocs(query(collection(db, 'units'), where(field, '==', value))), field);
+                    const snapshot = await withTimeout(getDocs(query(collection(db, 'units'), where(field, '==', value), limit(25))), field);
                     snapshot.docs.forEach((unitDoc) => addUnit(unitDoc.id, unitDoc.data()));
                 };
 
                 const profileSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile');
                 const profile = profileSnap.exists() ? profileSnap.data() : {};
                 const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
-                if (profileUnitId) {
-                    const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
-                    if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
-                }
-
-                await queryUnits('tenantId', user.uid);
-                await queryUnits('tenantUid', user.uid);
-                await queryUnits('currentTenantId', user.uid);
-                if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
+                const unitLookups = [
+                    profileUnitId
+                        ? withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit').then((profileUnitSnap) => {
+                            if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
+                        })
+                        : Promise.resolve(),
+                    queryUnits('tenantId', user.uid),
+                    queryUnits('tenantUid', user.uid),
+                    queryUnits('currentTenantId', user.uid),
+                    user.email ? queryUnits('tenantEmail', user.email.toLowerCase()) : Promise.resolve(),
+                ];
+                await Promise.all(unitLookups);
                 if (cancelled) return;
 
-                const collapsed = new Map<string, ResidenceUnit>();
-                for (const unit of unitCandidates.values()) {
-                    const key = residenceDedupeKey(unit);
-                    const current = collapsed.get(key);
-                    const winner = selectTenantResidence(
-                        current ? [{ unit: current }, { unit }] : [{ unit }],
-                        profileUnitId,
-                    );
-                    if (winner) collapsed.set(key, winner);
-                }
-                unitCandidates.clear();
-                collapsed.forEach((unit) => unitCandidates.set(unit.id, unit));
-
-                let selectedUnit: ResidenceUnit | null = null;
-                let selectedProperty: any = null;
-                for (const unit of unitCandidates.values()) {
-                    const propertyId = String(unit.propertyId || '').trim();
-                    if (!propertyId) {
-                        if (!selectedUnit) selectedUnit = unit;
-                        continue;
+                const rankedUnits = [...unitCandidates.values()].sort((left, right) => {
+                    const weight = (unit: ResidenceUnit) => (unit.id === profileUnitId ? 2 : 0) + (unit.leaseVerified === true || unit.contractVerified === true ? 1 : 0);
+                    return weight(right) - weight(left);
+                }).slice(0, 12);
+                const propertyIds = [...new Set(rankedUnits.map((unit) => String(unit.propertyId || '').trim()).filter(Boolean))];
+                const properties = await Promise.all(propertyIds.map(async (propertyId) => {
+                    try {
+                        const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
+                        return propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
+                    } catch (error: any) {
+                        if (String(error?.message || '').startsWith('timeout:')) throw error;
+                        return null;
                     }
-                    const propertySnap = await withTimeout(getDoc(doc(db, 'properties', propertyId)), 'property');
-                    const property = propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
-                    if (!selectedUnit) {
-                        selectedUnit = unit;
-                        selectedProperty = property;
-                    }
-                    if (property && hasCanonicalDispatchGeo(property)) {
-                        selectedUnit = unit;
-                        selectedProperty = property;
-                        break;
-                    }
-                }
+                }));
+                if (cancelled) return;
+                const propertyById = new Map(properties.filter(Boolean).map((property) => [String(property.id), property]));
+                const selectedUnit = chooseDispatchResidence(
+                    rankedUnits,
+                    (propertyId) => hasCanonicalDispatchGeo(propertyById.get(propertyId)),
+                    profileUnitId,
+                );
                 if (!selectedUnit) return;
-
                 setUnitData(selectedUnit);
-                if (!selectedProperty) return;
-                setPropertyData(selectedProperty);
+                const selectedProperty = propertyById.get(String(selectedUnit.propertyId || '').trim());
+                if (selectedProperty) setPropertyData(selectedProperty);
             } catch (error: any) {
                 if (cancelled) return;
                 const code = String(error?.code || '').toLowerCase();

@@ -35,6 +35,7 @@ import { functions, httpsCallable } from '../lib/firebase';
 import { DESIGN_SUBMIT_TIMEOUT_MS, designErrorMessage } from '../lib/designStudioErrors';
 import { STATUS_TONES } from '../theme/statusColors';
 import { designStatusLabel } from '../lib/designStatusLabels';
+import { stripDesignPrompt } from '../lib/stripDesignPrompt';
 
 type PreviewImage = {
   previewUrl: string;
@@ -281,7 +282,9 @@ export default function DesignStudioPage() {
     try {
       const requestId = createDesignRequestId();
       const submitDesign = httpsCallable(functions, 'submitAIDesignRequest', { timeout: DESIGN_SUBMIT_TIMEOUT_MS });
-      const result = await submitDesign({
+      let timeoutId = 0;
+      const result = await Promise.race([
+        submitDesign({
         requestId,
         imageBase64: reference.previewUrl,
         mimeType: reference.contentType,
@@ -294,9 +297,16 @@ export default function DesignStudioPage() {
         designStyle,
         designObjective,
         notes: scopeDescription,
-      });
-      const data = (result?.data || {}) as SubmitDesignResponse;
-      const concepts = Array.isArray(data.concepts) ? data.concepts : [];
+      }),
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => reject({ code: 'deadline-exceeded', message: 'deadline-exceeded' }), DESIGN_SUBMIT_TIMEOUT_MS);
+        }),
+      ]).finally(() => window.clearTimeout(timeoutId));
+      if (stoppedWaitingRef.current) return;
+      const data = stripDesignPrompt((result?.data || {}) as Record<string, unknown>) as SubmitDesignResponse;
+      const concepts = (Array.isArray(data.concepts) ? data.concepts : []).map((concept) => (
+        concept && typeof concept === 'object' ? stripDesignPrompt(concept as unknown as Record<string, unknown>) as unknown as DesignConcept : concept
+      ));
       const hasImage = concepts.some((concept) => Boolean(concept.afterImageUrl));
       if (!hasImage) {
         setRenderedConcepts([]);
@@ -305,7 +315,6 @@ export default function DesignStudioPage() {
         setSnackbar({ open: true, message: 'No design image came back. Nothing was invented.', severity: 'error' });
         return;
       }
-      if (stoppedWaitingRef.current) setSubmitting(false);
       setRenderedConcepts(concepts);
       setServerQuote(data.quote || null);
       setRenderStatus(data.renderStatus || 'AI_RENDER_COMPLETE');
@@ -322,6 +331,7 @@ export default function DesignStudioPage() {
         navigate(`${prefix}/design-studio/request/${data.requestId || requestId}`);
       }
     } catch (error) {
+      if (stoppedWaitingRef.current) return;
       setRenderStatus('AI_RENDER_FAILED');
       setSubmitError(designErrorMessage(error));
       setSnackbar({ open: true, message: designErrorMessage(error), severity: 'error' });
@@ -341,6 +351,11 @@ export default function DesignStudioPage() {
             <Chip icon={<Sparkles size={16} />} label={`Design status: ${designStatusLabel(renderStatus, isRTL ? 'ar' : 'en')}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? STATUS_TONES.success.text : STATUS_TONES.warning.text, fontWeight: 900 }} />
             <Chip label={tenantMode ? 'Your owner approves this' : 'Private to you'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
+          {submitting && (
+            <Alert severity="info" sx={{ mt: 2 }} data-testid="design-creating">
+              Creating your design image. This can take a few minutes. No image is shown until one is created.
+            </Alert>
+          )}
           {renderStatus === 'AI_RENDER_FAILED' && submitError && (
             <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error" action={<Button color="inherit" disabled={submitting} onClick={() => void handleCreateConcept()}>{submitting ? 'Creating…' : 'Try again'}</Button>}>{submitError}</Alert>
           )}
