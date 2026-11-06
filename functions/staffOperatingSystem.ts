@@ -264,12 +264,52 @@ export const submitStaffQuickAction = onCall(CALLABLE_OPTIONS, async (request) =
       shiftDate: todayStr,
       updatedAt: timestamp,
     }, { merge: true });
+    const userBeforeDuty = await db.collection("users").doc(uid).get();
+    const callerRole = getCallerRole(token);
+    const isTechnician = callerRole === "technician" || token.technician === true;
+    let currentShiftId = text(userBeforeDuty.data()?.currentShiftId);
+    if (isTechnician) {
+      const openShift = currentShiftId ? await db.collection("technician_shifts").doc(currentShiftId).get() : null;
+      const recorded = openShift?.data()?.clockIn || openShift?.data()?.startedAt;
+      const recordedDay = asDate(recorded);
+      const sameDayOpen = Boolean(
+        openShift?.exists &&
+        recordedDay &&
+        dubaiDateKey(recordedDay) === todayStr &&
+        upper(openShift.data()?.status) !== "CLOSED",
+      );
+      if (!sameDayOpen) {
+        const previousShiftId = currentShiftId;
+        currentShiftId = `${uid}_${todayStr.replace(/-/g, "")}_${Date.now()}`;
+        if (previousShiftId) {
+          await db.collection("technician_shifts").doc(previousShiftId).set({
+            status: "CLOSED",
+            closeReason: "NEXT_DUTY_DAY_WITHOUT_RECORDED_CLOCK_OUT",
+            updatedAt: timestamp,
+          }, { merge: true });
+        }
+        await db.collection("technician_shifts").doc(currentShiftId).set({
+          shiftId: currentShiftId,
+          uid,
+          technicianId: uid,
+          status: "ACTIVE",
+          clockIn: timestamp,
+          startedAt: timestamp,
+          breaks: [],
+          dateKey: todayStr.replace(/-/g, ""),
+          source: "STAFF_QUICK_ACTION_CLOCK_IN",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+      }
+    }
     const dutyPatch = {
       onDuty: true,
       isAvailable: true,
       available: true,
       dutyStatus: "ON_DUTY",
       dutyStartedAt: timestamp,
+      ...(currentShiftId ? { currentShiftId } : {}),
       updatedAt: timestamp,
     };
     await db.collection("users").doc(uid).set(dutyPatch, { merge: true });

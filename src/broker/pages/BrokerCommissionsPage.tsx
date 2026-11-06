@@ -12,7 +12,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import Bi from '../../components/Bi';
-import { pendingSettlementAmount } from '../commissionTotals';
+import { isVoidOrClosedCommission, pendingSettlementAmount } from '../commissionTotals';
 
 type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 
@@ -52,8 +52,8 @@ export default function BrokerCommissionsPage() {
 
   const stats = useMemo(() => ({
     pending: pendingSettlementAmount(commissions),
-    approved: commissions.filter((item) => String(item.status || '').toLowerCase() === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    totalPaid: commissions.filter((item) => String(item.status || '').toLowerCase() === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    approved: commissions.filter((item) => !isVoidOrClosedCommission(item) && String(item.status || '').toLowerCase() === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    totalPaid: commissions.filter((item) => !isVoidOrClosedCommission(item) && String(item.status || '').toLowerCase() === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
   }), [commissions]);
 
   const fetchCommissions = async () => {

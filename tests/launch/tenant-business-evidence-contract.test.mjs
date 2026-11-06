@@ -94,7 +94,8 @@ test('Tenant request page resolves the canonical dispatch-ready linked unit with
   assert.match(page, /await queryUnits\('tenantUid', user\.uid\)/);
   assert.match(page, /await queryUnits\('currentTenantId', user\.uid\)/);
   assert.match(page, /await queryUnits\('tenantEmail', user\.email\.toLowerCase\(\)\)/);
-  assert.match(page, /if \(property && hasCanonicalDispatchGeo\(property\)\)/);
+  assert.match(page, /chooseDispatchResidence/);
+  assert.match(page, /property && hasCanonicalDispatchGeo\(property\)/);
   assert.match(page, /setUnitData\(selectedUnit\)/);
   assert.match(page, /setPropertyData\(selectedProperty\)/);
   assert.doesNotMatch(page, /getDoc\(doc\(db, ['"]users['"], ownerId\)\)/);

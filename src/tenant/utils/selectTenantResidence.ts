@@ -48,6 +48,17 @@ function score(candidate: ResidenceCandidate, profileUnitId: string): number {
  * "E2E-101" and "101"). Prefers the profile-linked unit, then a property that
  * can be dispatched, then the record with lease evidence. Ties break by id.
  */
+export function chooseDispatchResidence(
+  units: ResidenceUnit[],
+  propertyHasGeo: (propertyId: string) => boolean,
+  profileUnitId = "",
+): ResidenceUnit | null {
+  return selectTenantResidence(units.map((unit) => ({
+    unit,
+    propertyHasDispatchGeo: propertyHasGeo(String(unit.propertyId || "").trim()),
+  })), profileUnitId);
+}
+
 export function selectTenantResidence(candidates: ResidenceCandidate[], profileUnitId = ""): ResidenceUnit | null {
   const profileId = String(profileUnitId || "").trim();
   const groups = new Map<string, ResidenceCandidate[]>();

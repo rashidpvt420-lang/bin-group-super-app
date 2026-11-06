@@ -3,6 +3,8 @@ import { readPayrollForStaff, settleSection, unavailableSections } from "./hrRea
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { mergeOfficialAttendance } from "./attendanceShiftView";
+import { payableShiftDocId } from "./technicianPayableShift";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -296,17 +298,36 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
   const unavailable = unavailableSections([attendanceSnap, leaveSnap, documentSnap, payrollSnap]);
 
   const mapDocs = (settled: any) => settled?.value ? settled.value.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
-  const attendance = mapDocs(attendanceSnap)
+  const attendanceDocs = mapDocs(attendanceSnap);
+  let attendance = attendanceDocs
     .sort((a: any, b: any) => clean(b.workDate).localeCompare(clean(a.workDate)))
     .slice(0, 60)
     .map((entry: any) => ({
       id: entry.id,
+      uid,
       workDate: entry.workDate || null,
       status: entry.status || null,
       note: entry.note || null,
       hoursSource: "staff_shifts",
+      shiftClockIn: entry.shiftClockIn,
+      shiftClockOut: entry.shiftClockOut,
       shiftClockRecorded: Boolean(entry.shiftClockIn && entry.shiftClockOut),
     }));
+  try {
+    const shiftIds: string[] = [];
+    const seenShiftIds = new Set<string>();
+    for (let day = 0; day < 46; day += 1) {
+      const id = payableShiftDocId(uid, new Date(Date.now() - day * 24 * 60 * 60 * 1000));
+      if (seenShiftIds.has(id)) continue;
+      seenShiftIds.add(id);
+      shiftIds.push(id);
+    }
+    const shiftSnaps = await db.getAll(...shiftIds.map((id) => db.collection("staff_shifts").doc(id)));
+    const shifts = shiftSnaps.filter((snap) => snap.exists).map((snap) => ({ id: snap.id, data: snap.data() || {} }));
+    attendance = mergeOfficialAttendance(attendance, shifts, seenShiftIds).slice(0, 60);
+  } catch (error) {
+    console.error("[hr-read] staff payable shift join failed", uid, error);
+  }
   const leaveTypes = new Set(["annual_leave", "sick_leave", "emergency_leave", "unpaid_leave"]);
   const leaveRequests = mapDocs(leaveSnap)
     .filter((entry: any) => entry.category === "leave" || leaveTypes.has(clean(entry.requestType)) || leaveTypes.has(clean(entry.leaveType)))

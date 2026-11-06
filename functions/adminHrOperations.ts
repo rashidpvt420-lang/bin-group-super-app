@@ -6,6 +6,8 @@ import * as admin from "firebase-admin";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { applyApprovedLeaveDeduction } from "./hrAutomation";
 import { inclusiveDays } from "./hrLeaveEngine";
+import { mergeOfficialAttendance, shiftDocId, type PayableShiftRow } from "./attendanceShiftView";
+import { dubaiPayrollDateKey } from "./technicianPayableShift";
 
 /**
  * Official attendance and pay hours come from staff_shifts (clockInTime / clockOutTime).
@@ -99,6 +101,29 @@ function publicAttendanceRow(entry: any) {
   };
 }
 
+async function loadAttendanceShifts(statusRows: Array<Record<string, unknown>>): Promise<{ shifts: PayableShiftRow[]; checked: Set<string> }> {
+  const checked = new Set<string>();
+  const shifts: PayableShiftRow[] = [];
+  const remember = (id: string, data: Record<string, unknown> | undefined, exists: boolean) => {
+    checked.add(id);
+    if (exists && data) shifts.push({ id, data });
+  };
+  const today = dubaiPayrollDateKey();
+  const yesterday = dubaiPayrollDateKey(new Date(Date.now() - 36 * 60 * 60 * 1000));
+  const recent = await db.collection("staff_shifts").where("shiftDate", "in", [today, yesterday]).limit(200).get();
+  recent.docs.forEach((doc) => remember(doc.id, doc.data(), true));
+  const linkedIds = [...new Set(statusRows.map((row) => {
+    const uid = String(row.uid || "").trim();
+    const workDate = String(row.workDate || "").trim();
+    return uid && /^\d{4}-\d{2}-\d{2}$/.test(workDate) ? shiftDocId(uid, workDate) : "";
+  }).filter(Boolean))].filter((id) => !checked.has(id)).slice(0, 100);
+  if (linkedIds.length > 0) {
+    const snaps = await db.getAll(...linkedIds.map((id) => db.collection("staff_shifts").doc(id)));
+    snaps.forEach((snap) => remember(snap.id, snap.data(), snap.exists));
+  }
+  return { shifts, checked };
+}
+
 function publicLeaveRow(entry: any) {
   const status = clean(entry.status);
   return {
@@ -132,11 +157,19 @@ export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3",
     throw new HttpsError("unavailable", "HR operations data could not be loaded. Nothing is shown as empty; retry shortly.");
   }
   const mapDocs = (settled: any) => settled.value ? settled.value.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
+  const attendanceDocs = mapDocs(attendanceSnap);
+  let attendance = attendanceDocs.map(publicAttendanceRow);
+  try {
+    const loaded = await loadAttendanceShifts(attendanceDocs);
+    attendance = mergeOfficialAttendance(attendanceDocs, loaded.shifts, loaded.checked);
+  } catch (error) {
+    console.error("[hr-read] payable shift join failed", error);
+  }
   return {
     success: unavailable.length === 0,
     complete: unavailable.length === 0,
     unavailableSections: unavailable,
-    attendance: mapDocs(attendanceSnap).map(publicAttendanceRow),
+    attendance,
     leaveRequests: mapDocs(leaveSnap).map(publicLeaveRow).sort((a: any, b: any) => b.createdAtMs - a.createdAtMs),
     documents: mapDocs(documentSnap),
     // Documents staff uploaded themselves (staff vault). Metadata only; file bytes stay behind

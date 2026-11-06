@@ -215,6 +215,7 @@ export default function TechnicianDashboardPage() {
 
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
+    const [payableClockIn, setPayableClockIn] = useState<unknown>(null);
     const [updating, setUpdating] = useState(false);
     const [dutyError, setDutyError] = useState('');
     const [availabilityGpsError, setAvailabilityGpsError] = useState('');
@@ -301,6 +302,10 @@ export default function TechnicianDashboardPage() {
             const staffRosterRows = uniqueRows([...(await readRows('staff_roster', 'uid', user.uid, 4)), ...(await readRows('staff_roster', 'email', emailValue, 4))]);
             const hrStaffRows = uniqueRows([...(await readRows('hr_staff', 'uid', user.uid, 4)), ...(await readRows('hr_staff', 'email', emailValue, 4))]);
             const attendanceRows = uniqueRows([...(await readRows('attendance', 'uid', user.uid, 6)), ...(await readRows('attendance', 'technicianId', user.uid, 6)), ...(await readRows('attendanceLogs', 'uid', user.uid, 6))]);
+            const todayParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+            const todayKey = ['year', 'month', 'day'].map((part) => todayParts.find((item) => item.type === part)?.value || '').join('-');
+            const payableShift = /^\d{4}-\d{2}-\d{2}$/.test(todayKey) ? await readDocByUid('staff_shifts', `SHIFT_${user.uid}_${todayKey}`) : null;
+            setPayableClockIn(payableShift?.clockInTime || null);
             const certs = uniqueRows([
                 ...(await readRows('technician_certifications', 'technicianId', user.uid, 8)),
                 ...(await readRows('certifications', 'technicianId', user.uid, 8)),
@@ -447,7 +452,7 @@ export default function TechnicianDashboardPage() {
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={dutyDisplay} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={leaveBalance} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={dutyDisplay} /><DetailRow label="Last check-in" value={formatTime(payableClockIn || raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={leaveBalance} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 

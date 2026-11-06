@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { payableShiftPatch, dubaiPayrollDateKey, payableShiftDocId, legacyOpenShiftBackfill, SECOND_SAME_DAY_CLOCK_IN_MESSAGE } from '../../functions/technicianPayableShift.ts';
-import { canonicalUnitNumber, selectTenantResidence } from '../../src/tenant/utils/selectTenantResidence.ts';
+import { payableShiftPatch, dubaiPayrollDateKey, payableShiftDocId, legacyOpenShiftBackfill, SECOND_SAME_DAY_CLOCK_IN_MESSAGE, payableDutyWrite, sameDayRecordedClock } from '../../functions/technicianPayableShift.ts';
+import { mergeOfficialAttendance } from '../../functions/attendanceShiftView.ts';
+import { canonicalUnitNumber, chooseDispatchResidence, selectTenantResidence } from '../../src/tenant/utils/selectTenantResidence.ts';
 import { pendingSettlementAmount } from '../../src/broker/commissionTotals.ts';
+import { pendingSettlementAmount as adminPendingSettlementAmount } from '../../apps/admin-panel/src/lib/brokerCommissionPending.ts';
 import { brokerDocumentLevelLabel, brokerPayoutDisplayEligible } from '../../src/broker/brokerReadiness.ts';
 import { employmentJoinValue } from '../../src/technician/utils/employmentJoinDate.ts';
 import { unmeasuredRateLabel } from '../../src/utils/unmeasuredRateLabel.ts';
@@ -28,6 +30,19 @@ test('payable duty clock writes staff_shifts without reopening a finished day', 
   assert.equal(payableShiftPatch({ status: 'ACTIVE', clockInTime: { seconds: 1 } }, 'CLOCK_OUT').setClockOut, true);
   assert.equal(payableShiftPatch({ status: 'OFF_DUTY' }, 'CLOCK_OUT').write, false);
   assert.equal(payableShiftPatch({ status: 'ACTIVE', clockInTime: { seconds: 1 } }, 'BREAK').fields.status, 'ON_BREAK');
+  const recorded = { seconds: Math.floor(Date.parse('2026-11-06T08:00:00Z') / 1000) };
+  assert.equal(sameDayRecordedClock(recorded, '2026-11-06'), recorded);
+  assert.equal(sameDayRecordedClock(recorded, '2026-11-07'), null);
+  const copied = payableDutyWrite(null, 'CLOCK_IN', recorded, '2026-11-06');
+  assert.equal(copied.reason, 'clocked_in_from_recorded_shift');
+  assert.equal(copied.setClockIn, false);
+  assert.equal(copied.recordedClockIn, recorded);
+  const closed = payableDutyWrite(null, 'CLOCK_OUT', recorded, '2026-11-06');
+  assert.equal(closed.reason, 'clocked_out_from_recorded_shift');
+  assert.equal(closed.fields.status, 'COMPLETED');
+  assert.equal(closed.setClockOut, true);
+  assert.equal(payableDutyWrite(null, 'CLOCK_OUT', recorded, '2026-11-07').write, false);
+  assert.equal(payableDutyWrite({ status: 'COMPLETED', clockInTime: recorded }, 'CLOCK_IN', recorded, '2026-11-06').write, false);
 });
 
 test('duplicate tenant units collapse to one residence', () => {
@@ -44,6 +59,11 @@ test('duplicate tenant units collapse to one residence', () => {
   ]);
   assert.equal(geoWins?.id, 'geo');
   assert.equal(selectTenantResidence([]), null);
+  const dispatchable = chooseDispatchResidence([
+    { id: 'plain', propertyId: 'plain-property', unitNumber: '101' },
+    { id: 'geo', propertyId: 'geo-property', unitNumber: 'E2E-101' },
+  ], (propertyId) => propertyId === 'geo-property');
+  assert.equal(dispatchable?.id, 'geo');
 });
 
 test('broker pending settlement ignores VOID rows', () => {
@@ -56,8 +76,10 @@ test('broker pending settlement ignores VOID rows', () => {
     { status: 'PAID', amount: 40 },
     { status: 'pending', amount: 25 },
     { status: 'APPROVED', amount: 900 },
+    { status: 'PENDING', voidReason: 'E2E_CLEANUP_CONTRACT_DELETED', amount: 1500 },
   ];
   assert.equal(pendingSettlementAmount(rows), 25);
+  assert.equal(adminPendingSettlementAmount(rows), 25);
 });
 
 test('tenant report labels and owner chat emphasis are real words', async () => {
@@ -148,14 +170,17 @@ test('audit wiring stays in the duty, payroll and owner home paths', async () =>
     read('src/tenant/pages/TenantRequestPage.tsx'),
     read('src/pages/DesignStudioPage.tsx'),
   ]);
-  assert.match(duty, /queuePayableShift\(batch, techId, "CLOCK_IN"\)/);
-  assert.match(duty, /queuePayableShift\(batch, techId, "CLOCK_OUT"\)/);
+  assert.match(duty, /queuePayableShift\(batch, techId, "CLOCK_IN"/);
+  assert.match(duty, /queuePayableShift\(batch, techId, "CLOCK_OUT"/);
   assert.match(rules, /match \/payroll\/\{payrollId\}/);
   assert.match(rules, /'payroll',\n\s+'staffPayslips',\n\s+'salaryHistory'/);
   assert.match(home, /OwnerPortfolioHomeCard/);
-  assert.match(request, /selectTenantResidence/);
+  assert.match(request, /chooseDispatchResidence/);
   assert.match(request, /RESIDENCE_LOOKUP_TIMEOUT_MS/);
+  assert.match(request, /remaining <= 0/);
   assert.match(design, /stopWaitingForDesign/);
+  assert.match(design, /design-creating/);
+  assert.match(design, /stripDesignPrompt/);
   assert.match(design, /The design service did not return an image/);
   assert.match(design, /dimensions: scope\.dimensions/);
   const [ownerApp, brokerDash, tracking] = await Promise.all([
@@ -166,5 +191,27 @@ test('audit wiring stays in the duty, payroll and owner home paths', async () =>
   assert.match(ownerApp, /path="\/add-property"/);
   assert.match(rules, /basicSalary/);
   assert.match(brokerDash, /pendingSettlementAmount\(rows\)/);
+  const [quickAction, hrOps, adminHub] = await Promise.all([
+    read('functions/staffOperatingSystem.ts'),
+    read('functions/adminHrOperations.ts'),
+    read('apps/admin-panel/src/pages/brokers/BrokerCommissionHubPage.tsx'),
+  ]);
+  assert.match(quickAction, /technician_shifts/);
+  assert.match(quickAction, /STAFF_QUICK_ACTION_CLOCK_IN/);
+  assert.match(hrOps, /mergeOfficialAttendance/);
+  assert.match(adminHub, /pendingSettlementAmount/);
+  const merged = mergeOfficialAttendance(
+    [{ id: 'status-1', uid: 'tech1', workDate: '2026-11-06', status: 'PRESENT', shiftClockIn: null, shiftClockOut: null }],
+    [{ id: 'SHIFT_tech1_2026-11-06', data: { staffId: 'tech1', shiftDate: '2026-11-06', status: 'ACTIVE', clockInTime: { seconds: 1 } } }],
+    new Set(['SHIFT_tech1_2026-11-06']),
+  );
+  assert.equal(merged[0].shiftClockRecorded, true);
+  assert.equal(merged[0].status, 'PRESENT');
+  const shiftOnly = mergeOfficialAttendance([], [
+    { id: 'SHIFT_tech2_2026-11-06', data: { staffId: 'tech2', shiftDate: '2026-11-06', status: 'COMPLETED', clockInTime: { seconds: 1 }, clockOutTime: { seconds: 2 } } },
+  ]);
+  assert.equal(shiftOnly[0].uid, 'tech2');
+  assert.equal(shiftOnly[0].shiftClockRecorded, true);
+  assert.equal(shiftOnly[0].hoursSource, 'staff_shifts');
   assert.match(tracking, /_seconds/);
 });
