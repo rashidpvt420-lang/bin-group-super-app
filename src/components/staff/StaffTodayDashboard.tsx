@@ -375,8 +375,8 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   };
 
   return (
-    <Box dir={isRtl ? "rtl" : "ltr"} sx={{ minHeight: "100vh", bgcolor: "#0f172a", color: "#f8fafc", pb: 10 }}>
-      <Box sx={{ borderBottom: "1px solid #334155", py: 3, px: 2, background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
+    <Box dir={isRtl ? "rtl" : "ltr"} sx={{ bgcolor: "#0f172a", color: "#f8fafc", borderRadius: 3.5, overflow: "hidden", pb: 3, border: "1px solid #1e293b", boxShadow: "0 12px 30px rgba(15,23,42,0.12)" }}>
+      <Box sx={{ borderBottom: "1px solid #334155", py: 2.5, px: 2, background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
         <Container maxWidth="md">
           <Stack direction={{ xs: "column", sm: "row" }} gap={2} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }}>
             <Stack direction="row" spacing={2} alignItems="center">
