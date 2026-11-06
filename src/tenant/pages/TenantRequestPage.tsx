@@ -205,18 +205,14 @@ export default function TenantRequestPage() {
                 const profileSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 'profile');
                 const profile = profileSnap.exists() ? profileSnap.data() : {};
                 const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
-                const unitLookups = [
-                    profileUnitId
-                        ? withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit').then((profileUnitSnap) => {
-                            if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
-                        })
-                        : Promise.resolve(),
-                    queryUnits('tenantId', user.uid),
-                    queryUnits('tenantUid', user.uid),
-                    queryUnits('currentTenantId', user.uid),
-                    user.email ? queryUnits('tenantEmail', user.email.toLowerCase()) : Promise.resolve(),
-                ];
-                await Promise.all(unitLookups);
+                if (profileUnitId) {
+                    const profileUnitSnap = await withTimeout(getDoc(doc(db, 'units', profileUnitId)), 'profile-unit');
+                    if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
+                }
+                await queryUnits('tenantId', user.uid);
+                await queryUnits('tenantUid', user.uid);
+                await queryUnits('currentTenantId', user.uid);
+                if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
                 if (cancelled) return;
 
                 const rankedUnits = [...unitCandidates.values()].sort((left, right) => {
@@ -237,7 +233,10 @@ export default function TenantRequestPage() {
                 const propertyById = new Map(properties.filter(Boolean).map((property) => [String(property.id), property]));
                 const selectedUnit = chooseDispatchResidence(
                     rankedUnits,
-                    (propertyId) => hasCanonicalDispatchGeo(propertyById.get(propertyId)),
+                    (propertyId) => {
+                        const property = propertyById.get(propertyId);
+                        return Boolean(property && hasCanonicalDispatchGeo(property));
+                    },
                     profileUnitId,
                 );
                 if (!selectedUnit) return;
