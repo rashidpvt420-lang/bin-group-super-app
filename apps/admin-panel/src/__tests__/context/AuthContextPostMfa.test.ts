@@ -35,6 +35,8 @@ describe('AuthContext post-MFA authorization contract', () => {
     );
 
     expect(authorizationFunction).toMatch(/await timeout\(getIdTokenResult\(firebaseUser, true\)/);
+    expect(authorizationFunction).toContain('isTransientTokenError(tokenError)');
+    expect(authorizationFunction).toContain('Token refresh failed temporarily; retrying');
     expect(retryFunction).toContain('await authorizeFirebaseUser(currentUser);');
     expect(retryFunction).not.toContain('getIdTokenResult(currentUser, true)');
     expect(authContextSource).toContain("throw new Error('INVALID_ADMIN_CLAIMS')");
