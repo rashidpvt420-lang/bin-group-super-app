@@ -104,6 +104,26 @@ const shouldBlockForInitialAuth = () => {
     return window.location.pathname !== '/login';
 };
 
+const TRANSIENT_TOKEN_CODES = new Set([
+    'auth/network-request-failed',
+    'auth/internal-error',
+    'auth/timeout',
+]);
+
+// Identity Toolkit sometimes returns 503 while a valid Admin session is still
+// stored. That is not a logout. Retry the forced token refresh before the
+// route guard treats the founder as signed out.
+const isTransientTokenError = (authError: unknown) => {
+    const err = authError as { code?: unknown; message?: unknown };
+    const code = String(err?.code || '').trim().toLowerCase();
+    const message = String(err?.message || '').trim().toLowerCase();
+    return TRANSIENT_TOKEN_CODES.has(code)
+        || message.includes('503')
+        || message.includes('unavailable')
+        || message.includes('network-request-failed')
+        || message === 'auth_token_timeout';
+};
+
 const messageForAuthorizationError = (authError: any) => {
     const errMessage = String(authError?.message || '');
     const errCode = String(authError?.code || '');
@@ -227,8 +247,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setError(null);
             setStatus('verifying-token');
 
-            const idTokenResult = await timeout(getIdTokenResult(firebaseUser, true), 15000, 'AUTH_TOKEN_TIMEOUT');
-            if (!isCurrentAttempt(attempt)) return;
+            let idTokenResult: Awaited<ReturnType<typeof getIdTokenResult>> | undefined;
+            for (let tokenAttempt = 0; tokenAttempt < 3; tokenAttempt += 1) {
+                try {
+                    idTokenResult = await timeout(getIdTokenResult(firebaseUser, true), 15000, 'AUTH_TOKEN_TIMEOUT');
+                    break;
+                } catch (tokenError) {
+                    if (!isCurrentAttempt(attempt)) return;
+                    if (!isTransientTokenError(tokenError) || tokenAttempt === 2) throw tokenError;
+                    console.warn('[ADMIN-AUTH] Token refresh failed temporarily; retrying:', tokenError);
+                    await new Promise((resolve) => window.setTimeout(resolve, 750 * (tokenAttempt + 1)));
+                    if (!isCurrentAttempt(attempt)) return;
+                }
+            }
+            if (!idTokenResult || !isCurrentAttempt(attempt)) return;
 
             const claims = (idTokenResult.claims || {}) as Record<string, unknown>;
             const claimRole = roleFrom(claims);
