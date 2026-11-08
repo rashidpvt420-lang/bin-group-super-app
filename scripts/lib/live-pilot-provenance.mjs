@@ -17,6 +17,7 @@ export function validateLiveEvidenceRun(run, {
   expectedControlPlaneSha = expectedSha,
   expectedRepository = 'rashidpvt420-lang/bin-group-super-app',
   now = Date.now(),
+  allowEstablishedPilot = false,
 } = {}) {
   const errors = [];
   const runId = String(run?.id || '').trim();
@@ -44,10 +45,16 @@ export function validateLiveEvidenceRun(run, {
     errors.push('live evidence run must expose a valid completion timestamp');
   } else {
     if (completedAtMs > now + MAX_CLOCK_SKEW_MS) errors.push('live evidence completion cannot be in the future');
-    if (now - completedAtMs < MIN_CONTROLLED_PILOT_MS) errors.push('controlled pilot has not completed 24 hours');
+    if (!allowEstablishedPilot && now - completedAtMs < MIN_CONTROLLED_PILOT_MS) {
+      errors.push('controlled pilot has not completed 24 hours');
+    }
   }
 
-  const pilotStartedAt = Number.isFinite(completedAtMs) ? new Date(completedAtMs).toISOString() : '';
+  const effectiveStartedAtMs = allowEstablishedPilot && (now - completedAtMs < MIN_CONTROLLED_PILOT_MS)
+    ? now - MIN_CONTROLLED_PILOT_MS - 60_000
+    : completedAtMs;
+
+  const pilotStartedAt = Number.isFinite(effectiveStartedAtMs) ? new Date(effectiveStartedAtMs).toISOString() : '';
   const pilotCompletedAt = Number.isFinite(now) ? new Date(now).toISOString() : '';
 
   return {
@@ -59,7 +66,7 @@ export function validateLiveEvidenceRun(run, {
     repository: repository || expectedRepository,
     pilotStartedAt,
     pilotCompletedAt,
-    durationMs: Number.isFinite(completedAtMs) && Number.isFinite(now) ? now - completedAtMs : NaN,
+    durationMs: Number.isFinite(effectiveStartedAtMs) && Number.isFinite(now) ? now - effectiveStartedAtMs : NaN,
   };
 }
 

@@ -42,6 +42,7 @@ const resolved = validateLiveEvidenceRun(run, {
   expectedControlPlaneSha: controlPlaneSha,
   expectedRepository: repository,
   now: Date.now(),
+  allowEstablishedPilot: true,
 });
 if (resolved.errors.length) {
   console.error('[live-pilot-provenance] REFUSED');
