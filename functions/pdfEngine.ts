@@ -1,4 +1,5 @@
 import { getStorage } from 'firebase-admin/storage';
+import { EMERGENCY_OWNER_NOTIFY_HOURS, EMERGENCY_SPEND_LIMIT_AED, FIXED_OWNER_APPROVAL_LIMIT_AED } from './ownerSpendingLimits';
 import { OWNER_MOBILIZATION_DUE_DAYS, OWNER_SUSPENSION_NOTICE_DAYS, RETURNED_CHEQUE_FEE_AED, mobilizationDueAt } from './ownerPaymentLedger';
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
@@ -806,6 +807,10 @@ function renderPaymentScheduleClauses(doc: any) {
     para(doc,
         `9F. Suspension for non-payment: if an amount remains unpaid after its due date, BIN-GROUPS may suspend services only after giving the Owner written notice and ${OWNER_SUSPENSION_NOTICE_DAYS} days to pay. Emergency works needed to prevent imminent danger to persons or property are not suspended without separate written notice. Services resume once the overdue amount is verified as paid.`,
         `9و. التعليق بسبب عدم السداد: إذا بقي مبلغ غير مسدد بعد تاريخ استحقاقه، يجوز لشركة BIN-GROUPS تعليق الخدمات فقط بعد إشعار المالك كتابياً ومنحه مهلة للسداد مدتها ${OWNER_SUSPENSION_NOTICE_DAYS} يوماً. ولا تُعلق الأعمال الطارئة اللازمة لمنع خطر وشيك على الأشخاص أو الممتلكات دون إشعار كتابي مستقل. وتُستأنف الخدمات بعد التحقق من سداد المبلغ المتأخر.`
+    );
+    para(doc,
+        `9G. Fixed approval limit: the Owner's prior written approval is required for ANY job costing more than AED ${FIXED_OWNER_APPROVAL_LIMIT_AED.toLocaleString('en-GB')}. This is a fixed limit per job; a job may not be split to avoid it. The only exception is a genuine emergency, where up to AED ${EMERGENCY_SPEND_LIMIT_AED.toLocaleString('en-GB')} per event may be spent without prior approval and the Owner is notified within ${EMERGENCY_OWNER_NOTIFY_HOURS} hours.`,
+        `9ز. حد الموافقة الثابت: يلزم الحصول على موافقة المالك الكتابية المسبقة على أي عمل تزيد تكلفته على ${FIXED_OWNER_APPROVAL_LIMIT_AED.toLocaleString('en-GB')} درهم. وهذا حد ثابت لكل عمل، ولا يجوز تجزئة العمل لتجنبه. ويُستثنى من ذلك فقط حالات الطوارئ الحقيقية، إذ يجوز إنفاق ما يصل إلى ${EMERGENCY_SPEND_LIMIT_AED.toLocaleString('en-GB')} درهم للحالة الواحدة دون موافقة مسبقة، مع إبلاغ المالك خلال ${EMERGENCY_OWNER_NOTIFY_HOURS} ساعة.`
     );
 }
 
