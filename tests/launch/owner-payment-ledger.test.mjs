@@ -1,7 +1,7 @@
 // Owner payment ledger: 15% mobilisation invoice -> CASH/CHEQUE receipt -> cheque clearance -> verified.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -10,7 +10,7 @@ const outDir = path.resolve('node_modules/.cache/owner-payment-ledger-test');
 const outfile = path.join(outDir, `ledger-${process.pid}.cjs`);
 await build({ entryPoints: ['functions/ownerPaymentLedger.ts'], bundle: true, platform: 'node', format: 'cjs', outfile, logLevel: 'silent' });
 const L = createRequire(import.meta.url)(outfile);
-const read = (p) => fs.readFileSync(p, 'utf8');
+const read = (rel) => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
 
 const invoice = { contractId: 'C1', paymentId: 'P1', amount: 1800, currency: 'AED', feeType: 'MOBILIZATION_DEPOSIT', status: 'PENDING' };
 const recorded = (extra = {}) => ({ status: 'PENDING_ADMIN_APPROVAL', verificationState: 'PAYMENT_EVIDENCE_RECORDED', paymentReferenceId: 'R-1', paymentProofHash: 'a'.repeat(64), ...extra });
