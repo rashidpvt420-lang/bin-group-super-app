@@ -228,6 +228,42 @@ export async function computeMonthlyOvertime(staffId: string, month: string, bas
     return { days: payable, pay: overtimePayFor(payable, basicMonthly) };
 }
 
+/**
+ * Staff roles paid through monthly payroll (P1-2). Mirrors the provisionable STAFF_ROLES in
+ * adminUserProvisioning.ts; Founder/Admin/CEO accounts are not payroll employees here.
+ * Firestore `in` accepts at most 30 values.
+ */
+export const PAYROLL_ELIGIBLE_ROLES: readonly string[] = [
+    "technician", "manager", "operations_admin", "operations_manager", "dispatcher",
+    "hr_admin", "hr_manager", "hr_staff", "support_admin", "admin_assistant", "account_manager",
+    "finance_admin", "finance_staff", "finance_manager", "finance_controller",
+];
+
+export type PayrollSalarySource = "PRIVATE_HR_PROFILE" | "LEGACY_USERS_BASE_SALARY" | "NONE";
+
+/**
+ * Basic salary comes from private_hr_profiles/{uid}.salaryPackage.basicSalary (server-only).
+ * The deprecated users.baseSalary / users.basicSalary is a last-resort fallback that is flagged
+ * and audited so it can be migrated and removed.
+ */
+export function resolvePayrollBasicSalary(
+    privateHr: Record<string, any> | null,
+    userDoc: Record<string, any>,
+): { salary: unknown; source: PayrollSalarySource; overtimeEligible: boolean } {
+    const pkg = privateHr?.salaryPackage || {};
+    const overtimeEligible = pkg.overtimeEligible !== false;
+    const privateSalary = Number(pkg.basicSalary);
+    if (Number.isFinite(privateSalary) && privateSalary > 0) {
+        return { salary: pkg.basicSalary, source: "PRIVATE_HR_PROFILE", overtimeEligible };
+    }
+    const legacy = userDoc?.baseSalary ?? userDoc?.basicSalary;
+    const legacyNumber = Number(legacy);
+    if (legacy !== undefined && legacy !== null && Number.isFinite(legacyNumber) && legacyNumber > 0) {
+        return { salary: legacy, source: "LEGACY_USERS_BASE_SALARY", overtimeEligible };
+    }
+    return { salary: 0, source: "NONE", overtimeEligible };
+}
+
 export const adminGeneratePayrollBatch = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {
@@ -238,26 +274,40 @@ export const adminGeneratePayrollBatch = onCall(
             throw new HttpsError("invalid-argument", "Payroll month must use YYYY-MM.");
         }
         const afterId = safeText(request.data?.afterId);
+        const previewOnly = request.data?.preview === true;
+        // P1-2 (audit 9 Nov 2026): payroll covers every payroll-eligible staff role, not only technicians,
+        // and reads the salary from the server-only private_hr_profiles record.
         let techQuery: FirebaseFirestore.Query = db.collection("users")
-            .where("role", "==", "technician")
+            .where("role", "in", [...PAYROLL_ELIGIBLE_ROLES])
             .orderBy(admin.firestore.FieldPath.documentId())
             .limit(200);
         if (afterId) techQuery = techQuery.startAfter(afterId);
         const techSnap = await techQuery.get();
-        const candidates = techSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const privateHrSnaps = techSnap.docs.length
+            ? await db.getAll(...techSnap.docs.map((doc) => db.collection("private_hr_profiles").doc(doc.id)))
+            : [];
+        const privateHrById = new Map(privateHrSnaps.map((snap) => [snap.id, snap.exists ? (snap.data() || {}) : null]));
+        const candidates = techSnap.docs.map((doc) => {
+            const data = doc.data() || {};
+            const resolved = resolvePayrollBasicSalary(privateHrById.get(doc.id) || null, data);
+            return { id: doc.id, ...data, baseSalary: resolved.salary, salarySource: resolved.source, overtimeEligible: resolved.overtimeEligible };
+        });
         const payrollRefs = candidates.map((tech) => db.collection("payroll").doc(`${tech.id}_${month}`));
         const existing = payrollRefs.length ? await db.getAll(...payrollRefs) : [];
         const existingIds = new Set(existing.filter((snap) => snap.exists).map((snap) => snap.id));
         const skipped: string[] = [];
+        const skippedDetails: Array<{ techId: string; techName: string; reason: string }> = [];
         const rejected: Array<{ techId: string; techName: string; reason: string }> = [];
+        const legacySalaryFallback: string[] = [];
         let processed = 0;
+        let previewTotal = 0;
         const batch = db.batch();
         const now = serverTimestamp();
         const overtimeByTech = new Map<string, OvertimePay>();
         for (const tech of candidates) {
             if (existingIds.has(`${tech.id}_${month}`)) continue;
             const base = exactPositivePayrollAmount((tech as any).baseSalary);
-            if (base === null) continue;
+            if (base === null || (tech as any).overtimeEligible === false) continue;
             overtimeByTech.set(tech.id, (await computeMonthlyOvertime(tech.id, month, base)).pay);
         }
         candidates.forEach((tech) => {
@@ -266,7 +316,9 @@ export const adminGeneratePayrollBatch = onCall(
             if (existingIds.has(payrollId)) return;
             const rawNumber = Number(rawSalary || 0);
             if (!Number.isFinite(rawNumber) || rawNumber <= 0) {
-                skipped.push(safeText((tech as any).displayName || (tech as any).email || tech.id));
+                const techName = safeText((tech as any).displayName || (tech as any).email || tech.id);
+                skipped.push(techName);
+                skippedDetails.push({ techId: tech.id, techName, reason: "NO_BASIC_SALARY_ON_PRIVATE_HR_PROFILE" });
                 return;
             }
             const baseSalary = exactPositivePayrollAmount(rawSalary);
@@ -274,11 +326,17 @@ export const adminGeneratePayrollBatch = onCall(
                 const techName = safeText((tech as any).displayName || (tech as any).email || tech.id);
                 skipped.push(techName);
                 rejected.push({ techId: tech.id, techName, reason: "BASE_SALARY_NOT_EXACT_TO_THE_FILS" });
+                skippedDetails.push({ techId: tech.id, techName, reason: "BASE_SALARY_NOT_EXACT_TO_THE_FILS" });
                 return;
             }
             const overtime = overtimeByTech.get(tech.id);
             const overtimePay = overtime?.overtimePay || 0;
             const amount = Math.round((baseSalary + overtimePay) * 100) / 100;
+            const salarySource = (tech as any).salarySource as PayrollSalarySource;
+            if (salarySource === "LEGACY_USERS_BASE_SALARY") legacySalaryFallback.push(tech.id);
+            processed += 1;
+            previewTotal = Math.round((previewTotal + amount) * 100) / 100;
+            if (previewOnly) return;
             batch.create(db.collection("payroll").doc(payrollId), {
                 payrollId,
                 techId: tech.id,
@@ -286,6 +344,8 @@ export const adminGeneratePayrollBatch = onCall(
                 email: safeText((tech as any).email).toLowerCase() || null,
                 amount,
                 baseSalary,
+                salarySource,
+                staffRole: safeText((tech as any).role) || null,
                 overtimePay,
                 overtimeBreakdown: overtime ? {
                     ordinaryMinutes: overtime.ordinaryMinutes,
@@ -330,15 +390,30 @@ export const adminGeneratePayrollBatch = onCall(
                 createdAt: now,
                 updatedAt: now,
             });
-            processed += 1;
         });
-        if (processed > 0) await batch.commit();
+        if (!previewOnly && legacySalaryFallback.length > 0) {
+            // Deprecated users.baseSalary was used because private_hr_profiles had no basic salary.
+            // Audited so HR can migrate the salary into the private record and remove it from users.
+            batch.create(db.collection("audit_logs").doc(), {
+                actorId: request.auth!.uid,
+                action: "PAYROLL_LEGACY_USERS_BASE_SALARY_USED",
+                targetType: "payroll",
+                month,
+                metadata: { staffIds: legacySalaryFallback, count: legacySalaryFallback.length },
+                createdAt: now,
+            });
+        }
+        if (!previewOnly && processed > 0) await batch.commit();
         return {
-            status: "SUCCESS",
+            status: previewOnly ? "PREVIEW" : "SUCCESS",
             month,
+            preview: previewOnly,
             processed,
+            previewTotal,
             skipped,
+            skippedDetails,
             rejected,
+            legacySalaryFallback,
             nextAfterId: techSnap.size === 200 ? techSnap.docs[techSnap.docs.length - 1]?.id || null : null,
         };
     },

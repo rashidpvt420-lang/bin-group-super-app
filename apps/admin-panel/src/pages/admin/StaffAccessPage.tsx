@@ -25,6 +25,8 @@ const STAFF_ROLES = [
     { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and reporting' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
+    { value: 'finance_manager', label: 'Finance Manager', description: 'Painting payment approvals only (MFA required; cannot approve own invoices)' },
+    { value: 'finance_controller', label: 'Finance Controller', description: 'Painting payment approvals only (MFA required; cannot approve own invoices)' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -67,6 +69,9 @@ const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    // Painting payment reviewers use /finance/painting-payments only (staffAccessPolicy), no modules.
+    finance_manager: [],
+    finance_controller: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
@@ -83,6 +88,8 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_manager: [],
+    finance_controller: [],
 };
 
 interface StaffMember {

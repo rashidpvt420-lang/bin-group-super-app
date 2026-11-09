@@ -25,6 +25,10 @@ const STAFF_ROLES = new Set([
   "account_manager",
   "operations_manager",
   "finance_admin",
+  // P1-8: painting payment approvers. The role grants no admin-panel modules; the approval callables
+  // (paintingFinanceApprover.ts) separately demand a live MFA session and refuse the invoice issuer.
+  "finance_manager",
+  "finance_controller",
 ]);
 
 const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
@@ -41,6 +45,8 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "properties", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
+  finance_manager: [],
+  finance_controller: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
@@ -57,6 +63,8 @@ const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports"],
+  finance_manager: [],
+  finance_controller: [],
 };
 
 const MODULE_PERMISSION_MAP: Record<string, readonly string[]> = {

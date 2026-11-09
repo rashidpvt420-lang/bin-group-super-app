@@ -9,7 +9,7 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
-import { OWNER_MANUAL_GEO_SOURCE, isEmirateCentroid } from './ownerLocationRules';
+import { OWNER_MANUAL_GEO_SOURCE, firstPropertyMissingPin, isEmirateCentroid, propertyHasPin } from './ownerLocationRules';
 import { buildAddressQuery, createNominatimFetch, isNetworkFetchError, resolvePropertyAddress } from './propertyAddressLookup';
 
 const EMIRATES_LIST = [
@@ -78,11 +78,11 @@ const fieldSx = {
     }
 };
 
-const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
+const PropertyLocationEditor: React.FC<{ propertyIndex: number; onNext: () => void; onBack: () => void; selector?: React.ReactNode }> = ({ propertyIndex, onNext, onBack, selector }) => {
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
-    const activeProperty = properties[0];
+    const activeProperty = properties[propertyIndex];
     const fallbackEmirate = getEmirate(activeProperty?.emirate);
 
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -101,7 +101,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const commitGeoAnchorRef = useRef<(payload: any) => void>(() => {});
 
     useEffect(() => {
-        if (!activeProperty?.emirate) updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
+        if (!activeProperty?.emirate) updateProperty(propertyIndex, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
     }, []);
 
     const directGoogleMapsInput = useMemo(
@@ -130,19 +130,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             patch.googleMapsUrl = value;
             patch.location = { ...(activeProperty?.location || {}), googleMapsUrl: value };
         }
-        updateProperty(0, patch);
+        updateProperty(propertyIndex, patch);
     };
 
     const handleGoogleMapsUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setGoogleMapsUrlField(value);
-        updateProperty(0, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
+        updateProperty(propertyIndex, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
     };
 
     const handlePlusCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setPlusCodeField(value);
-        updateProperty(0, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
+        updateProperty(propertyIndex, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
     };
 
     const commitGeoAnchor = (payload: {
@@ -184,7 +184,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 accuracyMeters: payload.accuracyMeters,
                 capturedAt: payload.capturedAt,
             });
-            updateProperty(0, {
+            updateProperty(propertyIndex, {
                 address: geo.address,
                 emirate: geo.emirate,
                 city: geo.city,
@@ -316,7 +316,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const handleEmirateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = event.target.value;
         const emirate = getEmirate(emirateId);
-        updateProperty(0, { emirate: emirateId, city: emirateId } as any);
+        updateProperty(propertyIndex, { emirate: emirateId, city: emirateId } as any);
         // F-8: move the map view only; the Owner still has to pin the exact property location.
         if (mapObjRef.current && !isValidLatLng(Number(manualLat), Number(manualLng))) mapObjRef.current.panTo({ lat: emirate.lat, lng: emirate.lng });
     };
@@ -480,7 +480,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const currentGeo = activeProperty?.geo;
         const coordinatesUnchanged = currentGeo && sameCoordinate(currentGeo.lat, lat) && sameCoordinate(currentGeo.lng, lng);
         if (coordinatesUnchanged) {
-            updateProperty(0, {
+            updateProperty(propertyIndex, {
                 address: activeProperty.address,
                 emirate: activeProperty.emirate,
                 city: activeProperty.city || activeProperty.emirate,
@@ -547,6 +547,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             <Container maxWidth="md" sx={{ px: { xs: 0, sm: 3 } }}>
                 <Paper sx={{ p: { xs: 2, sm: 3, md: 6 }, borderRadius: { xs: 3, md: 6 }, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'visible' }}>
                     <Stack spacing={{ xs: 2.5, md: 4 }}>
+                        {selector}
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                             <Chip icon={locationVerified ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />} label={locationVerified ? copy('Location verified', 'الموقع موثّق') : copy('Location review required', 'مراجعة الموقع مطلوبة')} color={locationVerified ? 'success' : 'warning'} />
                             <Chip label={dispatchReady ? copy('Dispatch ready', 'جاهز للإرسال') : copy('Dispatch locked until review', 'الإرسال مقفل حتى المراجعة')} color={dispatchReady ? 'success' : 'default'} />
@@ -606,6 +607,67 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             </Container>
         </Box>
     );
+};
+
+/**
+ * P1-1 (audit 9 Nov 2026): every property in a multi-property application needs its own pin, because
+ * ReviewBeforeSubmitStep and submitOwnerInspectionFirstOnboarding reject any property without GPS.
+ * The editor is keyed by property index so its local lat/lng/link fields reset when the owner switches.
+ */
+const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
+    const { properties } = useOnboardingStore();
+    const { lang } = useLanguage();
+    const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
+    const [activeIndex, setActiveIndex] = useState(() => {
+        const missing = firstPropertyMissingPin(useOnboardingStore.getState().properties, EMIRATES_LIST);
+        return missing >= 0 ? missing : 0;
+    });
+    const [notice, setNotice] = useState<string | null>(null);
+    useEffect(() => {
+        if (activeIndex >= properties.length && properties.length > 0) setActiveIndex(properties.length - 1);
+    }, [activeIndex, properties.length]);
+    const safeIndex = Math.min(activeIndex, Math.max(0, properties.length - 1));
+
+    const handleNext = () => {
+        const latest = useOnboardingStore.getState().properties;
+        const missing = firstPropertyMissingPin(latest, EMIRATES_LIST);
+        if (missing >= 0 && missing !== safeIndex) {
+            setActiveIndex(missing);
+            setNotice(copy(`Property ${missing + 1} still needs its own map pin before you can continue.`, `العقار ${missing + 1} يحتاج إلى تحديد موقعه على الخريطة قبل المتابعة.`));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+        setNotice(null);
+        onNext();
+    };
+
+    const selector = properties.length > 1 ? (
+        <Box data-testid="property-location-selector">
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800, mb: 1 }}>
+                {copy('Each property needs its own pin. Choose a property:', 'كل عقار يحتاج إلى موقع خاص به. اختر العقار:')}
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {properties.map((property, index) => {
+                    const pinned = propertyHasPin(property, EMIRATES_LIST);
+                    return (
+                        <Chip
+                            key={property.id || index}
+                            data-testid={`property-location-chip-${index}`}
+                            onClick={() => { setActiveIndex(index); setNotice(null); }}
+                            icon={pinned ? <ShieldCheck size={15} /> : <MapPin size={15} />}
+                            label={`${copy('Property', 'العقار')} ${index + 1} · ${pinned ? copy('Pinned', 'تم التحديد') : copy('Pin needed', 'يحتاج تحديد')}`}
+                            color={index === safeIndex ? 'primary' : pinned ? 'success' : 'default'}
+                            variant={index === safeIndex ? 'filled' : 'outlined'}
+                            sx={{ fontWeight: 900 }}
+                        />
+                    );
+                })}
+            </Stack>
+            {notice && <Alert severity="warning" sx={{ mt: 1.5 }}>{notice}</Alert>}
+        </Box>
+    ) : null;
+
+    return <PropertyLocationEditor key={safeIndex} propertyIndex={safeIndex} onNext={handleNext} onBack={onBack} selector={selector} />;
 };
 
 export default PropertyLocationStep;

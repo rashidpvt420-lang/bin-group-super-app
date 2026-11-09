@@ -15,15 +15,16 @@ import MyHoursPanel from '../components/MyHoursPanel';
 import TechnicianOvertimeClaimCard from '../components/TechnicianOvertimeClaimCard';
 import MyPayslipsPanel from '../components/MyPayslipsPanel';
 
-const quickPrompts = [
+// Example wording only. Tapping fills the message box; it must never submit (P1-7).
+const examplePrompts = [
   'I need annual leave next week',
   'I am sick and going to hospital',
   'My salary is missing deduction issue',
   'I need passport visa Emirates ID update',
   'My room AC and water problem in camp',
   'I need helmet gloves uniform tools',
-  'There is unsafe electric shock accident risk',
-  'Supervisor pressure unfair treatment complaint',
+  'I want to report a safety risk at my work site',
+  'I want to raise a complaint with HR',
   'मुझे छुट्टी चाहिए',
   'എനിക്ക് sick leave വേണം',
   'Kailangan ko po ng payslip',
@@ -451,8 +452,11 @@ export default function TechnicianHRPageV2() {
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}><HrBi en={"Quick Training Tests"} ar={"اختبارات تدريب سريعة"} /></Typography>
-        <Grid container spacing={1.2}>{quickPrompts.map((prompt) => <Grid item xs={12} sm={6} md={4} key={prompt}><Button fullWidth variant="outlined" startIcon={<Plus size={14} />} disabled={loading} onClick={() => void createAiCase(prompt)} sx={{ justifyContent: 'flex-start', color: '#fff', borderColor: 'rgba(255,255,255,0.14)', fontWeight: 800, textTransform: 'none' }}>{prompt}</Button></Grid>)}</Grid>
+        {/* P1-7 (audit 9 Nov 2026): these examples used to submit real HR cases (createStaffHrCase) on tap.
+            They now only fill the message box; nothing is sent until the staff member presses the send button. */}
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 1 }}><HrBi en={"Example requests"} ar={"أمثلة على الطلبات"} /></Typography>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mb: 2 }} data-testid="hr-example-prompts-note"><HrBi en={"Tap an example to copy it into the message box. Nothing is sent until you press the send button."} ar={"اضغط على مثال لنسخه إلى خانة الرسالة. لن يُرسل أي شيء حتى تضغط زر الإرسال."} /></Typography>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{examplePrompts.map((prompt) => <Chip key={prompt} data-testid="hr-example-prompt" label={prompt} variant="outlined" disabled={loading} onClick={() => setMessage(prompt)} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.24)', fontWeight: 800, height: 'auto', py: 0.75, '& .MuiChip-label': { whiteSpace: 'normal' } }} />)}</Stack>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>

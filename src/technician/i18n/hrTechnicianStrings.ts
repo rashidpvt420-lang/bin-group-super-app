@@ -6,6 +6,8 @@ import type { TechLang } from './technicianLanguages';
 type Row = Record<TechLang, string>;
 
 export const HR_STRINGS: Record<string, Row> = {
+  // Machine-drafted (9 Nov 2026 remediation) — NEEDS NATIVE REVIEW before it is treated as final.
+  'Example requests': { en: 'Example requests', ar: 'أمثلة على الطلبات', hi: 'अनुरोधों के उदाहरण', ur: 'درخواستوں کی مثالیں', ml: 'അപേക്ഷകളുടെ ഉദാഹരണങ്ങൾ', tl: 'Mga halimbawang request', bn: 'অনুরোধের উদাহরণ' },
   'Language': { en: 'Language', ar: 'اللغة', hi: 'भाषा', ur: 'زبان', ml: 'ഭാഷ', tl: 'Wika', bn: 'ভাষা' },
   'AI-Driven Multilingual Blue-Collar Workforce ESS': { en: 'My HR', ar: 'الخدمة الذاتية للموظفين متعددة اللغات', hi: 'मेरा HR', ur: 'میرا HR', ml: 'എന്റെ HR', tl: 'Aking HR', bn: 'আমার HR' },
   'Sick leave, vacation, and HR requests': { en: 'Sick leave, vacation, and HR requests', ar: 'الإجازة المرضية والإجازة السنوية وطلبات الموارد البشرية', hi: 'बीमारी की छुट्टी, सालाना छुट्टी और HR अनुरोध', ur: 'بیماری کی چھٹی، سالانہ چھٹی اور HR درخواستیں', ml: 'അസുഖ അവധി, വാർഷിക അവധി, HR അപേക്ഷകൾ', tl: 'Sick leave, vacation, at mga HR request', bn: 'অসুস্থতার ছুটি, বার্ষিক ছুটি এবং HR অনুরোধ' },
@@ -45,7 +47,6 @@ export const HR_STRINGS: Record<string, Row> = {
   'Staff Document Upload Vault': { en: 'Staff Document Upload Vault', ar: 'خزنة مستندات الموظف', hi: 'दस्तावेज़ अपलोड करें', ur: 'دستاویزات اپلوڈ کریں', ml: 'രേഖകൾ അപ്‌ലോഡ് ചെയ്യുക', tl: 'Mag-upload ng dokumento', bn: 'নথি আপলোড করুন' },
   'Wellbeing Check-In': { en: 'Wellbeing Check-In', ar: 'متابعة الحالة الصحية', hi: 'सेहत की जाँच', ur: 'صحت کی جانچ', ml: 'ക്ഷേമ പരിശോധന', tl: 'Kumusta ka?', bn: 'সুস্থতা যাচাই' },
   'Heat Stress Season': { en: 'Heat Stress Season', ar: 'موسم الإجهاد الحراري', hi: 'गर्मी का मौसम — सावधान', ur: 'گرمی کا موسم — احتیاط', ml: 'ചൂട് കാലം — ശ്രദ്ധിക്കുക', tl: 'Panahon ng matinding init', bn: 'গরমের মৌসুম — সাবধান' },
-  'Quick Training Tests': { en: 'Quick Training Tests', ar: 'اختبارات تدريب سريعة', hi: 'छोटे प्रशिक्षण टेस्ट', ur: 'مختصر تربیتی ٹیسٹ', ml: 'ചെറിയ പരിശീലന ടെസ്റ്റുകൾ', tl: 'Mabilis na training test', bn: 'ছোট প্রশিক্ষণ পরীক্ষা' },
   'IF I RESIGN': { en: 'IF I RESIGN', ar: 'إذا استقلت', hi: 'अगर मैं इस्तीफ़ा दूँ', ur: 'اگر میں استعفیٰ دوں', ml: 'ഞാൻ രാജിവെച്ചാൽ', tl: 'KUNG MAG-RESIGN AKO', bn: 'যদি আমি পদত্যাগ করি' },
   'CONTRACT END / EMPLOYER-INITIATED': { en: 'CONTRACT END / EMPLOYER-INITIATED', ar: 'انتهاء العقد / بقرار صاحب العمل', hi: 'अनुबंध समाप्त / कंपनी द्वारा', ur: 'معاہدہ ختم / کمپنی کی طرف سے', ml: 'കരാർ അവസാനം / കമ്പനി തീരുമാനം', tl: 'TAPOS NA KONTRATA / DESISYON NG EMPLOYER', bn: 'চুক্তি শেষ / কোম্পানির সিদ্ধান্তে' },
   'Document Type': { en: 'Document Type', ar: 'نوع المستند', hi: 'दस्तावेज़ का प्रकार', ur: 'دستاویز کی قسم', ml: 'രേഖയുടെ തരം', tl: 'Uri ng dokumento', bn: 'নথির ধরন' },

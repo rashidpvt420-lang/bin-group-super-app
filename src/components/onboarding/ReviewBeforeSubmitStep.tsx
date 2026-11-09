@@ -86,11 +86,24 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             : `The server has not accepted this Owner account yet${serverMessage ? ` (${serverMessage})` : ''}. Make sure your email is verified, then reload the page. If this continues, contact BIN GROUP support.`
     ), [lang]);
 
-    const missingGpsMessage = React.useCallback(() => (
-        lang === 'ar'
-            ? 'موقع GPS للعقار مفقود. ارجع إلى موقع العقار وGPS واحفظ إحداثيات صحيحة قبل إنشاء عرض السعر أو التوقيع.'
-            : 'Property GPS is missing. Return to Property Location & GPS and save valid coordinates before quotation or signature.'
-    ), [lang]);
+    // P1-1: name which properties still need a pin so a multi-property owner knows where to go.
+    const missingGpsNumbers = React.useMemo(
+        () => properties.map((property, index) => (property?.geo?.lat == null || property?.geo?.lng == null ||
+            String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
+            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng))) ? index + 1 : 0).filter(Boolean),
+        [properties],
+    );
+    const missingGpsMessage = React.useCallback(() => {
+        const which = properties.length > 1 && missingGpsNumbers.length ? missingGpsNumbers.join(', ') : '';
+        if (lang === 'ar') {
+            return which
+                ? `موقع GPS مفقود للعقار ${which}. ارجع إلى موقع العقار وGPS واحفظ إحداثيات صحيحة لكل عقار قبل إنشاء عرض السعر أو التوقيع.`
+                : 'موقع GPS للعقار مفقود. ارجع إلى موقع العقار وGPS واحفظ إحداثيات صحيحة قبل إنشاء عرض السعر أو التوقيع.';
+        }
+        return which
+            ? `Property GPS is missing for property ${which}. Return to Property Location & GPS and save valid coordinates for every property before quotation or signature.`
+            : 'Property GPS is missing. Return to Property Location & GPS and save valid coordinates before quotation or signature.';
+    }, [lang, missingGpsNumbers, properties.length]);
 
     React.useEffect(() => onAuthStateChanged(auth, (user) => {
         setSignedInUid(user?.uid || null);
