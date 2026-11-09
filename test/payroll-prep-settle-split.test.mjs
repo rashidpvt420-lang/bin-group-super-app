@@ -27,13 +27,14 @@ test('only admin/super_admin/ceo/finance_admin with MFA can settle', () => {
     assert.equal(mod.canSettlePayroll({ role, claims: { role } }, true), true, role);
     assert.equal(mod.canSettlePayroll({ role, claims: { role } }, false), false, `${role} no MFA`);
   }
-  for (const role of ['hr_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'manager', 'operations_admin', 'finance_manager']) {
+  for (const role of ['hr_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'manager', 'operations_admin', 'finance_manager', 'payroll_admin']) {
     assert.equal(mod.canSettlePayroll({ role, claims: { role } }, true), false, role);
   }
   assert.equal(mod.canSettlePayroll({ role: 'finance_admin', claims: { role: 'finance_admin', suspended: true } }, true), false);
 });
 
 test('HR prep roles cannot settle; finance_admin does not prepare', () => {
-  for (const role of ['hr_admin', 'hr_manager']) assert.equal(mod.canPreparePayroll({ role, claims: { role } }, true), true);
+  for (const role of ['hr_admin', 'hr_manager', 'payroll_admin']) assert.equal(mod.canPreparePayroll({ role, claims: { role } }, true), true);
+  assert.equal(mod.canPreparePayroll({ role: 'payroll_admin', claims: { role: 'payroll_admin' } }, false), false, 'payroll_admin needs MFA');
   for (const role of ['finance_admin', 'finance_staff', 'hr_staff']) assert.equal(mod.canPreparePayroll({ role, claims: { role } }, true), false);
 });

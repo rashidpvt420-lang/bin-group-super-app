@@ -15,7 +15,7 @@ test('My HR reads only own payslips, documents and requests by uid', () => {
 
 test('/my-hr is open to every non-suspended employee, routed and linked', () => {
   assert.match(policy, /MY_HR_PATH = '\/my-hr'/);
-  assert.match(policy, /normalizedPath === MY_HR_PATH\) \{\s*return !user\?\.claims\?\.suspended && \(STAFF_PORTAL_ROLES\.has\(role\) \|\| PAINTING_FINANCE_ROLES\.has\(role\)\)/);
+  assert.match(policy, /normalizedPath === MY_HR_PATH\) \{\s*return !user\?\.claims\?\.suspended && \(STAFF_PORTAL_ROLES\.has\(role\) \|\| PAINTING_FINANCE_ROLES\.has\(role\) \|\| PAYROLL_ADMIN_ROLES\.has\(role\)\)/);
   assert.match(app, /path="\/my-hr" element={<ProtectedRoute><MyHrSelfServicePage \/>/);
   assert.match(nav, /path: '\/my-hr'/);
   assert.match(nav, /path: '\/hr\/payroll-prep'/);

@@ -32,6 +32,8 @@ type Payment = {
     receiptPath?: string;
     receiptHash?: string;
     notes?: string;
+    dueDate?: any;
+    receiptState?: string;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -42,6 +44,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     ADMIN_VERIFICATION_REQUIRED: { label: 'AWAITING ADMIN', color: '#f59e0b' },
     REJECTED: { label: 'REJECTED', color: '#ef4444' },
     OVERDUE: { label: 'OVERDUE', color: '#ef4444' },
+    UNPAID_CHEQUE_RETURNED: { label: 'UNPAID - CHEQUE RETURNED', color: '#ef4444' },
 };
 
 const PAYMENT_PENDING_STATUSES = ['PENDING', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED'];
@@ -93,6 +96,8 @@ export default function TenantPaymentsPage() {
                     verifiedAt: d.data().verifiedAt,
                     receiptUrl: d.data().receiptUrl,
                     receiptPath: d.data().receiptPath,
+                    dueDate: d.data().dueDate || d.data().paymentDueDate,
+                    receiptState: d.data().receiptState,
                     receiptHash: d.data().receiptHash,
                     notes: d.data().notes,
                 })));
@@ -125,6 +130,8 @@ export default function TenantPaymentsPage() {
                                     verifiedAt: d.data().verifiedAt,
                                     receiptUrl: d.data().receiptUrl,
                                     receiptPath: d.data().receiptPath,
+                    dueDate: d.data().dueDate || d.data().paymentDueDate,
+                    receiptState: d.data().receiptState,
                                     receiptHash: d.data().receiptHash,
                                     notes: d.data().notes,
                                 });
@@ -215,6 +222,13 @@ export default function TenantPaymentsPage() {
 
     const totalPaid = payments.filter(p => ['VERIFIED', 'APPROVED'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
     const totalPending = payments.filter(p => PAYMENT_PENDING_STATUSES.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+    // A bounced cheque reopens the rent as unpaid (server reversal); the original due date still applies.
+    const displayStatus = (p: Payment) => {
+        if (p.status !== 'UNPAID_CHEQUE_RETURNED') return p.status;
+        const due = p.dueDate ? (p.dueDate.toDate ? p.dueDate.toDate() : new Date(p.dueDate)) : null;
+        return due && !Number.isNaN(due.getTime()) && due.getTime() < Date.now() ? 'OVERDUE' : p.status;
+    };
+    const totalOutstanding = payments.filter(p => p.status === 'UNPAID_CHEQUE_RETURNED').reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 8 }}>
@@ -257,6 +271,7 @@ export default function TenantPaymentsPage() {
                 {[
                     { label: 'Total Verified', value: `AED ${totalPaid.toLocaleString()}`, color: '#10b981', icon: <CheckCircle2 size={20} /> },
                     { label: 'Pending Verification', value: `AED ${totalPending.toLocaleString()}`, color: '#f59e0b', icon: <Clock size={20} /> },
+                    { label: 'Unpaid - Returned Cheques', value: `AED ${totalOutstanding.toLocaleString()}`, color: '#ef4444', icon: <Clock size={20} /> },
                     { label: 'Total Transactions', value: payments.length, color: '#3b82f6', icon: <DollarSign size={20} /> },
                     { label: 'Documents', value: payments.filter(p => p.receiptUrl).length, color: '#8b5cf6', icon: <FileText size={20} /> },
                 ].map(kpi => (
@@ -277,6 +292,7 @@ export default function TenantPaymentsPage() {
                     <Typography variant="body2"><Bi en={"1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted."} ar={"1. ادفع الإيجار نقداً (مقابل إيصال رسمي) أو بشيك. لا يُقبل التحويل البنكي أو الدفع الإلكتروني."} /></Typography>
                     <Typography variant="body2"><Bi en={"2. Click \"SUBMIT PAYMENT PROOF\", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque"} ar={"2. اضغط \"إرسال إثبات الدفع\"، اختر نقداً أو شيك، وارفع صورة الإيصال أو الشيك"} /></Typography>
                     <Typography variant="body2"><Bi en={"3. Admin will verify the payment within 24 hours and update your status"} ar={"3. ستتحقق الإدارة من الدفعة خلال 24 ساعة وتحدّث حالتك"} /></Typography>
+                    <Typography data-testid="tenant-returned-cheque-fee" variant="body2"><Bi en={"4. Returned cheque: a cheque counts as paid only once the bank clears it. A returned (bounced) cheque incurs a fee of AED 500 in addition to the unpaid rent."} ar={"4. الشيك المرتجع: لا يُعتبر الشيك مدفوعاً إلا بعد تحصيله من البنك، ويُستحق رسم قدره 500 درهم عن كل شيك مرتجع بالإضافة إلى الإيجار غير المسدد."} /></Typography>
                 </Stack>
             </Paper>
 
@@ -317,7 +333,7 @@ export default function TenantPaymentsPage() {
                             </TableHead>
                             <TableBody>
                                 {payments.map((payment) => {
-                                    const config = STATUS_CONFIG[payment.status] || { label: payment.status, color: binThemeTokens.textOnDarkMuted };
+                                    const config = STATUS_CONFIG[displayStatus(payment)] || { label: payment.status, color: binThemeTokens.textOnDarkMuted };
                                     return (
                                         <TableRow key={payment.id} hover>
                                             <TableCell sx={{ color: binThemeTokens.textOnDarkMuted, fontSize: '0.8rem' }}>{formatDate(payment.createdAt)}</TableCell>
@@ -326,6 +342,7 @@ export default function TenantPaymentsPage() {
                                             <TableCell sx={{ color: binThemeTokens.textOnDarkMuted, fontSize: '0.8rem' }}>{payment.period || '—'}</TableCell>
                                             <TableCell>
                                                 <Chip label={config.label} size="small" sx={{ bgcolor: alpha(config.color, 0.1), color: config.color, fontWeight: 900, fontSize: '0.6rem' }} />
+                                                {payment.receiptState === 'REVERSED' && <Typography data-testid="tenant-receipt-reversed" variant="caption" display="block" sx={{ color: '#ef4444', mt: 0.5 }}>Receipt reversed - cheque returned by bank (AED 500 fee applies)</Typography>}
                                             </TableCell>
                                             <TableCell align="right">
                                                 {payment.receiptUrl ? (

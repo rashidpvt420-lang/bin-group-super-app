@@ -14,8 +14,36 @@ const id = (value: unknown) => String(value ?? "").trim().slice(0, 220);
 const CLOSED = new Set(["CLOSED", "CANCELLED", "CANCELED", "TERMINATED", "EXPIRED", "PAYMENT_REJECTED", "REJECTED", "SUSPENDED", "VOID"]);
 const PAID = new Set(["APPROVED", "VERIFIED", "RECONCILED", "PAID"]);
 
-export function contractGrantsService(contract: Record<string, any> | undefined, ownerUid: string): boolean {
-  if (!contract) return false;
+/**
+ * Owner "services suspended" state (audit D-03, clause 9F). The owner keeps their login, balances and
+ * payment screens; only NEW service requests are refused, except emergency works. Tenants' emergency
+ * requests on that owner's units still go through. A full account lock (status "suspended") is
+ * treated the same way for service requests: emergencies are never refused here.
+ */
+export function ownerServicesSuspended(owner: Record<string, any> | undefined): boolean {
+  if (!owner) return false;
+  const status = String(owner.status ?? "").trim().toLowerCase();
+  return owner.serviceSuspended === true || status === "suspended" || status === "services_suspended";
+}
+
+export const OWNER_SERVICES_SUSPENDED_MESSAGE =
+  "Services for this property are suspended for non-payment. Only emergency requests are accepted until the overdue amount is paid and verified. / الخدمات لهذا العقار معلقة لعدم السداد. تُقبل طلبات الطوارئ فقط حتى يتم سداد المبلغ المتأخر والتحقق منه.";
+
+export function assertOwnerServiceRequestAllowed(owner: Record<string, any> | undefined, emergency: boolean): void {
+  if (!emergency && ownerServicesSuspended(owner)) {
+    throw new HttpsError("failed-precondition", OWNER_SERVICES_SUSPENDED_MESSAGE, { reason: "OWNER_SERVICES_SUSPENDED" });
+  }
+}
+
+export type ServiceEntitlementOptions = { emergency?: boolean };
+
+export function contractGrantsService(input: Record<string, any> | undefined, ownerUid: string, options: ServiceEntitlementOptions = {}): boolean {
+  if (!input) return false;
+  // A contract suspended for non-payment (clause 9F) still covers emergency works.
+  const suspendedForNonPayment = upper(input.status) === "SUSPENDED" && input.serviceSuspended === true;
+  const contract = suspendedForNonPayment && options.emergency === true
+    ? { ...input, status: upper(input.serviceSuspension?.previousStatus) || "ACTIVE" }
+    : input;
   const status = upper(contract.status);
   const contractStatus = upper(contract.contractStatus);
   if (CLOSED.has(status) || CLOSED.has(contractStatus)) return false;
@@ -39,21 +67,25 @@ export async function assertPropertyServiceEntitlement(
   read: Reader,
   propertyId: string,
   property: Record<string, any>,
+  options: ServiceEntitlementOptions = {},
 ): Promise<string> {
   const ownerUid = id(property.ownerUid || property.ownerId);
+  const emergency = options.emergency === true;
+  // Read the owner first (all reads before writes inside transactions) and refuse non-emergency
+  // requests while the owner's services are suspended.
+  const owner = ownerUid ? ((await read(db.collection("users").doc(ownerUid))).data() || {}) : {};
+  assertOwnerServiceRequestAllowed(owner, emergency);
   const direct = [property.activeContractId, property.contractId].map(id).filter(Boolean);
   for (const contractId of [...new Set(direct)]) {
     const snap = await read(db.collection("contracts").doc(contractId));
-    if (snap.exists && contractGrantsService(snap.data(), ownerUid)) return contractId;
+    if (snap.exists && contractGrantsService(snap.data(), ownerUid, { emergency })) return contractId;
   }
   if (ownerUid) {
-    const ownerSnap = await read(db.collection("users").doc(ownerUid));
-    const owner = ownerSnap.data() || {};
     const viaOwner = [owner.activeContractId, owner.latestActivationContractId].map(id).filter((value) => value && !direct.includes(value));
     for (const contractId of [...new Set(viaOwner)]) {
       const snap = await read(db.collection("contracts").doc(contractId));
       const contract = snap.data();
-      if (snap.exists && contract && coversProperty(contract, propertyId) && contractGrantsService(contract, ownerUid)) return contractId;
+      if (snap.exists && contract && coversProperty(contract, propertyId) && contractGrantsService(contract, ownerUid, { emergency })) return contractId;
     }
   }
   throw new HttpsError(

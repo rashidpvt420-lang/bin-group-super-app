@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { generateContractPdfArtifact, generateMobilizationUnpaidInvoicePdfArtifact } from "./pdfEngine";
+import { mobilizationDueAt } from "./ownerPaymentLedger";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { termFieldsFromStart } from "./ownerContractTerm";
 import {
@@ -91,6 +92,8 @@ async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>
   }
 
   const invoicePdfArtifact = await generateMobilizationUnpaidInvoicePdfArtifact({
+
+    dueAt: mobilizationDueAt(Date.now()).toISOString(),
     ...invoiceSnapshot,
     ownerId,
   });
@@ -109,6 +112,7 @@ async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>
       pdfGeneration: invoicePdfArtifact.generation,
       canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE_REPAIR",
       issuedAt: ts(),
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       createdAt: ts(),
       updatedAt: ts(),
     }, { merge: false });
@@ -655,6 +659,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     const [pdfArtifact, invoicePdfArtifact] = await Promise.all([
       generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() }),
       generateMobilizationUnpaidInvoicePdfArtifact({
+        dueAt: mobilizationDueAt(Date.now()).toISOString(),
         ...invoiceSnapshot,
         ownerId,
       }),
@@ -711,6 +716,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           pdfGeneration: invoicePdfArtifact.generation,
           canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE",
           issuedAt: ts(),
+          dueAt: mobilizationDueAt(Date.now()).toISOString(),
           createdAt: ts(),
           updatedAt: ts(),
         });
@@ -858,17 +864,47 @@ export const ownerInviteTenantToProperty = onCall({ cors: true, enforceAppCheck:
   return { status: "TENANT_INVITED", tenantId, inviteUrl, locationInherited: Boolean(tenantLocation) };
 });
 
+/**
+ * D-03 (Rashid, Nov 2026): suspending an owner means "services suspended", not an account lock.
+ * The owner can still sign in, see balances and pay; new service requests are refused on the server
+ * (propertyServiceEntitlement.ts) except emergency works (clause 9F), and tenants' emergency requests
+ * on the owner's units still go through. Auth is NOT disabled and no `suspended` claim is set.
+ * A full account lock (fraud / security) stays available with mode: "ACCOUNT_LOCK".
+ */
 export const adminSuspendOwner = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   const ownerId = s(request.data?.ownerId);
   if (!ownerId) throw new HttpsError("invalid-argument", "ownerId is required.");
   const reason = s(request.data?.reason, "No reason provided.");
+  const mode = s(request.data?.mode, "SERVICES").toUpperCase();
+  if (!["SERVICES", "ACCOUNT_LOCK"].includes(mode)) throw new HttpsError("invalid-argument", "mode must be SERVICES or ACCOUNT_LOCK.");
   const ref = db.collection("users").doc(ownerId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Owner not found.");
   const owner = snap.data() || {};
   if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
   const actorId = request.auth?.uid || "admin";
+
+  if (mode === "SERVICES") {
+    const patch = {
+      serviceSuspended: true,
+      serviceSuspension: { source: "ADMIN", reason, suspendedAt: new Date().toISOString(), suspendedBy: actorId },
+      updatedAt: ts(),
+    };
+    const batch = db.batch();
+    batch.set(ref, patch, { merge: true });
+    batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
+    batch.set(db.collection("notifications").doc(), {
+      userId: ownerId, recipientId: ownerId, toRole: "owner", type: "OWNER_SERVICES_SUSPENDED", read: false,
+      title: "Services suspended", titleAr: "تم تعليق الخدمات",
+      body: "New service requests are paused until the overdue amount is paid and verified. Emergency works continue. You can still sign in, see your balance and pay. / تم إيقاف طلبات الخدمة الجديدة حتى يتم سداد المبلغ المتأخر والتحقق منه. تستمر أعمال الطوارئ. ويمكنك تسجيل الدخول والاطلاع على رصيدك والسداد.",
+      link: "/owner/financials", createdAt: ts(),
+    });
+    batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_SUSPEND_OWNER_SERVICES", targetType: "users", targetId: ownerId, metadata: { reason, mode, accountDisabled: false }, createdAt: ts() });
+    await batch.commit();
+    return { status: "SERVICES_SUSPENDED", ownerId };
+  }
+
   const currentStatus = s(owner.status, "pending_admin_approval").toLowerCase();
   const statusBeforeSuspension = currentStatus === "suspended"
     ? s(owner.statusBeforeSuspension, "pending_admin_approval").toLowerCase()
@@ -884,7 +920,7 @@ export const adminSuspendOwner = onCall({ cors: true, enforceAppCheck: true }, a
   const batch = db.batch();
   batch.set(ref, patch, { merge: true });
   batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
-  batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_SUSPEND_OWNER", targetType: "users", targetId: ownerId, metadata: { reason }, createdAt: ts() });
+  batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_SUSPEND_OWNER", targetType: "users", targetId: ownerId, metadata: { reason, mode }, createdAt: ts() });
   await batch.commit();
   const authUser = await admin.auth().getUser(ownerId);
   await admin.auth().updateUser(ownerId, { disabled: true });
@@ -906,6 +942,23 @@ export const adminResumeOwner = onCall({ cors: true, enforceAppCheck: true }, as
   const owner = snap.data() || {};
   if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
   const actorId = request.auth?.uid || "admin";
+
+  // Services-only suspension: clear the flag; the account was never locked.
+  if (s(owner.status).toLowerCase() !== "suspended") {
+    if (owner.serviceSuspended !== true) return { status: "NOT_SUSPENDED", ownerId };
+    const patch = {
+      serviceSuspended: false,
+      serviceSuspension: { ...(owner.serviceSuspension || {}), liftedAt: new Date().toISOString(), liftedBy: actorId },
+      updatedAt: ts(),
+    };
+    const batch = db.batch();
+    batch.set(ref, patch, { merge: true });
+    batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
+    batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_RESUME_OWNER_SERVICES", targetType: "users", targetId: ownerId, createdAt: ts() });
+    await batch.commit();
+    return { status: "SERVICES_RESTORED", ownerId };
+  }
+
   const priorStatus = s(owner.statusBeforeSuspension, "pending_admin_approval").toLowerCase();
   const hasActivationEvidence =
     owner.adminApproved === true &&

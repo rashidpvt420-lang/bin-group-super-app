@@ -32,6 +32,9 @@ type PaymentRecord = {
     inspectionStatus?: string;
     paymentMethod?: string;
     method?: string;
+    chequeDetails?: { chequeNumber?: string; chequeBank?: string; chequeDate?: string } | null;
+    chequeClearanceState?: string | null;
+    cheque?: { chequeNumber?: string; chequeBank?: string; chequeDate?: string } | null;
     paymentReference?: string;
     paymentReferenceId?: string;
     referenceId?: string;
@@ -158,6 +161,11 @@ export default function PaymentApprovalsPage() {
             ? (current.includes(source) ? current : [...current, source])
             : current.filter((item) => item !== source));
     }, []);
+    const [chequeNumber, setChequeNumber] = React.useState('');
+    const [returnedPaymentId, setReturnedPaymentId] = React.useState('');
+    const [replacementInvoiceId, setReplacementInvoiceId] = React.useState('');
+    const [chequeBank, setChequeBank] = React.useState('');
+    const [chequeDate, setChequeDate] = React.useState('');
 
     React.useEffect(() => {
         pendingCursorRef.current = null;
@@ -360,6 +368,15 @@ export default function PaymentApprovalsPage() {
             setError('Select Cash or Cheque for the received 15% mobilisation payment.');
             return;
         }
+        const recordingOwnerCheque = !rent && !design && !hasImmutableReceipt(approvalTarget) && selectedMethod === 'CHEQUE';
+        if (recordingOwnerCheque && (!/^[0-9]{4,12}$/.test(chequeNumber.replace(/\s+/g, '')) || chequeBank.trim().length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(chequeDate))) {
+            setError('Enter the cheque number (4-12 digits), drawee bank and cheque date.');
+            return;
+        }
+        if (!rent && !design && hasImmutableReceipt(approvalTarget) && selectedMethod === 'CHEQUE' && upper(approvalTarget.chequeClearanceState) !== 'CLEARED') {
+            setError('Mark the cheque as cleared by the bank before approving this payment.');
+            return;
+        }
         if (!reference || received <= 0) {
             setError('Enter the exact payment reference and amount received.');
             return;
@@ -396,6 +413,7 @@ export default function PaymentApprovalsPage() {
                     paymentReferenceId: reference,
                     amountReceived: received,
                     paymentMethod: selectedMethod,
+                    ...(selectedMethod === 'CHEQUE' ? { chequeNumber: chequeNumber.replace(/\s+/g, ''), chequeBank: chequeBank.trim(), chequeDate } : {}),
                     filename: receiptFile?.name.replace(/[^A-Za-z0-9._-]/g, '_'),
                     contentType: receiptFile?.type || 'application/pdf',
                     encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '',
@@ -452,6 +470,53 @@ export default function PaymentApprovalsPage() {
         } finally { setBusyId(null); }
     };
 
+    const setChequeClearance = async (row: PaymentRecord, clearance: 'CLEARED' | 'BOUNCED') => {
+        const note = clearance === 'BOUNCED' ? (window.prompt('Bank return reason for this cheque') || '').trim() : '';
+        if (clearance === 'BOUNCED' && note.length < 4) { setError('Enter the bank return reason to mark a cheque as bounced.'); return; }
+        setBusyId(row.id);
+        setError(null);
+        setNotice(null);
+        try {
+            const callable = httpsCallable(functions, 'adminSetOwnerChequeClearance');
+            const response: any = await callable({ paymentId: row.id, clearance, note });
+            if (response?.data?.paymentReversed) {
+                setNotice(response.data.activationReviewRequired
+                    ? 'Cheque returned after verification: the 15% invoice is reopened as UNPAID, the receipt is marked REVERSED and an AED 500 fee was added. Activation was NOT reversed - review this Owner manually.'
+                    : 'Cheque returned after verification: the rent is reopened as UNPAID, the receipt is marked REVERSED and an AED 500 fee was added to the tenant ledger.');
+                setReturnedPaymentId('');
+                return;
+            }
+            setNotice(clearance === 'CLEARED' ? 'Cheque marked as cleared. A second Finance Admin can now verify and approve.' : 'Cheque marked as bounced. A pending AED 500 returned-cheque fee was added to the payer ledger. Return the evidence and request a replacement payment.');
+        } catch (err: any) {
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Cheque clearance update failed.');
+        } finally { setBusyId(null); }
+    };
+
+    // Replacement payment for a reopened invoice / returned-cheque fee (dual control: record, then a different Admin verifies).
+    const recordReplacement = async () => {
+        const method = (window.prompt('Payment method: CASH or CHEQUE') || '').trim().toUpperCase();
+        if (!['CASH', 'CHEQUE'].includes(method)) { setError('Only CASH or CHEQUE is accepted.'); return; }
+        const reference = (window.prompt('Official receipt reference') || '').trim();
+        const cheque = method === 'CHEQUE' ? {
+            chequeNumber: (window.prompt('Cheque number') || '').replace(/\s+/g, ''),
+            chequeBank: (window.prompt('Drawee bank') || '').trim(),
+            chequeDate: (window.prompt('Cheque date (YYYY-MM-DD)') || '').trim(),
+        } : {};
+        try {
+            await httpsCallable(functions, 'adminRecordReplacementInvoicePayment')({ invoiceId: replacementInvoiceId, paymentMethod: method, paymentReferenceId: reference, ...cheque });
+            setNotice('Replacement payment recorded. A different Finance Admin must verify it.');
+        } catch (err: any) { setError((typeof err?.details === 'string' && err.details) || err?.message || 'Recording failed.'); }
+    };
+    const verifyReplacement = async () => {
+        const chequeCleared = window.confirm('If this is a cheque, confirm the bank has CLEARED it. (Cancel = not cleared / cash)');
+        try {
+            const response: any = await httpsCallable(functions, 'adminVerifyReplacementInvoicePayment')({ invoiceId: replacementInvoiceId, chequeCleared });
+            const lifted = Object.values(response?.data?.suspension || {}).includes('LIFT');
+            setNotice(lifted ? 'Payment verified, new receipt issued and the service suspension lifted.' : 'Payment verified and new receipt issued.');
+            setReplacementInvoiceId('');
+        } catch (err: any) { setError((typeof err?.details === 'string' && err.details) || err?.message || 'Verification failed.'); }
+    };
+
     const openReference = (row: PaymentRecord) => {
         const url = referenceUrl(row);
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
@@ -496,6 +561,19 @@ export default function PaymentApprovalsPage() {
             {queueLimitWarnings.length > 0 && <Alert severity="warning" data-testid="admin-payment-queue-capped" sx={{ mb: 3 }}>At least one Finance queue reached its display limit ({queueLimitWarnings.join(', ')}). Older items may be hidden. Do not treat the visible rows or an empty subset as a complete queue until the full queue is reviewed.</Alert>}
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
+            <Paper data-testid="admin-returned-cheque-panel" sx={{ p: 2, mb: 3, bgcolor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 3 }}>
+                <Typography variant="caption" sx={{ color: '#F87171', fontWeight: 900 }}>CHEQUE RETURNED BY BANK AFTER VERIFICATION</Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ mt: 1 }}>
+                    <TextField size="small" label="Payment ID (verified cheque)" value={returnedPaymentId} onChange={(event) => setReturnedPaymentId(event.target.value.trim())} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    <Button disabled={!returnedPaymentId || busyId === returnedPaymentId} onClick={() => void setChequeClearance({ id: returnedPaymentId } as PaymentRecord, 'BOUNCED')} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 900, whiteSpace: 'nowrap' }}>Mark Returned</Button>
+                </Stack>
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ mt: 1.5 }}>
+                    <TextField size="small" label="Invoice ID (reopened 15% / RCF fee)" value={replacementInvoiceId} onChange={(event) => setReplacementInvoiceId(event.target.value.trim())} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    <Button data-testid="admin-record-replacement" disabled={!replacementInvoiceId} onClick={() => void recordReplacement()} sx={{ color: '#DAA520', fontWeight: 900, whiteSpace: 'nowrap' }}>Record Payment</Button>
+                    <Button data-testid="admin-verify-replacement" disabled={!replacementInvoiceId} onClick={() => void verifyReplacement()} sx={{ color: '#10b981', fontWeight: 900, whiteSpace: 'nowrap' }}>Verify Payment</Button>
+                </Stack>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Reopens the payment as UNPAID, marks its receipt REVERSED, adds the AED 500 fee and writes an audit entry. An Owner's activation is never reversed automatically.</Typography>
+            </Paper>
 
             {receiptRepairs.length > 0 && (
                 <Paper sx={{ mb: 3, p: 3, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.28)', borderRadius: 4 }}>
@@ -556,7 +634,7 @@ export default function PaymentApprovalsPage() {
                                         <TableCell><Chip label={design ? 'Design Deposit' : rent ? 'Rent Collection' : 'Owner 15%'} size="small" sx={{ bgcolor: rent ? 'rgba(16,185,129,0.16)' : 'rgba(218,165,32,0.16)', color: rent ? '#10b981' : '#DAA520', fontWeight: 900 }} /></TableCell>
                                         <TableCell><Typography sx={{ fontWeight: 900 }}>{design ? 'Design payer' : rent ? (row.tenantName || 'Tenant') : (row.companyName || row.ownerName || 'Owner')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{design ? row.payerId : row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography></TableCell>
                                         <TableCell>{row.designRequestId || row.contractId || row.intakeId || '—'}</TableCell>
-                                        <TableCell>{row.paymentMethod || row.method || 'Not recorded'}</TableCell>
+                                        <TableCell>{row.paymentMethod || row.method || 'Not recorded'}{upper(row.paymentMethod || row.method) === 'CHEQUE' && (row.chequeDetails || row.cheque) && <Typography variant="caption" display="block" sx={{ color: 'rgba(255,255,255,0.55)' }}>#{(row.chequeDetails || row.cheque)?.chequeNumber} · {(row.chequeDetails || row.cheque)?.chequeBank} · {(row.chequeDetails || row.cheque)?.chequeDate}</Typography>}{upper(row.paymentMethod || row.method) === 'CHEQUE' && !design && (rent || hasImmutableReceipt(row)) && <Chip data-testid="admin-cheque-clearance" label={upper(row.chequeClearanceState) || 'PENDING_CLEARANCE'} size="small" sx={{ mt: 0.5, fontWeight: 900, bgcolor: upper(row.chequeClearanceState) === 'CLEARED' ? 'rgba(16,185,129,0.16)' : upper(row.chequeClearanceState) === 'BOUNCED' ? 'rgba(239,68,68,0.16)' : 'rgba(245,158,11,0.16)', color: upper(row.chequeClearanceState) === 'CLEARED' ? '#10b981' : upper(row.chequeClearanceState) === 'BOUNCED' ? '#F87171' : '#F59E0B' }} />}{upper(row.paymentMethod || row.method) === 'CHEQUE' && !design && (rent || hasImmutableReceipt(row)) && !['CLEARED', 'BOUNCED'].includes(upper(row.chequeClearanceState)) && <Stack direction="row" gap={0.5} sx={{ mt: 0.5 }}><Button size="small" disabled={busyId === row.id} onClick={() => void setChequeClearance(row, 'CLEARED')} sx={{ color: '#10b981', fontWeight: 900, minWidth: 0 }}>Cleared</Button><Button size="small" disabled={busyId === row.id} onClick={() => void setChequeClearance(row, 'BOUNCED')} sx={{ color: '#F87171', fontWeight: 900, minWidth: 0 }}>Bounced</Button></Stack>}</TableCell>
                                         <TableCell><Typography variant="body2" sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><FileCheck2 size={13} color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'} /><Typography variant="caption" color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'}>{hasImmutableReceipt(row) ? 'Immutable receipt recorded' : 'Receipt required'}</Typography></Stack>{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open evidence</Button>}</TableCell>
                                         <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                         <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : (row.status || row.paymentStatus || row.verificationState || 'pending')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
@@ -581,6 +659,7 @@ export default function PaymentApprovalsPage() {
                         <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Confirm actual receipt of Cash or cleared Cheque against this design quote. Upload the official receipt. Approval does not start work or activate an Owner account.' : approvalTarget && isRentPayment(approvalTarget) ? 'This verifies the rent payment only.' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'A Finance Admin who did not record this receipt must verify the exact 15% payment. Successful approval activates the contract and properties and unlocks the Owner dashboard.' : 'Record the exact 15% receipt evidence. A different Finance Admin must verify and approve it before activation.'}</Typography>
                         {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>LOCKED PAYMENT</Typography><Typography fontWeight={900}>{formatMoney(submittedAmount(approvalTarget), approvalTarget.currency)}</Typography><Typography variant="body2" sx={{ overflowWrap: 'anywhere', mt: 1 }}>{proofText(approvalTarget)}</Typography>{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open recorded evidence</Button>}</Paper>}
                         {approvalTarget && !isRentPayment(approvalTarget) && <TextField select label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }}>{MANUAL_METHODS.map((method) => <MenuItem key={method} value={method}>{method.replace('_', ' ')}</MenuItem>)}</TextField>}
+                        {approvalTarget && !isRentPayment(approvalTarget) && !isDesignPayment(approvalTarget) && !hasImmutableReceipt(approvalTarget) && upper(paymentMethod) === 'CHEQUE' && <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5}><TextField label="Cheque number" value={chequeNumber} onChange={(event) => setChequeNumber(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /><TextField label="Drawee bank" value={chequeBank} onChange={(event) => setChequeBank(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /><TextField label="Cheque date" type="date" value={chequeDate} onChange={(event) => setChequeDate(event.target.value)} fullWidth InputLabelProps={{ shrink: true, sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /></Stack>}
                         <TextField label="Official payment / receipt reference" value={paymentReferenceId} onChange={(event) => setPaymentReferenceId(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                         <TextField label="Exact amount received" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                         {approvalTarget && !isRentPayment(approvalTarget) && (isDesignPayment(approvalTarget) || !hasImmutableReceipt(approvalTarget)) && <Button component="label" variant="outlined" startIcon={<Upload size={17} />} sx={{ color: receiptFile ? '#4ADE80' : '#DAA520', borderColor: receiptFile ? '#4ADE80' : 'rgba(218,165,32,0.45)', justifyContent: 'flex-start' }}>{receiptFile ? `${receiptFile.name} · ${(receiptFile.size / 1024 / 1024).toFixed(2)} MB` : 'Upload official receipt (PDF or image)'}<input hidden type="file" accept={isDesignPayment(approvalTarget) ? 'application/pdf,image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp,image/heic'} onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} /></Button>}
