@@ -25,6 +25,12 @@ const STAFF_ROLES = new Set([
   "account_manager",
   "operations_manager",
   "finance_admin",
+  // Nov 9 audit (P1-8): painting payment reviewers. They get no admin modules; the
+  // painting finance page is role-gated and every decision still needs MFA and a
+  // live finance_manager / finance_controller claim (paintingFinanceApprover.ts),
+  // and the issuer of an invoice can never approve it.
+  "finance_manager",
+  "finance_controller",
 ]);
 
 const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
@@ -41,6 +47,8 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "properties", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
+  finance_manager: [],
+  finance_controller: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
@@ -57,6 +65,8 @@ const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports"],
+  finance_manager: [],
+  finance_controller: [],
 };
 
 const MODULE_PERMISSION_MAP: Record<string, readonly string[]> = {
