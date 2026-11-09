@@ -33,6 +33,10 @@ const STAFF_ROLES = [
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and live dispatch' },
     { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
     { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
+    // Finance tiers: the server accepts these only from a Super Admin / CEO with MFA (audit D-04).
+    { value: 'finance_manager', label: 'Finance Manager', description: 'Payment decisions (Super Admin / CEO assigns)' },
+    { value: 'finance_controller', label: 'Finance Controller', description: 'Payment decisions (Super Admin / CEO assigns)' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports (Super Admin / CEO assigns)' },
 ] as const;
 
 const MODULE_ACCESS = [
@@ -67,6 +71,9 @@ const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    finance_manager: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    finance_controller: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    payroll_admin: ['dashboard', 'hr', 'financials', 'reports'],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
@@ -83,6 +90,9 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_manager: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_controller: ['dashboard', 'financials', 'transactions', 'reports'],
+    payroll_admin: ['dashboard', 'hr', 'reports'],
 };
 
 interface StaffMember {

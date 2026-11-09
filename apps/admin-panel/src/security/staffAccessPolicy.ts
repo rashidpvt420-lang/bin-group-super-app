@@ -33,6 +33,9 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts and documents' },
     { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
     { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
+    { value: 'finance_manager', label: 'Finance Manager', description: 'Payment decisions (Super Admin / CEO assigns)' },
+    { value: 'finance_controller', label: 'Finance Controller', description: 'Payment decisions (Super Admin / CEO assigns)' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports (Super Admin / CEO assigns)' },
 ] as const;
 
 export const PROVISIONABLE_STAFF_ROLES = PROVISIONABLE_STAFF_ROLE_OPTIONS.map((role) => role.value);
@@ -77,6 +80,9 @@ export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     manager: ['dashboard', 'reports'],
     admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
+    finance_manager: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_controller: ['dashboard', 'financials', 'transactions', 'reports'],
+    payroll_admin: ['dashboard', 'hr', 'reports'],
 };
 
 const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [

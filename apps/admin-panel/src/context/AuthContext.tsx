@@ -48,6 +48,7 @@ const STAFF_ROLES = new Set([
     'operations_manager',
     'finance_manager',
     'finance_controller',
+    'payroll_admin',
 ]);
 
 const roleFrom = (source: Record<string, unknown> | null | undefined) => String(

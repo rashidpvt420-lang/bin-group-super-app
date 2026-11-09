@@ -25,7 +25,38 @@ const STAFF_ROLES = new Set([
   "account_manager",
   "operations_manager",
   "finance_admin",
+  // Finance tiers (audit D-04). Assignable only by a Super Admin / CEO (see FINANCE_TIER_ROLES).
+  "finance_manager",
+  "finance_controller",
+  "payroll_admin",
 ]);
+
+/**
+ * D-04: finance tiers that carry money authority (painting / payment decisions, payroll). Only a
+ * Super Admin or CEO, signed in with MFA and holding those LIVE claims, may assign a finance tier or
+ * change/restore an account that holds one. A plain Admin may still suspend such an account.
+ * Every assignment writes an audit_logs entry with financeTierAssignment: true.
+ */
+const FINANCE_TIER_ROLES: ReadonlySet<string> = new Set(["finance_manager", "finance_controller", "payroll_admin"]);
+const FINANCE_TIER_ASSIGNER_ROLES = new Set(["super_admin", "ceo"]);
+
+function isFinanceTierAssigner(claims: any) {
+  const role = cleanString(claims?.role || claims?.userRole || claims?.primaryRole).toLowerCase();
+  return claims?.suspended !== true && (
+    FINANCE_TIER_ASSIGNER_ROLES.has(role) || claims?.superAdmin === true || claims?.super_admin === true || claims?.ceo === true
+  );
+}
+
+async function requireFinanceTierAssigner(request: any) {
+  const token = request.auth?.token || {};
+  if (!isFinanceTierAssigner(token)) {
+    throw new HttpsError("permission-denied", "Only a Super Admin or CEO can assign or change a finance role (Finance Manager, Finance Controller, Payroll Admin).");
+  }
+  const record = await admin.auth().getUser(request.auth.uid);
+  if (!isFinanceTierAssigner(record.customClaims || {})) {
+    throw new HttpsError("permission-denied", "Super Admin / CEO authority is no longer active on this account.");
+  }
+}
 
 const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   technician: [],
@@ -41,6 +72,9 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "properties", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
+  finance_manager: ["dashboard", "financials", "transactions", "reports", "audit"],
+  finance_controller: ["dashboard", "financials", "transactions", "reports", "audit"],
+  payroll_admin: ["dashboard", "hr", "financials", "reports"],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
@@ -57,6 +91,9 @@ const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports"],
+  finance_manager: ["dashboard", "financials", "transactions", "reports"],
+  finance_controller: ["dashboard", "financials", "transactions", "reports"],
+  payroll_admin: ["dashboard", "hr", "reports"],
 };
 
 const MODULE_PERMISSION_MAP: Record<string, readonly string[]> = {
@@ -309,6 +346,8 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   }
 
   const { modules, permissions } = canonicalAccess(role, payload);
+  const financeTierAssignment = FINANCE_TIER_ROLES.has(role);
+  if (financeTierAssignment) await requireFinanceTierAssigner(request);
   await assertNoExistingIdentity(email);
   const authUser = await admin.auth().createUser({ email, displayName, password: generatedBootstrapPassword(), emailVerified: false, disabled: false });
   const uid = authUser.uid;
@@ -389,6 +428,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
           emailHash: hashValue(email), role, modules, permissionKeys: Object.keys(permissions).sort(),
           invitationQueued: true, invitationMailId: invitationRef.id, privateHrSeparated: true,
           onboardingStage: "INVITED", activationRequired: true, portalAccessActive: false,
+          financeTierAssignment,
         },
         createdAt: now,
       });
@@ -415,6 +455,8 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
     throw new HttpsError("failed-precondition", "Technician identities cannot be converted to or from Admin-portal staff roles.");
   }
   const { modules, permissions } = canonicalAccess(role, payload);
+  const financeTierAssignment = FINANCE_TIER_ROLES.has(role) || FINANCE_TIER_ROLES.has(currentRole);
+  if (financeTierAssignment) await requireFinanceTierAssigner(request);
   const lifecycleActive = cleanString(userSnap.data()?.status).toUpperCase() === "ACTIVE" &&
     userSnap.data()?.onboardingComplete === true && accessSnap.data()?.active === true;
   const previousClaims = authUser.customClaims || {};
@@ -434,7 +476,7 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: "ADMIN_UPDATE_STAFF_ACCESS", targetType: "users", targetId: uid,
         metadata: {
-          previousRole: currentRole, role, modules, permissionKeys: Object.keys(permissions).sort(),
+          previousRole: currentRole, role, modules, permissionKeys: Object.keys(permissions).sort(), financeTierAssignment,
           lifecycleActive, onboardingComplete: userSnap.data()?.onboardingComplete === true,
         },
         createdAt: now,
@@ -458,6 +500,7 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
   if (!["ACTIVE", "SUSPENDED"].includes(requestedStatus)) throw new HttpsError("invalid-argument", "status must be ACTIVE or SUSPENDED.");
 
   const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
+  if (requestedStatus === "ACTIVE" && FINANCE_TIER_ROLES.has(currentRole)) await requireFinanceTierAssigner(request);
   if (requestedStatus === "ACTIVE" && userSnap.data()?.onboardingComplete !== true) {
     throw new HttpsError("failed-precondition", "Complete canonical HR onboarding before activating staff access.");
   }
