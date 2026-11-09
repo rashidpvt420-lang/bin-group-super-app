@@ -31,6 +31,7 @@ import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidenc
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
 import TechnicianInstallationRegistration from './components/TechnicianInstallationRegistration';
+import TechnicianLiveTrackingOwner from './components/TechnicianLiveTrackingOwner';
 import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
@@ -125,6 +126,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 export default function TechnicianApp() {
     return (
         <TechnicianLayout>
+            <TechnicianLiveTrackingOwner />
             <Routes>
                 <Route path="/" element={<TechnicianSimpleDashboardPage />} />
                 <Route path="/dashboard" element={<TechnicianSimpleDashboardPage />} />
