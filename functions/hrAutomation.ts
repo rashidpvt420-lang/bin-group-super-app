@@ -8,6 +8,7 @@ import { stableCaseId } from "./hrCaseId";
 import { inclusiveDays, leaveSummary, splitSickDays, validateLeaveForm, type LeaveFormResult, type LeaveRecord } from "./hrLeaveEngine";
 import { ROSTER_SOURCE, dubaiParts, missedClockOutDue, startReminderDue, validateWeeklyRoster, type WeeklyRoster } from "./hrRosterEngine";
 import { PAYROLL_ELIGIBLE_ROLES, resolvePayrollBasicSalary } from "./hrPayrollEligibility";
+import { calculateEosbEstimate } from "./hrEosbEngine";
 import { recordedBreakMinutes } from "./technicianPayableShift";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
@@ -1088,6 +1089,47 @@ export const getMyLeaveBalance = onCall(
         const { joinDate, approved } = await staffLeaveState(uid);
         if (!joinDate) return { joinDateMissing: true, message: "Your joining date is not set. Ask HR to add it." };
         return { joinDateMissing: false, joinDate, ...leaveSummary(joinDate, new Date().toISOString().slice(0, 10), approved) };
+    },
+);
+
+/**
+ * P2-16: the caller's own end-of-service gratuity estimate. Salary is read on the server from
+ * private_hr_profiles (never exposed to the client); only the estimate is returned.
+ */
+export const getMyEosbEstimate = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        assertStaffActor(request.auth);
+        const uid = String(request.auth?.uid || "");
+        const [privateSnap, userSnap, leaveState] = await Promise.all([
+            db.collection("private_hr_profiles").doc(uid).get(),
+            db.collection("users").doc(uid).get(),
+            staffLeaveState(uid),
+        ]);
+        const salary = resolvePayrollBasicSalary(privateSnap.exists ? privateSnap.data() || {} : {}, userSnap.exists ? userSnap.data() || {} : {});
+        const basic = Number(salary.raw);
+        const joinDate = leaveState.joinDate;
+        if (!joinDate || !Number.isFinite(basic) || basic <= 0) {
+            return { available: false, joinDateMissing: !joinDate, salaryMissing: !(Number.isFinite(basic) && basic > 0) };
+        }
+        const joiningDate = new Date(`${joinDate}T00:00:00+04:00`);
+        const lastWorkingDate = new Date();
+        const scenario = (terminationReason: "resignation" | "employer_terminated") => {
+            const result = calculateEosbEstimate({ basicMonthlySalaryAed: basic, joiningDate, lastWorkingDate, terminationReason });
+            return {
+                serviceYears: result.serviceYears,
+                finalEstimateAed: result.finalEstimateAed,
+                capApplied: result.capApplied,
+                note: result.note,
+                disclaimer: result.disclaimer,
+            };
+        };
+        return {
+            available: true,
+            joinDate,
+            resignation: scenario("resignation"),
+            employer_terminated: scenario("employer_terminated"),
+        };
     },
 );
 
