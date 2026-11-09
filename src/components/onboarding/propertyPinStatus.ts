@@ -1,6 +1,6 @@
 // P1-1: every property in a multi-property onboarding needs its own exact pin.
 // Pure helpers shared by the location step, the review step and unit tests.
-import { isEmirateCentroid } from './ownerLocationRules';
+import { isEmirateCentroid } from "./ownerLocationRules";
 
 export const UAE_EMIRATE_CENTROIDS: ReadonlyArray<{ lat: number; lng: number }> = [
     { lat: 25.2048, lng: 55.2708 },
