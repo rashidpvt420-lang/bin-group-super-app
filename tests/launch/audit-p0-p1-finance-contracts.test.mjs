@@ -56,9 +56,9 @@ test('D-03: owner suspension defaults to services-only (no account lock) and eme
 
 test('D-04: finance tiers are provisionable only by a Super Admin / CEO with MFA, audit logged', () => {
   const prov = read('functions/adminUserProvisioning.ts');
-  for (const role of ['finance_manager', 'finance_controller', 'payroll_admin']) {
-    assert.match(prov, new RegExp(`"${role}",`));
-  }
+  assert.match(prov, /"finance_manager",/);
+  assert.match(prov, /"finance_controller",/);
+  assert.match(prov, /"payroll_admin",/);
   assert.match(prov, /const FINANCE_TIER_ASSIGNER_ROLES = new Set\(\["super_admin", "ceo"\]\)/);
   assert.equal((prov.match(/await requireFinanceTierAssigner\(request\)/g) || []).length, 3);
   assert.match(prov, /financeTierAssignment,/);

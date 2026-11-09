@@ -54,9 +54,15 @@ test('P2-15: 15 sick days used + 5 requested are 5 half-pay days', () => {
 });
 
 test('P1-2: payroll salary comes from the private HR profile, legacy only as a flagged fallback', () => {
-  assert.deepEqual(payroll.resolvePayrollBasicSalary({ salaryPackage: { basicSalary: 4000 } }, { baseSalary: 9999 }), { raw: 4000, source: 'PRIVATE_HR_PROFILE' });
-  assert.deepEqual(payroll.resolvePayrollBasicSalary({}, { baseSalary: 3000 }), { raw: 3000, source: 'LEGACY_USERS_BASE_SALARY' });
-  assert.deepEqual(payroll.resolvePayrollBasicSalary(null, null), { raw: null, source: 'NONE' });
+  assert.deepEqual(payroll.resolvePayrollBasicSalary({ salaryPackage: { basicSalary: 4000 } }, { baseSalary: 9999 }), { raw: 4000, source: 'PRIVATE_HR_PROFILE', overtimeEligible: true });
+  assert.deepEqual(payroll.resolvePayrollBasicSalary({}, { baseSalary: 3000 }), { raw: 3000, source: 'LEGACY_USERS_BASE_SALARY', overtimeEligible: true });
+  assert.deepEqual(payroll.resolvePayrollBasicSalary(null, null), { raw: null, source: 'NONE', overtimeEligible: true });
   for (const role of ['technician', 'hr_staff', 'finance_manager', 'dispatcher']) assert.ok(payroll.PAYROLL_ELIGIBLE_ROLES.includes(role), role);
   for (const role of ['admin', 'super_admin', 'ceo']) assert.ok(!payroll.PAYROLL_ELIGIBLE_ROLES.includes(role), role);
+});
+
+test('Nov 9 follow-up (from #1992): salary package overtimeEligible flag is carried with the salary', () => {
+  assert.equal(payroll.resolvePayrollBasicSalary({ salaryPackage: { basicSalary: 6000, overtimeEligible: false } }, {}).overtimeEligible, false);
+  assert.equal(payroll.resolvePayrollBasicSalary({ salaryPackage: { basicSalary: 6000 } }, {}).overtimeEligible, true);
+  assert.equal(payroll.resolvePayrollBasicSalary(null, { baseSalary: 5000 }).overtimeEligible, true);
 });

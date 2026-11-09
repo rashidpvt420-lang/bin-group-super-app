@@ -1,7 +1,7 @@
 // Clause 9F suspension after a returned 15% cheque + owner rent counted only when VERIFIED.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -16,7 +16,7 @@ async function load(entry, name) {
 const S = await load('functions/ownerServiceSuspension.ts', 'susp');
 const R = await load('src/owner/utils/ownerTenantLedgerResolver.ts', 'rent');
 const L = await load('functions/ownerPaymentLedger.ts', 'ledger');
-const read = (p) => fs.readFileSync(p, 'utf8');
+const read = (rel) => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
 const DAY = 86400000;
 const issued = Date.parse('2026-10-15T06:00:00Z');
 const notice = S.buildOwnerSuspensionNotice({ contractId: 'C1', ownerUid: 'o-1', paymentId: 'C1', invoiceIds: ['MOB-1', 'RCF-C1'], amountsAed: [1800, 500], issuedAtMs: issued, issuedBy: 'admin-b', bankReason: 'Insufficient funds' });

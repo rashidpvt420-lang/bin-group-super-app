@@ -129,10 +129,22 @@ function hasCompletionPhotoEvidence(data: Record<string, unknown>): boolean {
   return Boolean(single) || arrays.some((value) => Array.isArray(value) && value.length > 0);
 }
 
-async function loadActiveTicket(db: FirebaseFirestore.Firestore, uid: string) {
+/**
+ * Nov 9 follow-up (from #1993): an overtime claim may also auto-link a job the caller has accepted
+ * or is driving to (ACCEPTED / ON_THE_WAY / en_route), so its proof carries that job's evidence.
+ */
+const OVERTIME_LINKABLE_JOB_STATUSES = [
+  ...ACTIVE_JOB_STATUSES,
+  "accepted",
+  "ACCEPTED",
+  "en_route",
+  "ON_THE_WAY",
+];
+
+async function loadActiveTicket(db: FirebaseFirestore.Firestore, uid: string, statuses: readonly string[] = ACTIVE_JOB_STATUSES) {
   const snap = await db.collection("maintenanceTickets")
     .where("assignedTechnicianId", "==", uid)
-    .where("status", "in", ACTIVE_JOB_STATUSES)
+    .where("status", "in", [...statuses])
     .limit(1)
     .get();
   return snap.empty ? null : snap.docs[0];
@@ -559,7 +571,7 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
   let jobId = requestedJobId;
   let jobLinkSource: "CLIENT" | "SERVER_ACTIVE_ASSIGNMENT" | "NONE" = requestedJobId ? "CLIENT" : "NONE";
   if (!jobId) {
-    const activeTicket = await loadActiveTicket(db, uid);
+    const activeTicket = await loadActiveTicket(db, uid, OVERTIME_LINKABLE_JOB_STATUSES);
     if (activeTicket) {
       jobId = activeTicket.id;
       jobLinkSource = "SERVER_ACTIVE_ASSIGNMENT";

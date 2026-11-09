@@ -22,7 +22,7 @@ function roleOf(claims: Record<string, any>): string {
 
 // A generic admin/isAdmin boolean only counts when the account carries no explicit role. A staff
 // account with an explicit non-finance role (e.g. operations_admin) never gains finance authority
-// from a stray boolean claim.
+// from a stray boolean claim. Matches hasAdminClaimCycleFree() in firestore.rules (#1997).
 function claimsGrantRoleSet(claims: Record<string, any>, roles: ReadonlySet<string>): boolean {
   const role = roleOf(claims);
   if (roles.has(role)) return true;
