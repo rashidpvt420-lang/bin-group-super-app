@@ -88,7 +88,7 @@ test('P1-10: the users directory needs MFA and listing is limited to Admin, HR a
   assert.match(fn('canReadUserDirectoryCycleFree'), /hasAdminSecondFactor\(\)/);
   const list = fn('canListUserDirectoryCycleFree');
   assert.match(list, /hasAdminSecondFactor\(\)/);
-  for (const role of ['finance_admin', 'finance_staff', 'account_manager']) assert.doesNotMatch(list, new RegExp(`'${role}'`));
+  for (const role of ['finance_admin', 'finance_staff', 'account_manager']) assert.equal(list.includes(`'${role}'`), false, role);
   const users = rules.slice(rules.indexOf('match /users/{userId} {'), rules.indexOf('allow create:', rules.indexOf('match /users/{userId} {')));
   assert.match(users, /allow list: if isNotSuspended\(\) && \(\s*canListUserDirectoryCycleFree\(\)/);
   assert.match(read('scripts/write-production-firestore-rules.mjs'), /canListUserDirectoryCycleFree\(\) \|\|/);
