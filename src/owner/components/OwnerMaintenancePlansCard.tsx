@@ -96,7 +96,7 @@ export default function OwnerMaintenancePlansCard() {
               const label = STATUS[s.status] || [s.status, s.status];
               return (
                 <Box key={s.id} sx={{ border: '1px solid #cbd5e1', borderRadius: 2, p: 1.25 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={1}>
+                  <Stack direction={'row'} justifyContent="space-between" alignItems="center" spacing={1}>
                     <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{lang === 'ar' ? s.nameAr : s.nameEn}</Typography>
                     <Chip size="small" label={t(label[0], label[1])} color={s.status === 'ACTIVE' ? 'success' : s.status === 'PENDING_PAYMENT' ? 'warning' : 'default'} />
                   </Stack>
@@ -109,7 +109,7 @@ export default function OwnerMaintenancePlansCard() {
                     </Typography>
                   )}
                   {s.status === 'PENDING_PAYMENT' && (
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} sx={{ mt: 1 }}>
+                    <Stack direction={'row'} spacing={1} sx={{ mt: 1 }}>
                       <Typography variant="body2" sx={{ color: '#334155', flex: 1 }}>{t(`Invoice ${s.invoiceId}: pay by cash or cheque. Card payments are not available.`, `الفاتورة ${s.invoiceId}: الدفع نقداً أو بشيك. الدفع بالبطاقة غير متاح.`)}</Typography>
                       <Button size="small" variant="outlined" disabled={busy} onClick={() => cancel(s.id)}>{t('Cancel request', 'إلغاء الطلب')}</Button>
                     </Stack>

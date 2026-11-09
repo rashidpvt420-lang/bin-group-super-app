@@ -94,7 +94,7 @@ export default function OwnerTicketsPage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
+            <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         {tx('owner.tickets.propOps', 'PROPERTY OPERATIONS')}
@@ -138,7 +138,7 @@ export default function OwnerTicketsPage() {
                                 '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-2px)' }
                             }}
                         >
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start">
+                            <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start">
                                 <Box sx={{ flex: 1, minWidth: 0, mr: isRTL ? 0 : 2, ml: isRTL ? 2 : 0, textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                                         {ticket.description || tx('owner.tickets.noDesc', 'No Description')}

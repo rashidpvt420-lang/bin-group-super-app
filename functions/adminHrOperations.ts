@@ -4,8 +4,8 @@ import { settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
-import { applyApprovedLeaveDeduction } from "./hrAutomation";
-import { inclusiveDays } from "./hrLeaveEngine";
+import { annualBalanceBeforeApproval, applyApprovedLeaveDeduction } from "./hrAutomation";
+import { annualLeaveOverrideCheck, inclusiveDays, LEAVE_OVERRIDE_MIN_CHARS } from "./hrLeaveEngine";
 import { mergeOfficialAttendance, shiftDocId, type PayableShiftRow } from "./attendanceShiftView";
 import { dubaiPayrollDateKey } from "./technicianPayableShift";
 
@@ -296,9 +296,26 @@ export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe
     throw new HttpsError("failed-precondition", "This record is not a leave request. Nothing was approved and the balance was not changed.");
   }
   const status = decision === "APPROVED" ? "approved" : decision === "REJECTED" ? "rejected" : "cancelled";
+  // Nov 9 audit (P2-23): no silent approval beyond the annual balance.
+  let override: { required: boolean; reason: string | null; balance: number | null; days: number } = { required: false, reason: null, balance: null, days: 0 };
+  if (decision === "APPROVED") {
+    const balance = await annualBalanceBeforeApproval(requestId, data);
+    const check = annualLeaveOverrideCheck({ leaveType: balance.leaveType, days: balance.days, balance: balance.balance, overrideReason: request.data?.overrideReason });
+    if (!check.ok) {
+      throw new HttpsError(
+        "failed-precondition",
+        balance.balance === null
+          ? `Annual leave balance cannot be checked (join date missing). Give an override reason of at least ${LEAVE_OVERRIDE_MIN_CHARS} characters to approve.`
+          : `This request is ${balance.days} day(s) but the annual balance is ${balance.balance}. Give an override reason of at least ${LEAVE_OVERRIDE_MIN_CHARS} characters to approve.`,
+        { code: "LEAVE_OVERRIDE_REASON_REQUIRED", days: balance.days, balance: balance.balance },
+      );
+    }
+    override = { required: check.required, reason: check.reason, balance: balance.balance, days: balance.days };
+  }
   const now = FieldValue.serverTimestamp();
   await ref.set({
     status,
+    ...(override.required ? { balanceOverride: { reason: override.reason, balanceBefore: override.balance, days: override.days, by: actorId, at: now } } : {}),
     reviewNote: clean(request.data?.reviewNote) || null,
     reviewedBy: actorId,
     reviewedAt: now,
@@ -307,7 +324,11 @@ export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe
   if (decision === "APPROVED") await applyApprovedLeaveDeduction(requestId);
   await db.collection("audit_logs").add({
     actorId, actorRole, action: "ADMIN_REVIEW_STAFF_LEAVE", targetType: AUTHORITATIVE_LEAVE_COLLECTION, targetId: requestId,
-    metadata: { decision, status, uid: data.uid || data.userId || data.technicianId || null }, createdAt: now,
+    metadata: {
+      decision, status, uid: data.uid || data.userId || data.technicianId || null,
+      ...(override.required ? { balanceOverride: true, overrideReason: override.reason, balanceBefore: override.balance, days: override.days } : {}),
+    },
+    createdAt: now,
   });
   return { success: true, requestId, decision, authoritativeCollection: AUTHORITATIVE_LEAVE_COLLECTION };
 });

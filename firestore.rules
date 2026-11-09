@@ -51,11 +51,11 @@ service cloud.firestore {
       );
     }
 
-    function canReadUserDirectoryCycleFree() {
-      return signedIn() && (
-        hasAdminClaimCycleFree() || (
-          signedIn() &&
-          claimedRole() in [
+    // Nov 9 audit (P1-10): the staff/user directory exposes PII, so every reader
+    // needs a second-factor session, and directory-role staff (not full admins)
+    // may only list in bounded pages.
+    function isUserDirectoryStaffRoleCycleFree() {
+      return signedIn() && claimedRole() in [
             'hr_admin',
             'hr_manager',
             'hr_staff',
@@ -65,7 +65,21 @@ service cloud.firestore {
             'operations_admin',
             'operations_manager',
             'dispatcher'
-          ]
+          ];
+    }
+
+    function canReadUserDirectoryCycleFree() {
+      return signedIn() && hasAdminSecondFactor() && (
+        hasAdminClaimCycleFree() || isUserDirectoryStaffRoleCycleFree()
+      );
+    }
+
+    function canListUserDirectoryCycleFree() {
+      return signedIn() && hasAdminSecondFactor() && (
+        hasAdminClaimCycleFree() || (
+          isUserDirectoryStaffRoleCycleFree() &&
+          request.query.limit != null &&
+          request.query.limit <= 500
         )
       );
     }
@@ -1193,7 +1207,7 @@ service cloud.firestore {
                     )
                   );
       allow list: if isNotSuspended() && (
-                    canReadUserDirectoryCycleFree() ||
+                    canListUserDirectoryCycleFree() ||
                     (signedIn() &&
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)

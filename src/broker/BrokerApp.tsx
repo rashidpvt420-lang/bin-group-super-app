@@ -57,8 +57,8 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
     <Box sx={{ '--bin-adaptive-text': '#111827', '--bin-adaptive-text-muted': '#4B5563', minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
       <BrandWatermark opacity={0.035} compact />
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
-        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: 'row', gap: 1 }}>
+          <Stack direction={'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
             {!isBrokerHome && <Button type="button" data-testid="broker-header-back" aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/broker/dashboard'))} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: '#111827', border: '1px solid #B8932F', borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF', flexShrink: 0, textTransform: 'none' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
             <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#7A5C12', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
               <SafeIcon icon={Briefcase} size={20} />
@@ -69,7 +69,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             </Box>
           </Stack>
           {isPhoneHeader ? (
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+          <Stack direction={'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
             <NotificationBell />
             <PortalHeaderMenu role="broker" items={[
               { key: 'referrals', label: label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط'), onClick: () => navigate('/broker/referrals'), icon: Paintbrush },
@@ -77,7 +77,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             ]} />
           </Stack>
           ) : (
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          <Stack direction={'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
             <IconButton onClick={() => navigate('/broker/referrals')} sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }} title={label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط')}>
               <SafeIcon icon={Paintbrush} size={18} />
             </IconButton>
@@ -92,7 +92,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       </AppBar>
       <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>
         <PortalConnectionStrip />
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
+        <Stack direction={'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (

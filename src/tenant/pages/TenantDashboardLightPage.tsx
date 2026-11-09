@@ -206,7 +206,7 @@ export default function TenantDashboardLightPage() {
     <Box sx={{ pb: 7, direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden' }}>
       <Stack spacing={4} sx={{ minWidth: 0 }}>
         <Stack
-          direction={isRTL ? 'row-reverse' : 'row'}
+          direction={'row'}
           justifyContent="space-between"
           alignItems="center"
           spacing={2}
@@ -277,7 +277,7 @@ export default function TenantDashboardLightPage() {
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6, ...readableTextSx }}>
                       {action.description}
                     </Typography>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.7} alignItems="center" sx={{ color: accent, pt: 0.5 }}>
+                    <Stack direction={'row'} spacing={0.7} alignItems="center" sx={{ color: accent, pt: 0.5 }}>
                       <Typography variant="caption" sx={{ fontWeight: 950 }}>{tx('common.open', 'Open')}</Typography>
                       <ArrowRight size={15} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                     </Stack>
@@ -326,7 +326,7 @@ export default function TenantDashboardLightPage() {
                       <Box sx={{ color: binThemeTokens.goldText }}>{service.icon}</Box>
                       <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{service.title}</Typography>
                       <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.55, ...readableTextSx }}>{service.description}</Typography>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.7} alignItems="center" sx={{ color: binThemeTokens.goldText, pt: 0.5 }}>
+                      <Stack direction={'row'} spacing={0.7} alignItems="center" sx={{ color: binThemeTokens.goldText, pt: 0.5 }}>
                         <CalendarDays size={15} />
                         <Typography variant="caption" sx={{ fontWeight: 950 }}>{tx('tenant.services.schedule', 'Schedule')}</Typography>
                       </Stack>
@@ -374,7 +374,7 @@ export default function TenantDashboardLightPage() {
         <Grid container spacing={3}>
           <Grid item xs={12} lg={8} sx={{ minWidth: 0 }}>
             <Paper sx={{ ...surfaceSx, p: { xs: 2.5, md: 3.5 } }}>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 2.5, minWidth: 0 }}>
+              <Stack direction={'row'} justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 2.5, minWidth: 0 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                   <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>
                     {tx('dash.active_tickets', 'Active Tickets')}
@@ -390,7 +390,7 @@ export default function TenantDashboardLightPage() {
                 <Stack spacing={1.5}>
                   {activeTickets.map((ticket) => (
                     <Box key={ticket.id} sx={{ ...innerCardSx, p: 2.25, minWidth: 0 }}>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ minWidth: 0 }}>
+                      <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ minWidth: 0 }}>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                           <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>
                             {ticket.serviceLabel || ticket.description || ticket.category || tx('dash.maintenanceRequest', 'Maintenance request')}

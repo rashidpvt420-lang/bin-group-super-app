@@ -24,7 +24,7 @@ import {
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const text = (value: unknown) => String(value ?? "").trim();
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin", "finance_manager", "finance_controller"]);
+const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 
 function isAdminToken(token: Record<string, any>): boolean {
   const role = text(token.role || token.userRole || token.primaryRole).toLowerCase();

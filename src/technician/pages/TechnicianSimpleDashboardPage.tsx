@@ -51,7 +51,7 @@ export default function TechnicianSimpleDashboardPage() {
           <UiCard testId="technician-next-job" highlight isRTL={isRTL} label={`${t('tech.home.nextJob', 'Your next job', 'مهمتك التالية')}${timeLabel(next) ? ` · ${timeLabel(next)}` : ''}`} title={`${jobTitle(next)}${jobPlace(next) ? ` — ${jobPlace(next)}` : ''}`}>
             <Typography sx={{ ...uiType.body, color: ui.muted, mt: 0.5 }}>{jobAddress(next) || t('tech.home.noAddress', 'Address not added yet — call the resident.', 'لا يوجد عنوان بعد — اتصل بالساكن.')}</Typography>
             <Box sx={{ mt: 1 }}>{statusChip(next)}</Box>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} sx={{ mt: 2 }}>
+            <Stack direction={'row'} spacing={1.25} sx={{ mt: 2 }}>
               <UiButton tone="dark" disabled={!nextNav} href={nextNav || undefined} target="_blank" rel="noopener noreferrer" data-testid="technician-next-job-navigate">{t('tech.home.navigate', 'Navigate', 'الاتجاهات')}</UiButton>
               <UiButton tone="primary" onClick={() => openJob(next)} data-testid="technician-next-job-open">{needsAccept(next) ? t('tech.home.accept', 'Accept job', 'قبول المهمة') : t('tech.home.start', 'Start job', 'ابدأ المهمة')}</UiButton>
             </Stack>

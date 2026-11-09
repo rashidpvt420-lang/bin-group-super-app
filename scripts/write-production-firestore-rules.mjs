@@ -218,7 +218,7 @@ replaceRuleBlock('    match /users/{userId} {', `    match /users/{userId} {
                     )
                   );
       allow list: if isNotSuspended() && (
-                    canReadUserDirectoryCycleFree() ||
+                    canListUserDirectoryCycleFree() ||
                     (signedIn() &&
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)

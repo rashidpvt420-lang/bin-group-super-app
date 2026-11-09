@@ -9,11 +9,12 @@ const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_adm
 const text = (value: unknown) => String(value || "").trim();
 
 /**
- * Payment approve / reject and cheque-clearance authority (audit D-01, Nov 2026): Admin-tier finance
- * roles plus the dedicated finance tiers. operations_admin, manager, HR and every other staff role are
- * refused on the server. MFA and dual control (recorder != approver) still apply on top of this.
+ * Payment approve / reject and cheque-clearance authority (audit D-01, Nov 2026): finance_admin and the
+ * Admin-tier finance roles only. operations_admin, manager, HR, payroll and every other staff role are
+ * refused on the server. finance_manager / finance_controller stay painting-only (#1994, P1-8). MFA and
+ * dual control (recorder != approver) still apply on top of this.
  */
-export const PAYMENT_DECISION_ROLES: ReadonlySet<string> = new Set([...FINANCE_ADMIN_ROLES, "finance_manager", "finance_controller"]);
+export const PAYMENT_DECISION_ROLES: ReadonlySet<string> = new Set([...FINANCE_ADMIN_ROLES]);
 
 function roleOf(claims: Record<string, any>): string {
   return text(claims.role || claims.userRole || claims.primaryRole).toLowerCase();

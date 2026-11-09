@@ -25,6 +25,8 @@ const STAFF_ROLES = [
     { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and reporting' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
+    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -33,10 +35,7 @@ const STAFF_ROLES = [
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and live dispatch' },
     { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
     { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
-    // Finance tiers: the server accepts these only from a Super Admin / CEO with MFA (audit D-04).
-    { value: 'finance_manager', label: 'Finance Manager', description: 'Payment decisions (Super Admin / CEO assigns)' },
-    { value: 'finance_controller', label: 'Finance Controller', description: 'Payment decisions (Super Admin / CEO assigns)' },
-    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports (Super Admin / CEO assigns)' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports. Super Admin / CEO assigns.' },
 ] as const;
 
 const MODULE_ACCESS = [
@@ -71,8 +70,8 @@ const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
-    finance_manager: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
-    finance_controller: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    finance_manager: [],
+    finance_controller: [],
     payroll_admin: ['dashboard', 'hr', 'financials', 'reports'],
 };
 
@@ -90,8 +89,8 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     operations_manager: ['dashboard', 'tickets', 'technicians', 'reports'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
-    finance_manager: ['dashboard', 'financials', 'transactions', 'reports'],
-    finance_controller: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_manager: [],
+    finance_controller: [],
     payroll_admin: ['dashboard', 'hr', 'reports'],
 };
 
@@ -391,6 +390,8 @@ export default function StaffAccessPage() {
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>SERVER-ENFORCED MODULE SCOPE</Typography>
                                 {formData.role === 'technician' ? (
                                     <Alert severity="info" sx={{ mt: 2 }}>Technicians use the Technician portal and receive no Admin-panel modules.</Alert>
+                                ) : (formData.role === 'finance_manager' || formData.role === 'finance_controller') ? (
+                                    <Alert severity="info" data-testid="painting-finance-role-note" sx={{ mt: 2 }}>Opens only the Painting payments page and their own HR page. Every approval needs MFA, and they can never approve an invoice they issued. — يفتح صفحة دفعات الدهان وصفحة الموارد البشرية الخاصة به فقط. كل موافقة تتطلب التحقق الثنائي، ولا يمكنه أبداً اعتماد فاتورة أصدرها.</Alert>
                                 ) : (
                                     <>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>Only modules allowed for this role are shown. The backend rejects any out-of-scope module.</Typography>

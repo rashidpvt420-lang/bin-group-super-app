@@ -26,6 +26,8 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and duty command' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
+    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -33,9 +35,7 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts and documents' },
     { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
     { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
-    { value: 'finance_manager', label: 'Finance Manager', description: 'Payment decisions (Super Admin / CEO assigns)' },
-    { value: 'finance_controller', label: 'Finance Controller', description: 'Payment decisions (Super Admin / CEO assigns)' },
-    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports (Super Admin / CEO assigns)' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Payroll and HR finance reports. Super Admin / CEO assigns.' },
 ] as const;
 
 export const PROVISIONABLE_STAFF_ROLES = PROVISIONABLE_STAFF_ROLE_OPTIONS.map((role) => role.value);
@@ -80,8 +80,8 @@ export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     manager: ['dashboard', 'reports'],
     admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
-    finance_manager: ['dashboard', 'financials', 'transactions', 'reports'],
-    finance_controller: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_manager: [],
+    finance_controller: [],
     payroll_admin: ['dashboard', 'hr', 'reports'],
 };
 

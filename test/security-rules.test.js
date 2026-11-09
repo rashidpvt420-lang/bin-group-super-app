@@ -18,6 +18,7 @@ import './issued-documents-rules.test.js';
 import './user-suggestions-rules.test.js';
 import './payment-collection-rules.test.js';
 import './owner-dashboard-own-data-rules.test.js';
+import './user-directory-mfa-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -1558,8 +1559,13 @@ describe('Firestore Security Rules', () => {
     const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
     const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
 
-    await assertSucceeds(getDoc(doc(opsDb, 'users/user_a')));
-    await assertSucceeds(getDoc(doc(financeDb, 'users/user_a')));
+    // Nov 9 audit P1-10: directory reads by staff roles need a second factor.
+    await assertFails(getDoc(doc(opsDb, 'users/user_a')));
+    await assertFails(getDoc(doc(financeDb, 'users/user_a')));
+    const opsMfaDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager', firebase: { sign_in_second_factor: 'phone' } }).firestore();
+    const financeMfaDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin', firebase: { sign_in_second_factor: 'phone' } }).firestore();
+    await assertSucceeds(getDoc(doc(opsMfaDb, 'users/user_a')));
+    await assertSucceeds(getDoc(doc(financeMfaDb, 'users/user_a')));
 
     for (const database of [selfDb, otherDb, adminDb, hrDb, opsDb, financeDb]) {
       await assertFails(getDoc(doc(database, 'users/user_a/fcmTokens/token_seeded')));

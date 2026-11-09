@@ -331,7 +331,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
 
   return (
     <Paper sx={{ p: { xs: 2.5, md: 4 }, mt: 4, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" gap={2} alignItems="flex-start" flexWrap="wrap">
+      <Stack direction={'row'} justifyContent="space-between" gap={2} alignItems="flex-start" flexWrap="wrap">
         <Box>
           <Typography variant="h5" fontWeight={950} color="#FFF">{label("What's inside this property?", 'ما الموجود داخل هذا العقار؟')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 760 }}>
@@ -347,7 +347,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
       <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mb={1}>{label('1. Floor plan — optional', '1. مخطط الطابق — اختياري')}</Typography>
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
         <Button component="label" variant="outlined" startIcon={floorPlanUploading ? <CircularProgress size={16} /> : <Upload size={17} />} disabled={floorPlanUploading || floorPlanAnalyzing} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>
           {property.floorPlan?.status === 'uploaded' ? label('Replace floor plan', 'استبدال مخطط الطابق') : label('Upload floor plan', 'رفع مخطط الطابق')}
           <input hidden type="file" accept="image/*,.pdf" onChange={uploadFloorPlan} />
@@ -360,7 +360,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
 
       {floorPlanAnalysis && <Paper sx={{ mt: 2, p: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
         <Typography variant="subtitle2" fontWeight={900} color="#FFF">{label('AI found these floor-plan details — review before applying', 'وجد الذكاء الاصطناعي تفاصيل المخطط التالية — راجعها قبل التطبيق')}</Typography>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+        <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
           {Number(floorPlanAnalysis.floorsDetected) > 0 && <Chip label={`${label('Floors detected', 'الطوابق المكتشفة')}: ${floorPlanAnalysis.floorsDetected}`} />}
           {Number(floorPlanAnalysis.measuredAreaSqft) > 0 && <Chip label={`${label('Area detected', 'المساحة المكتشفة')}: ${Math.round(Number(floorPlanAnalysis.measuredAreaSqft)).toLocaleString()} ft²`} />}
           {(Array.isArray(floorPlanAnalysis.totals) ? floorPlanAnalysis.totals : []).map((item: any, index: number) => <Chip key={`${item?.type || 'space'}-${index}`} label={`${item?.label || item?.type || label('Space', 'مساحة')} × ${item?.count || 0}`} />)}
@@ -380,7 +380,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
           return (
             <Grid item xs={12} sm={6} md={4} key={space.id}>
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, bgcolor: count > 0 ? alpha(binThemeTokens.gold, 0.07) : 'rgba(255,255,255,0.02)', borderColor: count > 0 ? alpha(binThemeTokens.gold, 0.35) : 'rgba(255,255,255,0.08)' }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" spacing={1}>
+                <Stack direction={'row'} alignItems="center" justifyContent="space-between" spacing={1}>
                   <Typography variant="body2" fontWeight={800} color="#FFF">{ar ? space.ar : space.en}</Typography>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
                     <IconButton size="small" onClick={() => setCount(space.id, count - 1)} disabled={!count}><Minus size={16} /></IconButton>
@@ -394,17 +394,17 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
         })}
       </Grid>
 
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1} sx={{ mt: 2 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
         <TextField fullWidth size="small" label={label('Another space not listed', 'مساحة أخرى غير موجودة في القائمة')} value={customSpace} onChange={(event) => setCustomSpace(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustomSpace(); } }} />
         <Button variant="outlined" onClick={addCustomSpace} startIcon={<Plus size={16} />} sx={{ minWidth: 180 }}>{label('Add another space', 'إضافة مساحة أخرى')}</Button>
       </Stack>
 
-      {!!inventory.filter((item) => item.type.startsWith('custom_')).length && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+      {!!inventory.filter((item) => item.type.startsWith('custom_')).length && <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
         {inventory.filter((item) => item.type.startsWith('custom_')).map((item) => <Chip key={item.id} label={`${ar ? item.labelAr : item.labelEn} × ${item.count}`} onDelete={() => updateInventory(inventory.filter((candidate) => candidate.id !== item.id))} deleteIcon={<X size={15} />} />)}
       </Stack>}
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mt={4} mb={1}>{label('3. Automatic property calculations', '3. حسابات العقار التلقائية')}</Typography>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+      <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap>
         <Chip label={`${label('Declared spaces', 'المساحات المصرح بها')}: ${intelligence.totalDeclaredSpaces}`} />
         <Chip label={`${label('Rooms', 'الغرف')}: ${intelligence.totalRoomSpaces}`} />
         <Chip label={`${label('Wet areas', 'المناطق الرطبة')}: ${intelligence.totalWetAreas}`} />
@@ -419,7 +419,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mt={4} mb={1}>{label('4. Describe the property with BIN AI', '4. وصف العقار بمساعدة BIN AI')}</Typography>
       <TextField fullWidth multiline minRows={3} value={descriptionDraft} onChange={(event) => setDescriptionDraft(event.target.value)} placeholder={label('Example: Two-floor Government Majlis with three halls, seven guest rooms, two offices, one kitchen and five bathrooms...', 'مثال: مجلس حكومي من طابقين يضم ثلاث قاعات وسبع غرف ضيوف ومكتبين ومطبخاً وخمسة حمامات...')} />
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
         <Button variant="contained" disabled={!descriptionDraft.trim() || aiBusy} onClick={() => askAi(descriptionDraft, 'description')} startIcon={aiBusy ? <CircularProgress size={16} /> : <Sparkles size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{label('Improve wording with AI', 'تحسين الصياغة بالذكاء الاصطناعي')}</Button>
         <Button variant="outlined" disabled={!descriptionDraft.trim() || descriptionAnalyzing} onClick={analyseDescription} startIcon={descriptionAnalyzing ? <CircularProgress size={16} /> : <ListPlus size={17} />}>{label('Find rooms & spaces with AI', 'استخراج الغرف والمساحات بالذكاء الاصطناعي')}</Button>
         <Button variant="outlined" onClick={() => onChange({ ownerPropertyDescription: descriptionDraft, propertyDescriptionSource: 'owner' })}>{label('Save my description', 'حفظ وصفي')}</Button>
@@ -432,7 +432,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
 
       {descriptionAnalysis && <Paper sx={{ mt: 2, p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.09)' }}>
         <Typography variant="subtitle2" fontWeight={900} color="#FFF">{label('AI extracted these explicit facts — confirm before adding', 'استخرج الذكاء الاصطناعي هذه البيانات الصريحة — أكد قبل الإضافة')}</Typography>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+        <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
           {Number(descriptionAnalysis.floorsMentioned) > 0 && <Chip label={`${label('Floors mentioned', 'الطوابق المذكورة')}: ${descriptionAnalysis.floorsMentioned}`} />}
           {(Array.isArray(descriptionAnalysis.totals) ? descriptionAnalysis.totals : []).map((item: any, index: number) => <Chip key={`description-${item?.type || 'space'}-${index}`} label={`${item?.label || item?.type || label('Space', 'مساحة')} × ${item?.count || 0}`} />)}
         </Stack>
@@ -445,7 +445,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
       </Paper>}
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mt={4} mb={1}>{label('5. Ask BIN AI anything about this step', '5. اسأل BIN AI أي شيء عن هذه الخطوة')}</Typography>
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <TextField fullWidth value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder={label('What am I missing? What does measured service area mean? Which rooms should I add?', 'ما الذي ينقصني؟ ما معنى مساحة الخدمة المقاسة؟ ما الغرف التي يجب إضافتها؟')} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAi(aiQuestion, 'question'); } }} />
         <Button variant="outlined" disabled={!aiQuestion.trim() || aiBusy} onClick={() => askAi(aiQuestion, 'question')} startIcon={<Bot size={17} />} sx={{ minWidth: 150 }}>{label('Ask BIN AI', 'اسأل BIN AI')}</Button>
       </Stack>

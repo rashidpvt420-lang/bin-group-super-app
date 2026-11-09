@@ -261,7 +261,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
           <Stack direction="row" spacing={2} alignItems="center"><WalletCards color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy(`AED ${formatAED(activationDeposit)} is a pre-visit 15% estimate; the payable amount is locked only after final verification`, `مبلغ ${formatAED(activationDeposit)} درهم هو تقدير 15٪ قبل الزيارة؛ يتم تثبيت المبلغ المستحق فقط بعد التحقق النهائي`)}</Typography></Stack>
           {readyDocuments.map((document) => <Typography key={document.key} variant="caption" color={uploadProgress[document.key] === 100 ? '#4ADE80' : 'rgba(255,255,255,0.58)'}>{uploadProgress[document.key] === 100 ? '✓' : '•'} {copy(document.en, document.ar)} {uploadProgress[document.key] ? `· ${uploadProgress[document.key]}%` : ''}</Typography>)}
         </Stack>
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 5 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 5 }}>
           <Button variant="outlined" fullWidth onClick={onBack} disabled={loading} sx={{ py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
           <Button variant="contained" fullWidth onClick={() => void submit()} disabled={loading} sx={{ py: 1.5, borderRadius: 100, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} color="inherit" /> : copy('Submit All 5 Pages', 'إرسال الصفحات الخمس')}</Button>
         </Stack>

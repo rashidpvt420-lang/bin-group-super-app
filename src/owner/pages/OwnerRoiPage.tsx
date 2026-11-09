@@ -57,7 +57,7 @@ export default function OwnerRoiPage() {
     tooltip: string;
   }) => (
     <Paper sx={{ p: 3, bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6, height: '100%' }}>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+      <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1.5 }}>{label}</Typography>
         <Tooltip title={tooltip}>
           <Info size={15} color={binThemeTokens.textSecondary} />
@@ -84,7 +84,7 @@ export default function OwnerRoiPage() {
 
   return (
     <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Box sx={{ mb: 5, display: 'flex', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, justifyContent: 'space-between', gap: 2, alignItems: { md: 'flex-end' } }}>
+      <Box sx={{ mb: 5, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', gap: 2, alignItems: { md: 'flex-end' } }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 3 }}>
             {tx('owner.roi.overline', 'PORTFOLIO PERFORMANCE')}
@@ -96,7 +96,7 @@ export default function OwnerRoiPage() {
             {tx('owner.roi.subtitle', 'Yield is shown only when a recorded property-value basis exists. Collection performance is kept separate from investment return.')}
           </Typography>
         </Box>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Stack direction={'row'} spacing={1.5} flexWrap="wrap" useFlexGap>
           <Chip icon={<Calendar size={16} />} label={tx('owner.roi.period', 'All recorded financials')} variant="outlined" />
           <Button
             variant="contained"
@@ -185,7 +185,7 @@ export default function OwnerRoiPage() {
                   <Paper key={passport.id} sx={{ p: 3, bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 5 }}>
                     <Grid container spacing={3} alignItems="center">
                       <Grid item xs={12} md={4}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                        <Stack direction={'row'} spacing={2} alignItems="center">
                           <Box sx={{ width: 46, height: 46, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'grid', placeItems: 'center', color: binThemeTokens.goldText }}>
                             <Building2 size={22} />
                           </Box>
@@ -198,7 +198,7 @@ export default function OwnerRoiPage() {
                         </Stack>
                       </Grid>
                       <Grid item xs={12} md={5}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Stack direction={'row'} justifyContent="space-between" sx={{ mb: 1 }}>
                           <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{tx('owner.roi.collection_rate', 'COLLECTION RATE')}</Typography>
                           <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>{rate.toFixed(1)}%</Typography>
                         </Stack>
@@ -218,7 +218,7 @@ export default function OwnerRoiPage() {
       )}
 
       <Paper sx={{ p: 4, mt: 5, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 5 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start">
+        <Stack direction={'row'} spacing={1.5} alignItems="flex-start">
           <Shield size={18} color={binThemeTokens.goldHover} />
           <Box sx={{ flex: 1 }}>
             <Typography fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>

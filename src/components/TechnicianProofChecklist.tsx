@@ -58,7 +58,7 @@ export default function TechnicianProofChecklist(props: TechnicianProofChecklist
   return (
     <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
           <Box>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{ar ? 'إثبات العمل الميداني' : 'FIELD EVIDENCE'}</Typography>
             <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950 }}>{ar ? 'متطلبات إثبات إغلاق المهمة' : hasLiveProofData ? 'Technician proof checklist' : 'Required job evidence'}</Typography>
@@ -75,7 +75,7 @@ export default function TechnicianProofChecklist(props: TechnicianProofChecklist
         <Stack spacing={1.25}>
           {/* Informational rows on the white shell — not buttons. Dark navy rows read as disabled controls. */}
           {proofItems.map((item) => (
-            <Stack key={item.id} data-testid={`proof-item-${item.id}`} direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ px: 1.5, py: 1.1, bgcolor: item.complete ? alpha('#10b981', 0.08) : '#F8FAFC', border: `1px solid ${item.complete ? alpha('#10b981', 0.35) : '#E5E7EB'}`, borderRadius: 2 }}>
+            <Stack key={item.id} data-testid={`proof-item-${item.id}`} direction={'row'} spacing={1.5} alignItems="center" sx={{ px: 1.5, py: 1.1, bgcolor: item.complete ? alpha('#10b981', 0.08) : '#F8FAFC', border: `1px solid ${item.complete ? alpha('#10b981', 0.35) : '#E5E7EB'}`, borderRadius: 2 }}>
               <Box sx={{ color: item.complete ? '#047857' : '#64748B', display: 'flex' }}>{item.complete ? <CheckCircle2 size={18} /> : item.icon}</Box>
               <Typography sx={{ color: item.complete ? '#065F46' : '#1F2937', fontWeight: 700 }}>{item.label}</Typography>
               {hasLiveProofData && (
@@ -87,7 +87,7 @@ export default function TechnicianProofChecklist(props: TechnicianProofChecklist
           ))}
         </Stack>
         {!hasLiveProofData && (
-          <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
             <Typography variant="body2" sx={{ color: '#475569', flex: 1 }}>
               {ar ? 'تُسجَّل هذه الإثباتات داخل كل مهمة مُسندة.' : 'You capture this evidence inside each assigned job.'}
             </Typography>
@@ -97,7 +97,7 @@ export default function TechnicianProofChecklist(props: TechnicianProofChecklist
           </Stack>
         )}
         {reworkFlag && (
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center" sx={{ p: 1.5, bgcolor: alpha('#ef4444', 0.12), border: `1px solid ${alpha('#ef4444', 0.35)}`, borderRadius: 3 }}>
+          <Stack direction={'row'} spacing={1.25} alignItems="center" sx={{ p: 1.5, bgcolor: alpha('#ef4444', 0.12), border: `1px solid ${alpha('#ef4444', 0.35)}`, borderRadius: 3 }}>
             <RotateCcw size={18} color="#B91C1C" />
             <Typography sx={{ color: '#B91C1C', fontWeight: 950 }}>{ar ? 'مخاطر إعادة العمل نشطة. يوصى بمراجعة المشرف قبل الإغلاق.' : 'Rework risk is active. Supervisor review recommended before closure.'}</Typography>
           </Stack>

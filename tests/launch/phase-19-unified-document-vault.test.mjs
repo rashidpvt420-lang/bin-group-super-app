@@ -77,8 +77,10 @@ test('Phase 19 root Owner Tenant and Technician surfaces consume the unified vau
     assert.ok(page.includes('documents.length === 0'));
     assert.ok(page.includes('severity="error"'));
   }
-  assert.ok(technician.includes('Technician Document Vault'));
-  assert.ok(technician.includes('assigned-job record IDs'));
+  // Nov 9 audit (P2-13): the staff page uses plain, translated wording for the same vault.
+  assert.ok(technician.includes('<UnifiedDocumentVault'));
+  assert.ok(technician.includes("ht('My documents')"));
+  assert.ok(technician.includes("ht('Your work photos and the HR documents you are allowed to see.')"));
 });
 
 test('Phase 19 Admin vault is live and role-authorized rather than hardcoded sample data', async () => {

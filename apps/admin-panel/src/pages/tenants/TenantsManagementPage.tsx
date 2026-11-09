@@ -77,7 +77,7 @@ export default function TenantsManagementPage() {
   const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => subscribeTenantLookups({
-    owners: (next, fail) => onSnapshot(query(collection(db, 'users'), where('role', 'in', ['owner', 'OWNER'])), next, fail),
+    owners: (next, fail) => onSnapshot(query(collection(db, 'users'), where('role', 'in', ['owner', 'OWNER']), limit(500)), next, fail),
     properties: (next, fail) => onSnapshot(query(collection(db, 'properties')), next, fail),
   }, {
     onOwners: (rows) => setOwners(rows),
@@ -145,7 +145,7 @@ export default function TenantsManagementPage() {
     if (!existingTenantSearch.includes('@')) return;
     setSearchLoading(true);
     try {
-        const q = query(collection(db, 'users'), where('email', '==', existingTenantSearch.toLowerCase().trim()));
+        const q = query(collection(db, 'users'), where('email', '==', existingTenantSearch.toLowerCase().trim()), limit(5));
         const snap = await getDocs(q);
         if (!snap.empty) {
             const found = { uid: snap.docs[0].id, ...snap.docs[0].data() };

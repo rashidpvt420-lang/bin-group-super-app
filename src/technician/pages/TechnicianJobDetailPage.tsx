@@ -232,11 +232,9 @@ export default function TechnicianJobDetailPage() {
         };
     }, []);
 
-    useEffect(() => {
-        return () => {
-            if (user?.uid) stopLiveTracking(user.uid).catch(() => undefined);
-        };
-    }, [user?.uid]);
+    // Nov 9 audit (P1-6): no stop-on-unmount here. Live GPS is owned by
+    // TechnicianLiveTrackingOwner in TechnicianApp so leaving this page while
+    // EN_ROUTE does not silently kill the owner/tenant tracking feed.
 
     // A Technician may refresh/reopen the mission after already going EN_ROUTE.
     // Resume the live feed from authoritative ticket state instead of requiring another
@@ -667,11 +665,12 @@ export default function TechnicianJobDetailPage() {
                         <Paper sx={{ p: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
                             <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.location', 'Location')}</Typography>
                             {serviceLocationDetail && <Paper sx={{ mt: 2, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 2 }}><Typography variant="caption" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>SERVICE POINT</Typography><Typography color={JOB_READABLE.ink} fontWeight={900}>{serviceLocationDetail}</Typography></Paper>}
-                            {resolved.hasExactCoordinates ? (
+                            {resolved.hasExactCoordinates ? (<>
                                 <Button fullWidth variant="contained" startIcon={<Navigation />} onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>
                                     {tx('tech.job.navigate', 'Navigate to Tenant Property')}
                                 </Button>
-                            ) : <Alert severity="warning" sx={{ mt: 2 }}>{tx('tech.job.gps_missing', 'Exact GPS pin missing. Use address and contact resident/admin.')}</Alert>}
+                                {isTracking && <Alert severity="info" data-testid="maps-gps-pause-warning" sx={{ mt: 1 }}>{tx('tech.job.navigate_gps_pause', 'On a phone browser, live GPS pauses while Google Maps is in front. Come back to this app when you arrive so your arrival can be checked.')}</Alert>}
+                            </>) : <Alert severity="warning" sx={{ mt: 2 }}>{tx('tech.job.gps_missing', 'Exact GPS pin missing. Use address and contact resident/admin.')}</Alert>}
                             <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>{ticket.address || ticket.propertyLocation?.address || 'No address'}</Typography>
                         </Paper>
 

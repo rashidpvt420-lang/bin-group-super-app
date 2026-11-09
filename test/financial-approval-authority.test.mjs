@@ -23,7 +23,7 @@ test('painting payments stay with Finance Manager / Controller', () => {
 // Audit D-01 (Nov 2026): payment approve / reject is limited to finance roles on the server.
 test('payment decision role set is finance roles only (no operations_admin)', () => {
   const file = src('financeAdminMfa.ts');
-  assert.match(file, /PAYMENT_DECISION_ROLES[^=]*= new Set\(\[\.\.\.FINANCE_ADMIN_ROLES, "finance_manager", "finance_controller"\]\)/);
+  assert.match(file, /PAYMENT_DECISION_ROLES[^=]*= new Set\(\[\.\.\.FINANCE_ADMIN_ROLES\]\)/);
   assert.doesNotMatch(code(file), /operations_admin/);
   // A stray admin:true boolean never upgrades an explicit non-finance role.
   assert.match(file, /return role === "" && \(claims\.admin === true \|\| claims\.isAdmin === true\)/);

@@ -10,7 +10,7 @@ import {
     ShieldAlert, Link as LinkIcon, 
     Search, Wrench, CheckCircle2
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, auth, functions, httpsCallable, limit } from '../../lib/firebase';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
@@ -103,7 +103,7 @@ export default function OrphanWarRoomPage() {
 
     useEffect(() => {
         // 1. Listen for orphans (Tickets or Tenants missing linkage)
-        const unsubTickets = onSnapshot(query(collection(db, 'maintenanceTickets'), where('propertyId', '==', 'UNASSOCIATED')), (snap) => {
+        const unsubTickets = onSnapshot(query(collection(db, 'maintenanceTickets'), where('propertyId', '==', 'UNASSOCIATED'), limit(500)), (snap) => {
             setOrphans(prev => {
                 const filtered = prev.filter(p => p.type !== 'TICKET');
                 return [...filtered, ...snap.docs.map(d => ({ id: d.id, type: 'TICKET', ...d.data() }))];

@@ -24,7 +24,8 @@ const STAFF_ROLES = new Set([
   "technician", "manager", "operations_admin", "hr_admin", "support_admin",
   "hr_staff", "hr_manager", "finance_staff", "dispatcher", "admin_assistant",
   "account_manager", "operations_manager", "finance_admin",
-  // Finance tiers (D-04): provisioned only by a Super Admin / CEO via adminUserProvisioning.ts.
+  // finance_manager / finance_controller: painting approvals (P1-8). payroll_admin added by D-04.
+  // All three are assignable only by a Super Admin / CEO via adminUserProvisioning.ts.
   "finance_manager", "finance_controller", "payroll_admin",
 ]);
 const ONBOARDING_STAGES = new Set([
@@ -493,7 +494,7 @@ export const adminUpdateStaffProfile = onCall({ cors: true, region: "europe-west
     contractEndDate: preservedNullableText(payload.contractEndDate, staff.hr.contractEndDate || staff.privateHr.contractEndDate),
     employmentType: preservedText(payload.employmentType, staff.hr.employmentType || staff.privateHr.employmentType, "full_time"),
     shiftName: preservedText(payload.shiftName, staff.hr.shiftName, "Day Shift"),
-    workingHours: preservedText(payload.workingHours, staff.hr.workingHours, "9 AM - 4 PM"),
+    workingHours: preservedText(payload.workingHours, staff.hr.workingHours, "8 AM - 4 PM"),
     offDay: preservedText(payload.offDay, staff.hr.offDay, "Sunday"),
     updatedAt: now,
   }, { merge: true });

@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { AlertTriangle, Shield, Flame, Droplets, Zap, ShieldAlert, Radio, Compass } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, functions, httpsCallable, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
 import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -51,7 +51,7 @@ export default function EmergencyCommandCenterPage() {
         });
 
         // Monitor all technicians
-        const qTechs = query(collection(db, 'users'), where('role', '==', 'technician'));
+        const qTechs = query(collection(db, 'users'), where('role', '==', 'technician'), limit(500));
         const unsubTechs = onSnapshot(qTechs, (snap) => {
             setTechnicians(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });

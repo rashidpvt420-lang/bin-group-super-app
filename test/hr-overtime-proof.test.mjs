@@ -45,7 +45,8 @@ test('callables: 120 cap, proof on the claim, reviewer roles, no self-review, no
   const src = readFileSync('functions/staffOperatingSystem.ts', 'utf8');
   assert.doesNotMatch(src, /estimatedMinutes > 360/);
   assert.match(src, /estimatedMinutes > MAX_OVERTIME_CLAIM_MINUTES/);
-  assert.match(src, /shiftDate: todayStr,\s*proof,/);
+  // P2-17: the claim date is the open shift's date (yesterday for a night shift still open after midnight).
+  assert.match(src, /shiftDate: shiftDateStr,\s*jobLinkSource,\s*proof,/);
   assert.match(src, /export const reviewStaffOvertimeClaim = onCall\(CALLABLE_OPTIONS/);
   assert.match(src, /export const listPendingOvertimeClaims = onCall\(CALLABLE_OPTIONS/);
   assert.match(src, /You cannot review your own overtime/);

@@ -132,12 +132,14 @@ const unitsLabel = (type: string, ar: boolean) => {
   return ar ? pair[1] : pair[0];
 };
 
-const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = ({ onNext, onBack }) => {
+const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; initialIndex?: number }> = ({ onNext, onBack, initialIndex }) => {
   const { properties, updateProperty, addProperty, removeProperty } = useOnboardingStore();
   const { t, isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
   const label = (en: string, arText: string) => ar ? arText : en;
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(typeof initialIndex === 'number' && initialIndex >= 0 ? initialIndex : 0);
+  // P2-21: Add property opens the new blank card, not property 1.
+  React.useEffect(() => { if (typeof initialIndex === 'number' && initialIndex >= 0) setActiveIndex(initialIndex); }, [initialIndex]);
   const [scanning, setScanning] = useState(false);
   const [ocrError, setOcrError] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -300,11 +302,11 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         {ocrError && <Alert severity="warning" icon={<AlertTriangle />} sx={{ mb: 3 }} action={<Button component="label" color="inherit" startIcon={<RefreshCcw size={14} />}>{label('Retry', 'إعادة المحاولة')}<input type="file" accept="image/*,.pdf" hidden onChange={scanTitleDeed} /></Button>}>{ocrError}</Alert>}
 
         <Paper sx={{ p: 2.5, mb: 3, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.78)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+            <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap>
               {properties.map((property, index) => <Chip key={property.id || index} onClick={() => { setActiveIndex(index); setValidationError(''); }} label={`${label('Property', 'العقار')} ${index + 1} · ${ASSET_TYPE_IDS.has(property.propertyType) ? property.propertyType : label('Unclassified', 'غير مصنف')}`} color={index === activeIndex ? 'primary' : 'default'} variant={index === activeIndex ? 'filled' : 'outlined'} sx={{ fontWeight: 900 }} />)}
             </Stack>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1}>
+            <Stack direction={'row'} spacing={1}>
               <Button startIcon={<CopyPlus size={17} />} onClick={addAnother} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{label('Add Property', 'إضافة عقار')}</Button>
               <Button startIcon={<Trash2 size={17} />} onClick={removeActive} disabled={properties.length <= 1} color="error" variant="outlined">{label('Remove', 'إزالة')}</Button>
             </Stack>
@@ -314,7 +316,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         <Grid container spacing={4}>
           <Grid item xs={12} lg={7}>
             <Paper sx={{ p: { xs: 2, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" mb={2} gap={2}>
+              <Stack direction={'row'} justifyContent="space-between" alignItems="center" mb={2} gap={2}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Asset type', 'نوع العقار')}</Typography>
                 <Button component="label" startIcon={scanning ? <CircularProgress size={16} /> : <Scan size={17} />} disabled={scanning} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{label('Scan title deed', 'مسح سند الملكية')}<input hidden type="file" accept="image/*,.pdf" onChange={scanTitleDeed} /></Button>
               </Stack>
@@ -343,7 +345,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         </Grid>
 
         {isGym && <Paper sx={{ p: { xs: 3, md: 4 }, mt: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} gap={2} mb={3}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} gap={2} mb={3}>
             <Box>
               <Typography variant="h5" fontWeight={950} color="#FFF">{label('Gym / Fitness Centre Operations Profile', 'ملف تشغيل النادي الرياضي / مركز اللياقة')}</Typography>
               <Typography variant="body2" color="text.secondary">{label('Sports & Wellness · Commercial asset · area-priced after BIN GROUP verification', 'رياضة وعافية · أصل تجاري · التسعير حسب المساحة بعد تحقق BIN GROUP')}</Typography>
@@ -435,7 +437,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
           </Grid>
         </Paper>}
 
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="space-between" sx={{ mt: 4 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" sx={{ mt: 4 }}>
           <Button variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : undefined} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : undefined} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', borderRadius: 100, px: 4 }}>{label('Back', 'رجوع')}</Button>
           <Button variant="contained" onClick={continuePortfolio} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 100, px: 6, fontWeight: 950 }}>{label(`Continue with ${properties.length} ${properties.length === 1 ? 'property' : 'properties'}`, `المتابعة مع ${properties.length} عقار`)}</Button>
         </Stack>

@@ -25,7 +25,10 @@ const STAFF_ROLES = new Set([
   "account_manager",
   "operations_manager",
   "finance_admin",
-  // Finance tiers (audit D-04). Assignable only by a Super Admin / CEO (see FINANCE_TIER_ROLES).
+  // Nov 9 audit (P1-8): painting payment reviewers. They get no admin modules; the
+  // painting finance page is role-gated and every decision still needs MFA and a
+  // live finance_manager / finance_controller claim (paintingFinanceApprover.ts),
+  // and the issuer of an invoice can never approve it.
   "finance_manager",
   "finance_controller",
   "payroll_admin",
@@ -72,8 +75,8 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "properties", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
-  finance_manager: ["dashboard", "financials", "transactions", "reports", "audit"],
-  finance_controller: ["dashboard", "financials", "transactions", "reports", "audit"],
+  finance_manager: [],
+  finance_controller: [],
   payroll_admin: ["dashboard", "hr", "financials", "reports"],
 };
 
@@ -91,8 +94,8 @@ const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "reports"],
   finance_admin: ["dashboard", "financials", "transactions", "reports"],
-  finance_manager: ["dashboard", "financials", "transactions", "reports"],
-  finance_controller: ["dashboard", "financials", "transactions", "reports"],
+  finance_manager: [],
+  finance_controller: [],
   payroll_admin: ["dashboard", "hr", "reports"],
 };
 
@@ -383,7 +386,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       uid, displayName, role, employeeType: role, department, specialization,
       status: "INVITED", suspended: true, onboardingStage: "INVITED", onboardingComplete: false,
       joiningDate: cleanString(payload.joiningDate) || null, offDay: cleanString(payload.offDay, "Sunday"),
-      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
+      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "8 AM - 4 PM"),
       employmentType: cleanString(payload.employmentType, "full_time"), createdAt: now, updatedAt: now,
     };
     const privateHrProfile = {

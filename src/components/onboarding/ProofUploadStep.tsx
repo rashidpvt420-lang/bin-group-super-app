@@ -137,7 +137,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                         return (
                             <Box key={key}>
                                 {gymOnly && key === 'gymSportsApproval' && <Typography variant="overline" color={binThemeTokens.gold} fontWeight={950}>GYM / FITNESS CENTRE SUPPORTING DOCUMENTS</Typography>}
-                                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" mb={1}>
+                                <Stack direction={'row'} justifyContent="space-between" alignItems="center" mb={1}>
                                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                         <Typography color="#FFF" fontWeight={900}>{required && <span style={{ color: '#ef4444' }}>* </span>}{tx(label, ar)}</Typography>
                                         <Typography variant="caption" color="rgba(255,255,255,0.5)">{tx(requirement, ar)}</Typography>
@@ -145,8 +145,8 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                                     {hasFile && <CheckCircle size={18} color="#4ADE80" />}
                                 </Stack>
                                 {hasFile ? (
-                                    <Box sx={{ p: 2, bgcolor: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
-                                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center"><FileText size={18} color="#4ADE80" /><Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography color="#FFF" fontWeight={800} sx={{ wordBreak: 'break-word' }}>{meta?.name}</Typography><Typography variant="caption" color="rgba(255,255,255,0.52)">{tx(copy.ready, ar)}</Typography></Box></Stack>
+                                    <Box sx={{ p: 2, bgcolor: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row', gap: 2 }}>
+                                        <Stack direction={'row'} spacing={1.2} alignItems="center"><FileText size={18} color="#4ADE80" /><Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography color="#FFF" fontWeight={800} sx={{ wordBreak: 'break-word' }}>{meta?.name}</Typography><Typography variant="caption" color="rgba(255,255,255,0.52)">{tx(copy.ready, ar)}</Typography></Box></Stack>
                                         <Button size="small" onClick={() => setConfirmDelete(key)} startIcon={<Trash2 size={14} />} color="error">{tx(copy.remove, ar)}</Button>
                                     </Box>
                                 ) : (
@@ -173,7 +173,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                     {hasGym && <Typography variant="body2" color={gymAvailableDocsReady ? '#4ADE80' : '#FCA5A5'}>{gymAvailableDocsReady ? '✓' : '•'} {tx(copy.gymRequired, ar)}</Typography>}
                 </Box>
 
-                <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ pt: 4 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 4 }}>
                     <Button variant="outlined" onClick={onBack} disabled={uploading} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, borderRadius: 100, fontWeight: 950 }}>{tx(copy.back, ar)}</Button>
                     <Button variant="contained" onClick={onNext} disabled={!canProceed || uploading} fullWidth sx={{ bgcolor: canProceed ? binThemeTokens.gold : alpha(binThemeTokens.gold, 0.3), color: '#000', py: 1.5, borderRadius: 100, fontWeight: 950 }}>{uploading ? <CircularProgress size={24} color="inherit" /> : tx(copy.continue, ar)}</Button>
                 </Stack>

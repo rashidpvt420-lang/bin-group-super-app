@@ -57,7 +57,7 @@ export default function BrokerAttributionQuickStartCard({
   return (
     <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: '#FDFBF7', color: '#111827', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
           <Box>
             <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>{isRTL ? 'إسناد الوسيط' : 'BROKER ATTRIBUTION'}</Typography>
             <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950 }}>{isRTL ? 'أثبت من جلب المالك أو المستأجر أو العقار' : 'Prove who brought the owner, tenant, or property'}</Typography>
@@ -81,7 +81,7 @@ export default function BrokerAttributionQuickStartCard({
         {referralUrl ? (
           <Stack
             data-testid="broker-referral-share"
-            direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }}
+            direction={{ xs: 'column', sm: 'row' }}
             spacing={2}
             alignItems={{ xs: 'stretch', sm: 'center' }}
             sx={{ p: 2, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 4 }}
@@ -92,7 +92,7 @@ export default function BrokerAttributionQuickStartCard({
             <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
               <Typography variant="caption" sx={{ color: '#475467', fontWeight: 900 }}>{isRTL ? 'رابط الإحالة الخاص بك' : 'Your referral link'}</Typography>
               <Typography dir="ltr" sx={{ color: '#111827', fontWeight: 700, fontSize: 13, wordBreak: 'break-all', textAlign: isRTL ? 'right' : 'left' }}>{referralUrl}</Typography>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+              <Stack direction={'row'} spacing={1} alignItems="center">
                 <Button
                   size="small"
                   variant="outlined"

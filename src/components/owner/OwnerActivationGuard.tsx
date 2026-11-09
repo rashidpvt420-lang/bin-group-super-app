@@ -66,7 +66,7 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
             </Typography>
           </Box>
 
-          {!suspended && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ width: '100%' }}>
+          {!suspended && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: '100%' }}>
             <Button
               variant="contained"
               startIcon={<CreditCard size={18} />}

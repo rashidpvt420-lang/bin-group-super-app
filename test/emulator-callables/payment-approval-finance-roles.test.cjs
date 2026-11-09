@@ -1,7 +1,7 @@
 'use strict';
 // Audit D-01 (Nov 2026): payment approve / reject is limited to finance roles on the server.
-// operations_admin (with or without a stray admin:true claim) and other staff are refused; the
-// finance roles pass the authority gate. MFA and dual control (recorder != approver) still apply;
+// operations_admin (with or without a stray admin:true claim) and other staff are refused; finance_admin
+// and the Admin tier pass the authority gate. finance_manager / finance_controller stay painting-only. MFA and dual control (recorder != approver) still apply;
 // dual control itself is covered by d5-payment-dual-control.test.cjs.
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -24,6 +24,8 @@ for (const [label, claims] of [
   ['operations_manager', { role: 'operations_manager' }],
   ['manager', { role: 'manager' }],
   ['payroll_admin', { role: 'payroll_admin' }],
+  ['finance_manager (painting only)', { role: 'finance_manager' }],
+  ['finance_controller (painting only)', { role: 'finance_controller' }],
   ['finance_staff', { role: 'finance_staff' }],
 ]) {
   test(`${label} is refused payment approve, reject and cheque clearance`, async () => {
@@ -36,7 +38,7 @@ for (const [label, claims] of [
   });
 }
 
-for (const role of ['finance_admin', 'finance_manager', 'finance_controller']) {
+for (const role of ['finance_admin', 'admin', 'super_admin', 'ceo']) {
   test(`${role} with MFA passes the payment authority gate`, async () => {
     const actor = await createUser(`d01_ok_${role}`, { role }, { tokenExtra: MFA });
     for (const run of [

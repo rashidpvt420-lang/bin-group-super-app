@@ -70,8 +70,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
         <Box sx={{ '--bin-adaptive-text': isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', '--bin-adaptive-text-muted': isLightRoute ? '#4B5563' : '#D1D5DB', minHeight: '100vh', bgcolor: isLightRoute ? binThemeTokens.softCanvas : binThemeTokens.black, color: isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={isLightRoute ? 0.025 : 0.038} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: binThemeTokens.textPrimary, backdropFilter: 'blur(16px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)', zIndex: 1200 }}>
-                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ minWidth: 0, gap: 1.5 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: 'row', gap: 1 }}>
+                    <Stack direction={'row'} alignItems="center" sx={{ minWidth: 0, gap: 1.5 }}>
                         {!isSimpleHome && <IconButton aria-label={tx('nav.back', copy('Back', 'رجوع'))} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
                         <IconButton aria-label={tx('nav.home', copy('Tenant dashboard', 'لوحة المستأجر'))} onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}><SafeIcon icon={Home} size={22} /></IconButton>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
@@ -80,7 +80,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         </Box>
                     </Stack>
                     {isPhoneHeader ? (
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+                    <Stack direction={'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
                         <NotificationBell />
                         <PortalHeaderMenu role="tenant" items={[
                             { key: 'homes', label: tx('tenant.quick.findHome', copy('Find a Home', 'ابحث عن منزل')), onClick: () => navigate('/tenant/homes') },
@@ -91,7 +91,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         ]} />
                     </Stack>
                     ) : (
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                    <Stack direction={'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Button onClick={() => navigate('/tenant/homes')} sx={quickButtonSx}>{tx('tenant.quick.findHome', copy('Find a Home', 'ابحث عن منزل'))}</Button>
                         <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة'))}</Button>
                         <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: binThemeTokens.danger, borderColor: alpha(binThemeTokens.danger, 0.35), bgcolor: alpha(binThemeTokens.danger, 0.04), '&:hover': { bgcolor: alpha(binThemeTokens.danger, 0.08), borderColor: binThemeTokens.danger } }}>{tx('tenant.quick.emergency', copy('Emergency', 'طوارئ'))}</Button>

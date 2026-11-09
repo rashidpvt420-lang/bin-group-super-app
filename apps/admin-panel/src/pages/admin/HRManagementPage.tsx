@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Alert, Avatar, Box, Button, Chip, CircularProgress, Container, Grid, MenuItem, Paper, Stack,
+    Alert, Avatar, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Paper, Stack,
     Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField,
     Typography, alpha,
 } from '@mui/material';
@@ -13,6 +13,7 @@ import StaffAccessPage from './StaffAccessPage';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 import OvertimeClaimsReviewPanel from './OvertimeClaimsReviewPanel';
+import StaffRosterEditorDialog from './StaffRosterEditorDialog';
 import HrDocumentVerifyDialog, { type VerifiableDocument } from './HrDocumentVerifyDialog';
 import { credentialKindForDocument } from '../../lib/technicianCredentialForm';
 
@@ -83,6 +84,7 @@ export default function HRManagementPage() {
     const [staff, setStaff] = useState<StaffLifecycle[]>([]);
     const [hrOps, setHrOps] = useState<HrOps>({ attendance: [], leaveRequests: [], documents: [], staffUploads: [] });
     const [verifyDocument, setVerifyDocument] = useState<VerifiableDocument | null>(null);
+    const [rosterStaff, setRosterStaff] = useState<{ uid: string; displayName: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -187,7 +189,29 @@ export default function HRManagementPage() {
 
     const recordAttendance = async () => run('adminRecordStaffAttendance', attendanceForm, 'Attendance status saved. Hours stay on the shift clock and were not changed.');
     const createLeave = async () => run('adminCreateStaffLeaveRequest', leaveForm, 'Leave request created in the HR workflow.');
-    const reviewLeave = async (requestId: string, decision: string) => run('adminReviewStaffLeaveRequest', { requestId, decision }, `Leave request ${decision.toLowerCase()}.`);
+    // Nov 9 audit (P2-23): approving beyond the annual balance needs a written override reason.
+    const [leaveOverride, setLeaveOverride] = useState<{ requestId: string; message: string; reason: string } | null>(null);
+    const reviewLeave = async (requestId: string, decision: string, overrideReason?: string) => {
+        if (actionBusyRef.current) return;
+        actionBusyRef.current = true;
+        setActionBusy(true);
+        setNotice(null);
+        try {
+            await httpsCallable(functions, 'adminReviewStaffLeaveRequest')({ requestId, decision, ...(overrideReason ? { overrideReason } : {}) });
+            setNotice({ type: 'success', message: overrideReason ? `Leave request ${decision.toLowerCase()} with a balance override. The reason is in the audit log.` : `Leave request ${decision.toLowerCase()}.` });
+            setLeaveOverride(null);
+            await loadProtectedHr();
+        } catch (error: any) {
+            if (decision === 'APPROVED' && error?.details?.code === 'LEAVE_OVERRIDE_REASON_REQUIRED') {
+                setLeaveOverride({ requestId, message: errorText(error), reason: overrideReason || '' });
+            } else {
+                setNotice({ type: 'error', message: errorText(error) });
+            }
+        } finally {
+            actionBusyRef.current = false;
+            setActionBusy(false);
+        }
+    };
     // Credential documents (medical card, driving licence, certificate) of technicians can be
     // verified here; the decision sets the technician's dispatch readiness. Upload alone never does.
     const renderVerification = (source: 'staffHrDocuments' | 'staffDocuments', entry: any) => {
@@ -338,7 +362,7 @@ export default function HRManagementPage() {
                                                 <TableCell><Stack spacing={.5}><Chip size="small" color={lifecycleColor(member.lifecycleState) as any} label={member.lifecycleState.replace(/_/g, ' ')} sx={{ width: 'fit-content', fontWeight: 900 }} /><Typography variant="caption" sx={{ color: member.emailVerified ? '#10b981' : '#f59e0b' }}>{member.emailVerified ? 'Email verified' : 'Email not verified'}</Typography></Stack></TableCell>
                                                 <TableCell><Stack direction="row" spacing={.5} flexWrap="wrap"><Chip size="small" label={member.employeeIdConfigured ? 'EMP ID ✓' : 'EMP ID !'} /><Chip size="small" label={member.emiratesIdConfigured ? 'EID ✓' : 'EID !'} /><Chip size="small" label={member.salaryConfigured ? 'SALARY ✓' : 'SALARY !'} /></Stack></TableCell>
                                                 <TableCell><Typography sx={{ color: '#fff' }}>{member.shiftName || 'Unassigned'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>{member.workingHours || 'No working hours'} · {member.offDay || 'No off day'}</Typography></TableCell>
-                                                <TableCell><Stack direction="row" spacing={1} flexWrap="wrap"><Button size="small" onClick={() => openProfile(member.uid)} data-testid={`admin-staff-profile-${member.uid}`}>PROFILE</Button>{canManageLifecycle && !member.emailVerified && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" disabled={actionBusy} onClick={() => void resendInvitation(member)}>{actionBusy ? <CircularProgress size={14} /> : 'RESEND INVITE'}</Button>}{isProvisioningAdmin && <Button size="small" onClick={() => setTab(4)}>ACCESS</Button>}{canManageLifecycle && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" color="error" disabled={actionBusy} onClick={() => void offboardStaff(member)}>{actionBusy ? <CircularProgress size={14} /> : 'OFFBOARD'}</Button>}</Stack></TableCell>
+                                                <TableCell><Stack direction="row" spacing={1} flexWrap="wrap"><Button size="small" onClick={() => openProfile(member.uid)} data-testid={`admin-staff-profile-${member.uid}`}>PROFILE</Button>{isHRStaff && <Button size="small" data-testid={`admin-staff-roster-${member.uid}`} onClick={() => setRosterStaff({ uid: member.uid, displayName: member.displayName })}>ROSTER</Button>}{canManageLifecycle && !member.emailVerified && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" disabled={actionBusy} onClick={() => void resendInvitation(member)}>{actionBusy ? <CircularProgress size={14} /> : 'RESEND INVITE'}</Button>}{isProvisioningAdmin && <Button size="small" onClick={() => setTab(4)}>ACCESS</Button>}{canManageLifecycle && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" color="error" disabled={actionBusy} onClick={() => void offboardStaff(member)}>{actionBusy ? <CircularProgress size={14} /> : 'OFFBOARD'}</Button>}</Stack></TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -363,6 +387,18 @@ export default function HRManagementPage() {
                 </Stack>
             </Container>
 
+            <Dialog open={Boolean(leaveOverride)} onClose={() => setLeaveOverride(null)} maxWidth="sm" fullWidth data-testid="leave-override-dialog">
+                <DialogTitle>Approve beyond the leave balance? — الموافقة بما يتجاوز رصيد الإجازة؟</DialogTitle>
+                <DialogContent>
+                    <Alert severity="warning" sx={{ mb: 2 }}>{leaveOverride?.message}</Alert>
+                    <TextField fullWidth multiline minRows={2} label="Override reason (min 8 characters) — سبب الاستثناء (8 أحرف على الأقل)" value={leaveOverride?.reason || ''} onChange={(e) => setLeaveOverride((v) => (v ? { ...v, reason: e.target.value } : v))} inputProps={{ 'data-testid': 'leave-override-reason', maxLength: 500 }} />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setLeaveOverride(null)}>Cancel — إلغاء</Button>
+                    <Button variant="contained" color="warning" disabled={actionBusy || (leaveOverride?.reason.trim().length || 0) < 8} onClick={() => leaveOverride && void reviewLeave(leaveOverride.requestId, 'APPROVED', leaveOverride.reason.trim())}>Approve with override — موافقة باستثناء</Button>
+                </DialogActions>
+            </Dialog>
+            <StaffRosterEditorDialog staff={rosterStaff} onClose={() => setRosterStaff(null)} onSaved={(message) => setNotice({ type: 'success', message })} />
             <StaffLifecycleDetailsDialog uid={selectedStaffUid} open={Boolean(selectedStaffUid)} onClose={closeProfile} onChanged={loadProtectedHr} />
         </Box>
     );
