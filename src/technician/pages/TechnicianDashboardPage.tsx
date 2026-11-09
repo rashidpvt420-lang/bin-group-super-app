@@ -57,6 +57,7 @@ import {
 import { AVAILABILITY_REPORT_INTERVAL_MS, reportTechnicianAvailabilityLocation } from '../utils/availabilityLocation';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useHrText } from '../components/HrBi';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { slaMinutesForPriority } from '../../config/uaeDominationBlueprint';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
@@ -217,6 +218,9 @@ export default function TechnicianDashboardPage() {
     const navigate = useNavigate();
     const { t, isRTL, lang } = useLanguage();
     const tx = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+    // Nov 9 follow-up (P2-12): the active-job card follows the technician's own language (7 languages,
+    // HR string table); unknown copy falls back to the same en/ar text as tx().
+    const { ht } = useHrText();
 
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
@@ -484,35 +488,35 @@ export default function TechnicianDashboardPage() {
                 const elapsedMinutes = Number.isFinite(startedMs) ? Math.max(0, Math.round((Date.now() - startedMs) / 60000)) : null;
 
                 let phaseTone = ui.blue;
-                let phaseBadge = gpsLive ? tx('EN ROUTE · GPS LIVE', 'في الطريق · GPS مباشر') : tx('EN ROUTE · GPS NOT LIVE', 'في الطريق · GPS غير مباشر');
-                let phaseTitle = tx('On the way to the property', 'في الطريق إلى العقار');
+                let phaseBadge = gpsLive ? ht('EN ROUTE · GPS LIVE', 'في الطريق · GPS مباشر') : ht('EN ROUTE · GPS NOT LIVE', 'في الطريق · GPS غير مباشر');
+                let phaseTitle = ht('On the way to the property', 'في الطريق إلى العقار');
                 let phaseHelper = gpsLive
-                    ? tx('Your location is updating for the tenant while this app is open. Drive safely.', 'يتم تحديث موقعك للمستأجر ما دام التطبيق مفتوحاً. قد بأمان.')
-                    : tx('GPS not live: the tenant is not seeing a fresh location. Keep this app open with location allowed.', 'GPS غير مباشر: المستأجر لا يرى موقعاً حديثاً. أبقِ التطبيق مفتوحاً مع السماح بالموقع.');
-                let actionLabel = tx('OPEN JOB & CONFIRM ARRIVAL', 'فتح المهمة وتأكيد الوصول');
+                    ? ht('Your location is updating for the tenant while this app is open. Drive safely.', 'يتم تحديث موقعك للمستأجر ما دام التطبيق مفتوحاً. قد بأمان.')
+                    : ht('GPS not live: the tenant is not seeing a fresh location. Keep this app open with location allowed.', 'GPS غير مباشر: المستأجر لا يرى موقعاً حديثاً. أبقِ التطبيق مفتوحاً مع السماح بالموقع.');
+                let actionLabel = ht('OPEN JOB & CONFIRM ARRIVAL', 'فتح المهمة وتأكيد الوصول');
 
                 if (isArrived) {
                     phaseTone = ui.gold;
-                    phaseBadge = tx('ARRIVED ON SITE', 'وصلت إلى الموقع');
-                    phaseTitle = tx('Arrived at the property', 'تم الوصول إلى العقار');
-                    phaseHelper = tx('Arrival checked: within 250 m of the property pin. Next: inspect the fault and take before photos.', 'تم التحقق من الوصول: ضمن 250 م من علامة العقار. التالي: افحص العطل والتقط صور ما قبل العمل.');
-                    actionLabel = tx('START WORK & TAKE BEFORE PHOTOS', 'بدء العمل والتقاط صور ما قبل العمل');
+                    phaseBadge = ht('ARRIVED ON SITE', 'وصلت إلى الموقع');
+                    phaseTitle = ht('Arrived at the property', 'تم الوصول إلى العقار');
+                    phaseHelper = ht('Arrival checked: within 250 m of the property pin. Next: inspect the fault and take before photos.', 'تم التحقق من الوصول: ضمن 250 م من علامة العقار. التالي: افحص العطل والتقط صور ما قبل العمل.');
+                    actionLabel = ht('START WORK & TAKE BEFORE PHOTOS', 'بدء العمل والتقاط صور ما قبل العمل');
                 } else if (isInProgress) {
                     phaseTone = ui.green;
-                    phaseBadge = tx('WORK IN PROGRESS', 'العمل جارٍ');
+                    phaseBadge = ht('WORK IN PROGRESS', 'العمل جارٍ');
                     phaseTitle = elapsedMinutes !== null
-                        ? tx(`Work in progress — started ${elapsedMinutes} min ago`, `العمل جارٍ — بدأ قبل ${elapsedMinutes} دقيقة`)
-                        : tx('Work in progress', 'العمل جارٍ');
-                    phaseHelper = tx('When done, take the after-work photo, record parts used, and send for tenant sign-off.', 'عند الانتهاء، التقط صورة ما بعد العمل وسجّل القطع المستخدمة وأرسل لتوقيع المستأجر.');
-                    actionLabel = tx('COMPLETE WORK & ATTACH PROOF', 'إنهاء العمل وإرفاق الإثبات');
+                        ? ht('Work in progress — started {n} min ago', 'العمل جارٍ — بدأ قبل {n} دقيقة').replace('{n}', String(elapsedMinutes))
+                        : ht('Work in progress', 'العمل جارٍ');
+                    phaseHelper = ht('When done, take the after-work photo, record parts used, and send for tenant sign-off.', 'عند الانتهاء، التقط صورة ما بعد العمل وسجّل القطع المستخدمة وأرسل لتوقيع المستأجر.');
+                    actionLabel = ht('COMPLETE WORK & ATTACH PROOF', 'إنهاء العمل وإرفاق الإثبات');
                 } else if (!isEnRoute) {
                     phaseTone = ui.gold;
-                    phaseBadge = isAccepted ? tx('ACCEPTED', 'مقبولة') : tx('ASSIGNED — NOT ACCEPTED', 'مسندة — لم تُقبل بعد');
-                    phaseTitle = isAccepted ? tx('Job accepted — ready to leave', 'تم قبول المهمة — جاهز للانطلاق') : tx('New job assigned to you', 'مهمة جديدة مسندة إليك');
+                    phaseBadge = isAccepted ? ht('ACCEPTED', 'مقبولة') : ht('ASSIGNED — NOT ACCEPTED', 'مسندة — لم تُقبل بعد');
+                    phaseTitle = isAccepted ? ht('Job accepted — ready to leave', 'تم قبول المهمة — جاهز للانطلاق') : ht('New job assigned to you', 'مهمة جديدة مسندة إليك');
                     phaseHelper = isAccepted
-                        ? tx('Start the route from the job screen. Location sharing starts then.', 'ابدأ الطريق من شاشة المهمة. تبدأ مشاركة الموقع عندها.')
-                        : tx('Open the job and accept it. Nothing is shared with the tenant until you start the route.', 'افتح المهمة واقبلها. لا يُشارك شيء مع المستأجر حتى تبدأ الطريق.');
-                    actionLabel = isAccepted ? tx('OPEN JOB & START ROUTE', 'فتح المهمة وبدء الطريق') : tx('OPEN JOB TO ACCEPT', 'فتح المهمة للقبول');
+                        ? ht('Start the route from the job screen. Location sharing starts then.', 'ابدأ الطريق من شاشة المهمة. تبدأ مشاركة الموقع عندها.')
+                        : ht('Open the job and accept it. Nothing is shared with the tenant until you start the route.', 'افتح المهمة واقبلها. لا يُشارك شيء مع المستأجر حتى تبدأ الطريق.');
+                    actionLabel = isAccepted ? ht('OPEN JOB & START ROUTE', 'فتح المهمة وبدء الطريق') : ht('OPEN JOB TO ACCEPT', 'فتح المهمة للقبول');
                 }
 
                 return (
@@ -549,31 +553,31 @@ export default function TechnicianDashboardPage() {
 
                         <Box sx={{ mt: 1.5, p: 2, bgcolor: ui.soft, borderRadius: 2.5, border: `1px solid ${ui.line}` }}>
                             <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, display: 'block', mb: 1 }}>
-                                {tx('JOB STEPS', 'خطوات المهمة')}
+                                {ht('JOB STEPS', 'خطوات المهمة')}
                             </Typography>
                             <Grid container spacing={1.5}>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isAccepted ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isAccepted ? <Check size={14} /> : '1'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('1. ACCEPTED', '1. القبول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isAccepted ? tx('Accepted', 'مقبولة') : tx('Not accepted yet', 'لم تُقبل بعد')}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{ht('1. ACCEPTED', '1. القبول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isAccepted ? ht('Accepted', 'مقبولة') : ht('Not accepted yet', 'لم تُقبل بعد')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isEnRoute || isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isEnRoute || isArrived || isInProgress ? <Check size={14} /> : '2'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('2. EN ROUTE', '2. في الطريق')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isEnRoute ? (gpsLive ? tx('GPS live', 'GPS مباشر') : tx('GPS not live', 'GPS غير مباشر')) : isArrived || isInProgress ? tx('Done', 'تم') : tx('Pending', 'قيد الانتظار')}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{ht('2. EN ROUTE', '2. في الطريق')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isEnRoute ? (gpsLive ? ht('GPS live', 'GPS مباشر') : ht('GPS not live', 'GPS غير مباشر')) : isArrived || isInProgress ? ht('Done', 'تم') : ht('Pending', 'قيد الانتظار')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isArrived || isInProgress ? <Check size={14} /> : '3'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('3. ARRIVED', '3. الوصول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isArrived ? tx('On site', 'في الموقع') : isInProgress ? tx('Arrival checked', 'تم التحقق من الوصول') : tx('Pending', 'قيد الانتظار')}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{ht('3. ARRIVED', '3. الوصول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isArrived ? ht('On site', 'في الموقع') : isInProgress ? ht('Arrival checked', 'تم التحقق من الوصول') : ht('Pending', 'قيد الانتظار')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isInProgress ? <Check size={14} /> : '4'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('4. WORK', '4. العمل')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isInProgress ? tx('In progress', 'جارٍ') : tx('Not started', 'لم يبدأ')}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{ht('4. WORK', '4. العمل')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isInProgress ? ht('In progress', 'جارٍ') : ht('Not started', 'لم يبدأ')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                             </Grid>

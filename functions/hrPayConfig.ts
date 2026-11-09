@@ -24,3 +24,12 @@ export const HR_PAY_CONFIG = Object.freeze({
   daysPerYear: 365,
   hoursPerDay: 8,
 });
+
+/**
+ * New-hire default schedule (Rashid, 9 Nov 2026): 8 AM - 5 PM with a 1 hour unpaid break = 8 working
+ * hours. Used wherever the server fills in workingHours when HR leaves it blank.
+ */
+export const DEFAULT_SHIFT_START = "08:00";
+export const DEFAULT_SHIFT_END = "17:00";
+export const DEFAULT_UNPAID_BREAK_MINUTES = 60;
+export const DEFAULT_WORKING_HOURS = "8 AM - 5 PM (1 h unpaid break)";

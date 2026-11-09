@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, TextField, Typography } from '@mui/material';
 import { useLanguage } from '@bin/shared';
 import { db, doc, functions, getDoc, httpsCallable } from '../../lib/firebase';
+import { DEFAULT_SHIFT_END, DEFAULT_SHIFT_START } from '../../lib/staffScheduleDefaults';
 
 // Nov 9 audit (P1-9): HR edits the weekly roster through the hrSetStaffRoster
 // callable (server validates HH:MM, 1–14 h per day, at least one rest day, MFA).
@@ -11,8 +12,8 @@ const DAY_LABELS: Record<string, [string, string]> = {
     '0': ['Sunday', 'الأحد'], '1': ['Monday', 'الاثنين'], '2': ['Tuesday', 'الثلاثاء'], '3': ['Wednesday', 'الأربعاء'],
     '4': ['Thursday', 'الخميس'], '5': ['Friday', 'الجمعة'], '6': ['Saturday', 'السبت'],
 };
-// 8-hour default working day (UAE Labour Law). Saturday and Sunday off.
-const defaultWeek = (): Record<string, Day> => Object.fromEntries(DAY_KEYS.map((k) => [k, { on: !['0', '6'].includes(k), start: '08:00', end: '16:00' }]));
+// Default day: 8 AM - 5 PM with a 1 h unpaid break = 8 working hours (UAE Labour Law). Saturday and Sunday off.
+const defaultWeek = (): Record<string, Day> => Object.fromEntries(DAY_KEYS.map((k) => [k, { on: !['0', '6'].includes(k), start: DEFAULT_SHIFT_START, end: DEFAULT_SHIFT_END }]));
 
 export default function StaffRosterEditorDialog({ staff, onClose, onSaved }: { staff: { uid: string; displayName: string } | null; onClose: () => void; onSaved: (message: string) => void }) {
     const { lang } = useLanguage();
@@ -34,7 +35,7 @@ export default function StaffRosterEditorDialog({ staff, onClose, onSaved }: { s
                 setHasSaved(true);
                 setWeek(Object.fromEntries(DAY_KEYS.map((k) => {
                     const d = weekly[k];
-                    return [k, d && d.start && d.end ? { on: true, start: String(d.start), end: String(d.end) } : { on: false, start: '08:00', end: '16:00' }];
+                    return [k, d && d.start && d.end ? { on: true, start: String(d.start), end: String(d.end) } : { on: false, start: DEFAULT_SHIFT_START, end: DEFAULT_SHIFT_END }];
                 })));
             })
             .catch(() => undefined)
