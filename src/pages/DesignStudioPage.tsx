@@ -73,7 +73,8 @@ const designSelectSx = {
   '& .MuiSelect-select': { color: '#F9FAFB' },
   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(249,250,251,0.45)' },
 };
-const DESIGN_WAIT_NOTE_MS = 45_000;
+// Nov 9 audit (P2-22): the wait note and elapsed counter appear straight away.
+const DESIGN_WAIT_NOTE_MS = 8_000;
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REFERENCE_IMAGES = 1;
@@ -156,6 +157,7 @@ export default function DesignStudioPage() {
   const [designObjective, setDesignObjective] = useState('refresh');
   const [submitting, setSubmitting] = useState(false);
   const [waitNote, setWaitNote] = useState(false);
+  const [waitSeconds, setWaitSeconds] = useState(0);
   const stoppedWaitingRef = useRef(false);
   const [renderStatus, setRenderStatus] = useState('REFERENCE_IMAGE_REQUIRED');
   const [renderedConcepts, setRenderedConcepts] = useState<DesignConcept[]>([]);
@@ -251,8 +253,11 @@ export default function DesignStudioPage() {
       setWaitNote(false);
       return undefined;
     }
+    const startedAt = Date.now();
+    setWaitSeconds(0);
+    const ticker = window.setInterval(() => setWaitSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     const timer = window.setTimeout(() => setWaitNote(true), DESIGN_WAIT_NOTE_MS);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); window.clearInterval(ticker); };
   }, [submitting]);
 
   const stopWaitingForDesign = () => {
@@ -353,15 +358,16 @@ export default function DesignStudioPage() {
           </Stack>
           {submitting && (
             <Alert severity="info" sx={{ mt: 2 }} data-testid="design-creating">
-              Creating your design image. This can take a few minutes. No image is shown until one is created.
+              {tx('design.wait.usually', 'Creating your design image. Usually 30–90 seconds, sometimes up to 3 minutes. No image is shown until one is created.')}
+              {' '}<b data-testid="design-wait-elapsed">{tx('design.wait.elapsed', 'Waiting:')} {waitSeconds} {tx('design.wait.seconds', 's')}</b>
             </Alert>
           )}
           {renderStatus === 'AI_RENDER_FAILED' && submitError && (
             <Alert severity="error" sx={{ mt: 2 }} data-testid="design-submit-error" action={<Button color="inherit" disabled={submitting} onClick={() => void handleCreateConcept()}>{submitting ? 'Creating…' : 'Try again'}</Button>}>{submitError}</Alert>
           )}
           {submitting && waitNote && (
-            <Alert severity="warning" sx={{ mt: 2 }} data-testid="design-still-waiting" action={<Button color="inherit" onClick={stopWaitingForDesign}>Stop waiting</Button>}>
-              Still waiting for a real design image. This can take a few minutes. No image is shown until one is created. You can stop waiting and try again.
+            <Alert severity="warning" sx={{ mt: 2 }} data-testid="design-still-waiting" action={<Button color="inherit" onClick={stopWaitingForDesign}>{tx('design.wait.stop', 'Stop waiting')}</Button>}>
+              {tx('design.wait.still', 'Still waiting for a real design image. You can stop waiting and try again.')}
             </Alert>
           )}
         </Box>
