@@ -7,6 +7,7 @@ import * as admin from "firebase-admin";
 import { stableCaseId } from "./hrCaseId";
 import { inclusiveDays, leaveSummary, splitSickDays, validateLeaveForm, type LeaveFormResult, type LeaveRecord } from "./hrLeaveEngine";
 import { ROSTER_SOURCE, dubaiParts, missedClockOutDue, startReminderDue, validateWeeklyRoster, type WeeklyRoster } from "./hrRosterEngine";
+import { PAYROLL_ELIGIBLE_ROLES, resolvePayrollBasicSalary } from "./hrPayrollEligibility";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
@@ -238,8 +239,11 @@ export const adminGeneratePayrollBatch = onCall(
             throw new HttpsError("invalid-argument", "Payroll month must use YYYY-MM.");
         }
         const afterId = safeText(request.data?.afterId);
+        // P1-2: preview mode computes the batch on the server and writes nothing.
+        const previewOnly = request.data?.preview === true;
+        // P1-2: every payroll-eligible staff role, not only technicians.
         let techQuery: FirebaseFirestore.Query = db.collection("users")
-            .where("role", "==", "technician")
+            .where("role", "in", [...PAYROLL_ELIGIBLE_ROLES])
             .orderBy(admin.firestore.FieldPath.documentId())
             .limit(200);
         if (afterId) techQuery = techQuery.startAfter(afterId);
@@ -248,25 +252,39 @@ export const adminGeneratePayrollBatch = onCall(
         const payrollRefs = candidates.map((tech) => db.collection("payroll").doc(`${tech.id}_${month}`));
         const existing = payrollRefs.length ? await db.getAll(...payrollRefs) : [];
         const existingIds = new Set(existing.filter((snap) => snap.exists).map((snap) => snap.id));
+        // P1-2: salary lives in private_hr_profiles/{uid}.salaryPackage.basicSalary. The users
+        // document is only a legacy fallback and is flagged in the payroll row when used.
+        const privateRefs = candidates.map((tech) => db.collection("private_hr_profiles").doc(tech.id));
+        const privateSnaps = privateRefs.length ? await db.getAll(...privateRefs) : [];
+        const salaryByTech = new Map<string, { raw: unknown; source: string }>();
+        candidates.forEach((tech, index) => {
+            const privateData = privateSnaps[index]?.exists ? privateSnaps[index].data() || {} : {};
+            const resolved = resolvePayrollBasicSalary(privateData, tech);
+            salaryByTech.set(tech.id, resolved);
+        });
         const skipped: string[] = [];
         const rejected: Array<{ techId: string; techName: string; reason: string }> = [];
         let processed = 0;
+        let previewTotal = 0;
         const batch = db.batch();
         const now = serverTimestamp();
         const overtimeByTech = new Map<string, OvertimePay>();
         for (const tech of candidates) {
             if (existingIds.has(`${tech.id}_${month}`)) continue;
-            const base = exactPositivePayrollAmount((tech as any).baseSalary);
+            const base = exactPositivePayrollAmount(salaryByTech.get(tech.id)?.raw);
             if (base === null) continue;
             overtimeByTech.set(tech.id, (await computeMonthlyOvertime(tech.id, month, base)).pay);
         }
         candidates.forEach((tech) => {
             const payrollId = `${tech.id}_${month}`;
-            const rawSalary = (tech as any).baseSalary;
+            const salary = salaryByTech.get(tech.id) || { raw: null, source: "NONE" };
+            const rawSalary = salary.raw;
             if (existingIds.has(payrollId)) return;
             const rawNumber = Number(rawSalary || 0);
             if (!Number.isFinite(rawNumber) || rawNumber <= 0) {
-                skipped.push(safeText((tech as any).displayName || (tech as any).email || tech.id));
+                const techName = safeText((tech as any).displayName || (tech as any).email || tech.id);
+                skipped.push(techName);
+                rejected.push({ techId: tech.id, techName, reason: "NO_BASIC_SALARY_ON_PRIVATE_HR_PROFILE" });
                 return;
             }
             const baseSalary = exactPositivePayrollAmount(rawSalary);
@@ -279,6 +297,11 @@ export const adminGeneratePayrollBatch = onCall(
             const overtime = overtimeByTech.get(tech.id);
             const overtimePay = overtime?.overtimePay || 0;
             const amount = Math.round((baseSalary + overtimePay) * 100) / 100;
+            if (previewOnly) {
+                previewTotal = Math.round((previewTotal + amount) * 100) / 100;
+                processed += 1;
+                return;
+            }
             batch.create(db.collection("payroll").doc(payrollId), {
                 payrollId,
                 techId: tech.id,
@@ -286,6 +309,9 @@ export const adminGeneratePayrollBatch = onCall(
                 email: safeText((tech as any).email).toLowerCase() || null,
                 amount,
                 baseSalary,
+                salarySource: salary.source,
+                legacySalarySource: salary.source === "LEGACY_USERS_BASE_SALARY",
+                staffRole: safeText((tech as any).role) || null,
                 overtimePay,
                 overtimeBreakdown: overtime ? {
                     ordinaryMinutes: overtime.ordinaryMinutes,
@@ -332,10 +358,12 @@ export const adminGeneratePayrollBatch = onCall(
             });
             processed += 1;
         });
-        if (processed > 0) await batch.commit();
+        if (processed > 0 && !previewOnly) await batch.commit();
         return {
             status: "SUCCESS",
             month,
+            preview: previewOnly,
+            previewTotal: previewOnly ? previewTotal : undefined,
             processed,
             skipped,
             rejected,
