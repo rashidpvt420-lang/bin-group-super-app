@@ -258,7 +258,7 @@ export const adminGeneratePayrollBatch = onCall(
         // document is only a legacy fallback and is flagged in the payroll row when used.
         const privateRefs = candidates.map((tech) => db.collection("private_hr_profiles").doc(tech.id));
         const privateSnaps = privateRefs.length ? await db.getAll(...privateRefs) : [];
-        const salaryByTech = new Map<string, { raw: unknown; source: string }>();
+        const salaryByTech = new Map<string, { raw: unknown; source: string; overtimeEligible: boolean }>();
         candidates.forEach((tech, index) => {
             const privateData = privateSnaps[index]?.exists ? privateSnaps[index].data() || {} : {};
             const resolved = resolvePayrollBasicSalary(privateData, tech);
@@ -268,18 +268,20 @@ export const adminGeneratePayrollBatch = onCall(
         const rejected: Array<{ techId: string; techName: string; reason: string }> = [];
         let processed = 0;
         let previewTotal = 0;
+        const legacySalaryFallback: string[] = [];
         const batch = db.batch();
         const now = serverTimestamp();
         const overtimeByTech = new Map<string, OvertimePay>();
         for (const tech of candidates) {
             if (existingIds.has(`${tech.id}_${month}`)) continue;
             const base = exactPositivePayrollAmount(salaryByTech.get(tech.id)?.raw);
-            if (base === null) continue;
+            // Nov 9 follow-up (from #1992): salaryPackage.overtimeEligible === false means no overtime pay.
+            if (base === null || salaryByTech.get(tech.id)?.overtimeEligible === false) continue;
             overtimeByTech.set(tech.id, (await computeMonthlyOvertime(tech.id, month, base)).pay);
         }
         candidates.forEach((tech) => {
             const payrollId = `${tech.id}_${month}`;
-            const salary = salaryByTech.get(tech.id) || { raw: null, source: "NONE" };
+            const salary = salaryByTech.get(tech.id) || { raw: null, source: "NONE", overtimeEligible: true };
             const rawSalary = salary.raw;
             if (existingIds.has(payrollId)) return;
             const rawNumber = Number(rawSalary || 0);
@@ -299,6 +301,7 @@ export const adminGeneratePayrollBatch = onCall(
             const overtime = overtimeByTech.get(tech.id);
             const overtimePay = overtime?.overtimePay || 0;
             const amount = Math.round((baseSalary + overtimePay) * 100) / 100;
+            if (salary.source === "LEGACY_USERS_BASE_SALARY") legacySalaryFallback.push(tech.id);
             if (previewOnly) {
                 previewTotal = Math.round((previewTotal + amount) * 100) / 100;
                 processed += 1;
@@ -313,6 +316,7 @@ export const adminGeneratePayrollBatch = onCall(
                 baseSalary,
                 salarySource: salary.source,
                 legacySalarySource: salary.source === "LEGACY_USERS_BASE_SALARY",
+                overtimeEligible: salary.overtimeEligible,
                 staffRole: safeText((tech as any).role) || null,
                 overtimePay,
                 overtimeBreakdown: overtime ? {
@@ -360,6 +364,18 @@ export const adminGeneratePayrollBatch = onCall(
             });
             processed += 1;
         });
+        if (processed > 0 && !previewOnly && legacySalaryFallback.length > 0) {
+            // Nov 9 follow-up (from #1992): the deprecated users.baseSalary was used because the private
+            // HR profile had no basic salary. Audited so HR can migrate it into private_hr_profiles.
+            batch.create(db.collection("audit_logs").doc(), {
+                actorId: request.auth!.uid,
+                action: "PAYROLL_LEGACY_USERS_BASE_SALARY_USED",
+                targetType: "payroll",
+                month,
+                metadata: { staffIds: legacySalaryFallback, count: legacySalaryFallback.length },
+                createdAt: now,
+            });
+        }
         if (processed > 0 && !previewOnly) await batch.commit();
         return {
             status: "SUCCESS",
@@ -369,6 +385,7 @@ export const adminGeneratePayrollBatch = onCall(
             processed,
             skipped,
             rejected,
+            legacySalaryFallback,
             nextAfterId: techSnap.size === 200 ? techSnap.docs[techSnap.docs.length - 1]?.id || null : null,
         };
     },

@@ -19,14 +19,16 @@ export const PAYROLL_ELIGIBLE_ROLES: readonly string[] = [
 ];
 
 /** Basic salary for payroll: private HR profile first, legacy users.baseSalary only as a flagged fallback. */
-export function resolvePayrollBasicSalary(privateHrProfile: Record<string, any> | null | undefined, userDoc: Record<string, any> | null | undefined): { raw: unknown; source: string } {
+export function resolvePayrollBasicSalary(privateHrProfile: Record<string, any> | null | undefined, userDoc: Record<string, any> | null | undefined): { raw: unknown; source: string; overtimeEligible: boolean } {
+    // Nov 9 follow-up (from #1992): HR can mark a salary package as not overtime-eligible.
+    const overtimeEligible = privateHrProfile?.salaryPackage?.overtimeEligible !== false;
     const packaged = privateHrProfile?.salaryPackage?.basicSalary;
     if (packaged !== undefined && packaged !== null && String(packaged).trim() !== "" && Number(packaged) > 0) {
-        return { raw: packaged, source: "PRIVATE_HR_PROFILE" };
+        return { raw: packaged, source: "PRIVATE_HR_PROFILE", overtimeEligible };
     }
     const legacy = userDoc?.baseSalary ?? userDoc?.basicSalary;
     if (legacy !== undefined && legacy !== null && String(legacy).trim() !== "" && Number(legacy) > 0) {
-        return { raw: legacy, source: "LEGACY_USERS_BASE_SALARY" };
+        return { raw: legacy, source: "LEGACY_USERS_BASE_SALARY", overtimeEligible };
     }
-    return { raw: null, source: "NONE" };
+    return { raw: null, source: "NONE", overtimeEligible };
 }
