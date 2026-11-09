@@ -4,7 +4,7 @@ import {
     CircularProgress, Stack, Snackbar, Alert
 } from '@mui/material';
 import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
-import { db, functions, collection, getDocs, httpsCallable } from '../../lib/firebase';
+import { db, functions, collection, getDocs, httpsCallable, limit, query } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 import { resolveVerifiedPropertyPin } from '../../lib/verifiedPropertyPin';
@@ -35,7 +35,7 @@ export default function GeoRepairCommandCenter() {
                 .filter((t: any) => !t.geo || !t.geo.lat || !t.geo.lng);
 
             // Fetch Technicians
-            const techSnap = await getDocs(collection(db, 'users'));
+            const techSnap = await getDocs(query(collection(db, 'users'), limit(500)));
             const techAnomalies = techSnap.docs.map(d => ({ id: d.id, ...d.data() }))
                 .filter((u: any) => u.role === 'technician' && (!u.emirate || !u.citiesCovered));
 
