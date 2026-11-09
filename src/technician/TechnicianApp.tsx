@@ -35,6 +35,8 @@ import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 import Bi from '../components/Bi';
+import { useRole } from '../context/RoleContext';
+import { useEnRouteTrackingOwner } from './hooks/useEnRouteTrackingOwner';
 
 // HR is an implemented operational module and is available by default. The flag
 // is now an explicit emergency kill switch instead of a hidden launch dependency.
@@ -123,6 +125,8 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 export default function TechnicianApp() {
+    const { user } = useRole();
+    useEnRouteTrackingOwner(user?.uid);
     return (
         <TechnicianLayout>
             <Routes>

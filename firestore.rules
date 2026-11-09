@@ -51,22 +51,38 @@ service cloud.firestore {
       );
     }
 
+    // P1-10 (audit 9 Nov 2026): staff read the raw users directory (email, phone, legacy salary fields)
+    // only from an ID token minted with a second factor. Single-profile reads stay open to the
+    // HR, Operations, Finance and Account roles; listing the directory is limited to Admin, HR and
+    // Operations / dispatch. Everyone else uses the masked getMaskedStaffDirectory callable.
     function canReadUserDirectoryCycleFree() {
-      return signedIn() && (
-        hasAdminClaimCycleFree() || (
-          signedIn() &&
-          claimedRole() in [
-            'hr_admin',
-            'hr_manager',
-            'hr_staff',
-            'finance_admin',
-            'finance_staff',
-            'account_manager',
-            'operations_admin',
-            'operations_manager',
-            'dispatcher'
-          ]
-        )
+      return signedIn() && hasAdminSecondFactor() && (
+        hasAdminClaimCycleFree() ||
+        claimedRole() in [
+          'hr_admin',
+          'hr_manager',
+          'hr_staff',
+          'finance_admin',
+          'finance_staff',
+          'account_manager',
+          'operations_admin',
+          'operations_manager',
+          'dispatcher'
+        ]
+      );
+    }
+
+    function canListUserDirectoryCycleFree() {
+      return signedIn() && hasAdminSecondFactor() && (
+        hasAdminClaimCycleFree() ||
+        claimedRole() in [
+          'hr_admin',
+          'hr_manager',
+          'hr_staff',
+          'operations_admin',
+          'operations_manager',
+          'dispatcher'
+        ]
       );
     }
 
@@ -1191,7 +1207,7 @@ service cloud.firestore {
                     )
                   );
       allow list: if isNotSuspended() && (
-                    canReadUserDirectoryCycleFree() ||
+                    canListUserDirectoryCycleFree() ||
                     (signedIn() &&
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)

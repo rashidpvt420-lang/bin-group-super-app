@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { DEFAULT_WORKING_HOURS } from "./hrPayConfig";
 import { readPayrollForStaff, settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -491,7 +492,7 @@ export const adminUpdateStaffProfile = onCall({ cors: true, region: "europe-west
     contractEndDate: preservedNullableText(payload.contractEndDate, staff.hr.contractEndDate || staff.privateHr.contractEndDate),
     employmentType: preservedText(payload.employmentType, staff.hr.employmentType || staff.privateHr.employmentType, "full_time"),
     shiftName: preservedText(payload.shiftName, staff.hr.shiftName, "Day Shift"),
-    workingHours: preservedText(payload.workingHours, staff.hr.workingHours, "9 AM - 4 PM"),
+    workingHours: preservedText(payload.workingHours, staff.hr.workingHours, DEFAULT_WORKING_HOURS),
     offDay: preservedText(payload.offDay, staff.hr.offDay, "Sunday"),
     updatedAt: now,
   }, { merge: true });

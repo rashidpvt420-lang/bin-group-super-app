@@ -1105,6 +1105,7 @@ const translations: Record<"en" | "ar", Record<string, string>> = {
         'tech.job.location': 'Location',
         'tech.job.navigate': 'Navigate to Tenant Property',
         'tech.job.gps_missing': 'Exact GPS pin missing. Use address and contact resident/admin.',
+        'tech.job.maps_gps_pause': 'Live GPS pauses while this app is in the background (for example while Google Maps is open). Come back to this app often while driving so the tenant keeps seeing your location.',
         'tech.job.contact': 'Contact',
         'tech.job.contact_admin': 'Contact Operations Base',
         'tech.job.gps_live': 'Live GPS is active and visible to the tenant.',
@@ -2201,6 +2202,8 @@ const translations: Record<"en" | "ar", Record<string, string>> = {
         'tech.job.location': 'الموقع',
         'tech.job.navigate': 'التوجه إلى عقار المستأجر',
         'tech.job.gps_missing': 'موقع GPS الدقيق غير متوفر. استخدم العنوان وتواصل مع الساكن أو الإدارة.',
+        // NEEDS NATIVE REVIEW (machine-drafted, audit 9 Nov 2026)
+        'tech.job.maps_gps_pause': 'يتوقف تتبع GPS المباشر عندما يكون هذا التطبيق في الخلفية (مثلاً أثناء فتح خرائط Google). ارجع إلى هذا التطبيق كثيراً أثناء القيادة حتى يظل المستأجر يرى موقعك.',
         'tech.job.contact': 'تواصل',
         'tech.job.contact_admin': 'التواصل مع غرفة العمليات',
         'tech.job.gps_live': 'الموقع المباشر نشط ويظهر للمستأجر.',

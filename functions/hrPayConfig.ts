@@ -24,3 +24,11 @@ export const HR_PAY_CONFIG = Object.freeze({
   daysPerYear: 365,
   hoursPerDay: 8,
 });
+
+/**
+ * P1-9 (audit 9 Nov 2026): new-hire default working hours. 08:00-17:00 with a 1 h unpaid break is
+ * exactly normalDailyMinutes (8 h), so the default no longer sits below the overtime baseline.
+ */
+export const DEFAULT_WORKING_HOURS = "8 AM - 5 PM (1 h break)";
+export const DEFAULT_WORKING_MINUTES = 9 * 60 - 60;
+

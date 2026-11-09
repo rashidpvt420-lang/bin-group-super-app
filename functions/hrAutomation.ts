@@ -1296,6 +1296,20 @@ export const hrSetStaffRoster = onCall(
     },
 );
 
+/** P1-9: HR reads one staff member's saved weekly roster so the Admin roster editor can prefill it. */
+export const hrGetStaffRoster = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        await requireRosterManager(request.auth);
+        const staffId = safeText(request.data?.staffId);
+        if (!/^[A-Za-z0-9_-]{6,128}$/.test(staffId)) throw new HttpsError("invalid-argument", "staffId required.");
+        const snap = await admin.firestore().collection("staff_roster").doc(staffId).get();
+        const data = snap.exists ? snap.data() || {} : {};
+        const checked = data.source === ROSTER_SOURCE ? validateWeeklyRoster(data.weekly) : null;
+        return { ok: true, staffId, weekly: checked && checked.ok ? checked.weekly : null, timezone: "Asia/Dubai" };
+    },
+);
+
 export const getMyRoster = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {

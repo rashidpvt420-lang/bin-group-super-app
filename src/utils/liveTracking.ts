@@ -695,6 +695,25 @@ const startLiveTrackingInternal = async (
     _state.watchId = installedWatchId;
 };
 
+/** Ticket the browser is streaming GPS for right now (null when no watch is running). */
+export const getActiveTrackingTicketId = (): string | null => (_state.watchId !== null ? _state.activeTicketId : null);
+
+// P1-6 (audit 9 Nov 2026): while a job page is open it drives start/stop for that ticket (arrival
+// needs a fresh one-shot fix with the watch released). Everywhere else the technician shell keeps
+// tracking alive for an EN_ROUTE job (useEnRouteTrackingOwner).
+let jobPageTrackingOwner: string | null = null;
+const jobPageOwnerListeners = new Set<() => void>();
+export const getJobPageTrackingOwner = (): string | null => jobPageTrackingOwner;
+export const setJobPageTrackingOwner = (ticketId: string | null) => {
+    if (jobPageTrackingOwner === ticketId) return;
+    jobPageTrackingOwner = ticketId;
+    jobPageOwnerListeners.forEach((listener) => listener());
+};
+export const subscribeJobPageTrackingOwner = (listener: () => void) => {
+    jobPageOwnerListeners.add(listener);
+    return () => { jobPageOwnerListeners.delete(listener); };
+};
+
 export const startLiveTracking = (
     ticketId: string,
     technicianUid: string,

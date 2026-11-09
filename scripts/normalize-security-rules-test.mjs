@@ -55,12 +55,18 @@ const canonicalUserSubcollectionBlock = `  it('user push token and readiness sub
     const selfDb = testEnv.authenticatedContext('user_a', { role: 'tenant' }).firestore();
     const otherDb = testEnv.authenticatedContext('user_b', { role: 'tenant' }).firestore();
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
-    const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
-    const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
-    const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
+    // P1-10: staff directory reads need an MFA token; the same roles without MFA are denied.
+    const staffMfa = { firebase: { sign_in_second_factor: 'phone' } };
+    const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin', ...staffMfa }).firestore();
+    const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager', ...staffMfa }).firestore();
+    const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin', ...staffMfa }).firestore();
+    const opsNoMfaDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
+    const financeNoMfaDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
 
     await assertSucceeds(getDoc(doc(opsDb, 'users/user_a')));
     await assertSucceeds(getDoc(doc(financeDb, 'users/user_a')));
+    await assertFails(getDoc(doc(opsNoMfaDb, 'users/user_a')));
+    await assertFails(getDoc(doc(financeNoMfaDb, 'users/user_a')));
 
     for (const database of [selfDb, otherDb, adminDb, hrDb, opsDb, financeDb]) {
       await assertFails(getDoc(doc(database, 'users/user_a/fcmTokens/token_seeded')));

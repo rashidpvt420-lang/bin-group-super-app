@@ -22,9 +22,14 @@ test('live tracking startup is idempotent for the same technician mission', () =
   assert.match(tracking, /if \(trackingStartKey === startKey\) return trackingStartPromise/);
 });
 
-test('GPS cleanup follows the hydrated technician identity on unmount', () => {
-  assert.match(source, /stopLiveTracking\(user\.uid\)/);
-  assert.match(source, /\}, \[user\?\.uid\]\);/);
+// P1-6 (audit 9 Nov 2026): the technician shell owns GPS cleanup. Leaving the job page must not stop
+// tracking for an en-route job; the shell stops it when the job leaves EN_ROUTE or the shell closes.
+test('GPS cleanup follows the hydrated technician identity when the technician shell unmounts', () => {
+  const owner = readFileSync('src/technician/hooks/useEnRouteTrackingOwner.ts', 'utf8');
+  assert.match(owner, /stopLiveTracking\(uid, undefined, 'PRESERVE'\)/);
+  assert.match(owner, /\}, \[uid\]\);/);
+  assert.match(readFileSync('src/technician/TechnicianApp.tsx', 'utf8'), /useEnRouteTrackingOwner\(user\?\.uid\)/);
+  assert.doesNotMatch(source, /if \(user\?\.uid\) stopLiveTracking\(user\.uid\)\.catch/);
 });
 
 

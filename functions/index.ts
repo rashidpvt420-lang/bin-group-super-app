@@ -3597,3 +3597,4 @@ export * from "./adminReports";
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 export * from "./controlCenterSummary";
+export { getMaskedStaffDirectory } from "./maskedStaffDirectory";
