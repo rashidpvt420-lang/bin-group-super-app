@@ -48,7 +48,8 @@ export const ownerCreateMaintenanceTicket = onCall(
     if (text(property.ownerId || property.ownerUid, 160) !== ownerUid) {
       throw new HttpsError("permission-denied", "The selected property is not bound to this owner.");
     }
-    await assertPropertyServiceEntitlement(db, (ref) => ref.get(), propertyId, property);
+    // D-03: while the owner's services are suspended only emergency works (clause 9F) are accepted.
+    await assertPropertyServiceEntitlement(db, (ref) => ref.get(), propertyId, property, { emergency: priority === "emergency" });
 
     let unit: FirebaseFirestore.DocumentData = {};
     let unitScope: string = UNIT_SCOPE.UNIT;

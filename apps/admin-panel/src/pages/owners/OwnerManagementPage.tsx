@@ -89,7 +89,8 @@ export default function OwnerManagementPage() {
           totalUnits: Number(data.totalUnits || 0),
           monthlyRentCollected: Number(data.monthlyRentCollected || 0),
           unpaidInvoiceCount: Number(data.unpaidInvoiceCount || 0),
-          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
+          // Services-only suspension (D-03) shows as SUSPENDED too; the owner keeps sign-in and payments.
+          suspensionStatus: data.serviceSuspended === true || String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
             ? 'SUSPENDED'
             : 'ACTIVE',
           joinedDate: data.createdAt?.toDate

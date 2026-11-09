@@ -10,6 +10,7 @@ export type RentPaymentSnapshot = {
   paymentStatus?: unknown;
   paymentVerified?: unknown;
   approved?: unknown;
+  chequeClearanceState?: unknown;
 };
 
 export type RentApprovalDecision = "replay" | "approve" | "refuse_rejected";
@@ -34,6 +35,8 @@ export function rentPaymentPhase(payment: RentPaymentSnapshot): "approved" | "re
 }
 
 export function rentApprovalDecision(payment: RentPaymentSnapshot): RentApprovalDecision {
+  // A returned (bounced) cheque can never be re-approved in place: the tenant pays again.
+  if (roleOf(payment?.chequeClearanceState) === "bounced") return "refuse_rejected";
   const phase = rentPaymentPhase(payment);
   if (phase === "approved") return "replay";
   if (phase === "rejected") return "refuse_rejected";

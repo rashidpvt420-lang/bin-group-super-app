@@ -14,6 +14,8 @@ import { collection, db, limit, onSnapshot, query, where } from '../../lib/fireb
 import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useAuth } from '../../context/AuthContext';
+import { canAssignFinanceTierRoles, FINANCE_TIER_ROLES } from '../../security/staffAccessPolicy';
 
 // Staff directory is paginated: each page adds STAFF_PAGE_SIZE rows, hard-capped at STAFF_MAX_ROWS.
 export const STAFF_PAGE_SIZE = 50;
@@ -25,8 +27,9 @@ const STAFF_ROLES = [
     { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and reporting' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
-    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
-    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Prepares the monthly payroll batch only, with MFA. Cannot settle payroll or approve payments. Super Admin / CEO assigns. — يجهّز دفعة الرواتب الشهرية فقط مع التحقق الثنائي، ولا يمكنه صرف الرواتب أو اعتماد الدفعات' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -71,6 +74,7 @@ const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
     finance_manager: [],
     finance_controller: [],
+    payroll_admin: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
@@ -89,6 +93,7 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
     finance_manager: [],
     finance_controller: [],
+    payroll_admin: [],
 };
 
 interface StaffMember {
@@ -108,6 +113,12 @@ function safeErrorMessage(error: any) {
 }
 
 export default function StaffAccessPage() {
+    const { user } = useAuth();
+    const canAssignFinanceTiers = canAssignFinanceTierRoles(user);
+    const assignableRoles = useMemo(
+        () => STAFF_ROLES.filter((role) => canAssignFinanceTiers || !FINANCE_TIER_ROLES.has(role.value)),
+        [canAssignFinanceTiers],
+    );
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [staffPageLimit, setStaffPageLimit] = useState(STAFF_PAGE_SIZE);
     const [staffHasMore, setStaffHasMore] = useState(false);
@@ -378,15 +389,20 @@ export default function StaffAccessPage() {
                                 <FormControl fullWidth>
                                     <InputLabel id="staff-role-label" sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
                                     <Select id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select" value={formData.role} onChange={(event) => handleRoleChange(event.target.value)} label="Role" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}>
-                                        {STAFF_ROLES.map((role) => <MenuItem key={role.value} value={role.value}><Box><Typography variant="body2" fontWeight={700}>{role.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.55)' }}>{role.description}</Typography></Box></MenuItem>)}
+                                        {assignableRoles.map((role) => <MenuItem key={role.value} value={role.value}><Box><Typography variant="body2" fontWeight={700}>{role.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.55)' }}>{role.description}</Typography></Box></MenuItem>)}
                                     </Select>
                                 </FormControl>
                             </Grid>
                             <Grid item xs={12}>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>SERVER-ENFORCED MODULE SCOPE</Typography>
+                                {!canAssignFinanceTiers ? (
+                                    <Alert severity="info" data-testid="finance-tier-assigner-note" sx={{ mt: 2 }}>Finance Manager, Finance Controller and Payroll Admin can only be assigned by a Super Admin or CEO. The server refuses other assigners.</Alert>
+                                ) : null}
                                 {formData.role === 'technician' ? (
                                     <Alert severity="info" sx={{ mt: 2 }}>Technicians use the Technician portal and receive no Admin-panel modules.</Alert>
+                                ) : formData.role === 'payroll_admin' ? (
+                                    <Alert severity="info" data-testid="payroll-admin-role-note" sx={{ mt: 2 }}>Opens only the payroll preparation page and their own HR page. Preparing payroll needs MFA. Settling payroll and approving payments stay with Finance Admin. — يفتح صفحة تجهيز الرواتب وصفحة الموارد البشرية الخاصة به فقط. يتطلب تجهيز الرواتب التحقق الثنائي، ويبقى صرف الرواتب واعتماد الدفعات لدى مسؤول المالية.</Alert>
                                 ) : (formData.role === 'finance_manager' || formData.role === 'finance_controller') ? (
                                     <Alert severity="info" data-testid="painting-finance-role-note" sx={{ mt: 2 }}>Opens only the Painting payments page and their own HR page. Every approval needs MFA, and they can never approve an invoice they issued. — يفتح صفحة دفعات الدهان وصفحة الموارد البشرية الخاصة به فقط. كل موافقة تتطلب التحقق الثنائي، ولا يمكنه أبداً اعتماد فاتورة أصدرها.</Alert>
                                 ) : (

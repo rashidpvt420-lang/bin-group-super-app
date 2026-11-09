@@ -16,6 +16,7 @@ export const PAYROLL_ELIGIBLE_ROLES: readonly string[] = [
     "finance_admin",
     "finance_manager",
     "finance_controller",
+    "payroll_admin",
 ];
 
 /** Basic salary for payroll: private HR profile first, legacy users.baseSalary only as a flagged fallback. */

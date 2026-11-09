@@ -11,6 +11,7 @@ import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
 import { generateMobilizationUnpaidInvoicePdfArtifact, generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
+import { assertOwnerChequeClearedForApproval, mobilizationDueAt } from "./ownerPaymentLedger";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
   assertOwnerOnboardingTransition,
@@ -441,6 +442,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   const preApproveInvoiceSnap = await invoiceRef.get();
   if (!preApproveInvoiceSnap.exists) {
     const unpaidInvoicePdf = await generateMobilizationUnpaidInvoicePdfArtifact({
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       ...invoiceSnapshot,
       ownerId: ownerUid,
     });
@@ -458,6 +460,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       pdfGeneration: unpaidInvoicePdf.generation,
       canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
       issuedAt: ts(),
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       createdAt: ts(),
       updatedAt: ts(),
     }, { merge: false });
@@ -500,6 +503,12 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
     // D-5: evidence may have been re-recorded since the pre-check.
     assertPaymentDualControl(freshPayment, actorId);
+    // Ledger: re-check clearance inside the transaction so a bounce marked mid-approval wins.
+    try {
+      assertOwnerChequeClearedForApproval(freshPayment);
+    } catch (error: any) {
+      throw new HttpsError("failed-precondition", error?.message || "Cheque clearance is required.");
+    }
     const evidenceRecordedBy = paymentEvidenceRecorderUid(freshPayment) || null;
     // F-5: activation is legal only from PAYMENT_EVIDENCE_PENDING_APPROVAL (never e.g. from a
     // pending final signature, a rejected payment, or an unrecognised state).
@@ -835,6 +844,10 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         ...invoiceSnapshot,
         ownerId: ownerUid,
         paymentReferenceId: manualReference || payment.stripeSessionId,
+        paymentMethod: normalizedMethod,
+        chequeDetails: payment.chequeDetails || null,
+        chequeClearanceState: payment.chequeClearanceState || null,
+        verifiedAt: new Date().toISOString(),
       });
       await invoiceRef.set({
         receiptPdfUrl: receiptArtifact.pdfUrl,
