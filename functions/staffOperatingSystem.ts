@@ -20,6 +20,15 @@ const ACTIVE_JOB_STATUSES = [
   "IN_PROGRESS",
 ];
 
+/** Jobs an overtime claim may be auto-linked to: the caller's own open job, accepted or later. */
+const OVERTIME_LINKABLE_JOB_STATUSES = [
+  ...ACTIVE_JOB_STATUSES,
+  "accepted",
+  "ACCEPTED",
+  "en_route",
+  "ON_THE_WAY",
+];
+
 const ensureDb = () => {
   if (!admin.apps.length) {
     admin.initializeApp();
@@ -534,13 +543,28 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
   }
 
   const todayStr = dubaiDateKey();
-  const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
-  const shiftSnap = await shiftRef.get();
-  if (!shiftSnap.exists || !["ACTIVE", "ON_BREAK"].includes(upper(shiftSnap.data()?.status))) {
+  const isOpenShift = (snap: FirebaseFirestore.DocumentSnapshot) => snap.exists && ["ACTIVE", "ON_BREAK"].includes(upper(snap.data()?.status));
+  let shiftDate = todayStr;
+  let shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
+  let shiftSnap = await shiftRef.get();
+  if (!isOpenShift(shiftSnap)) {
+    // P2-17 (audit 9 Nov 2026): a night shift opened yesterday is still the active shift after midnight.
+    const yesterdayStr = dubaiDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const yesterdayRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${yesterdayStr}`);
+    const yesterdaySnap = await yesterdayRef.get();
+    if (isOpenShift(yesterdaySnap)) {
+      shiftDate = yesterdayStr;
+      shiftRef = yesterdayRef;
+      shiftSnap = yesterdaySnap;
+    }
+  }
+  if (!isOpenShift(shiftSnap)) {
     throw new HttpsError("failed-precondition", "Overtime can be requested only from an active shift.");
   }
 
   let ticketData: Record<string, unknown> | null = null;
+  let linkedJobId = jobId;
+  let jobAutoLinked = false;
   if (jobId) {
     const ticketSnap = await db.collection("maintenanceTickets").doc(jobId).get();
     if (!ticketSnap.exists) {
@@ -550,8 +574,23 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
       throw new HttpsError("permission-denied", "The overtime work order is not assigned to this staff member.");
     }
     ticketData = ticketSnap.data() || {};
+  } else {
+    // P1-4 (audit 9 Nov 2026): the HR-page card sends no jobId. Link the caller's own active assigned
+    // job on the server so the proof can include arrival GPS and photos. No job means SHIFT_ONLY.
+    const activeSnap = await db.collection("maintenanceTickets")
+      .where("assignedTechnicianId", "==", uid)
+      .where("status", "in", OVERTIME_LINKABLE_JOB_STATUSES)
+      .limit(1)
+      .get();
+    const activeTicket = activeSnap.empty ? null : activeSnap.docs[0];
+    if (activeTicket && assignedTechnicianUid(activeTicket.data() || {}) === uid) {
+      linkedJobId = activeTicket.id;
+      ticketData = activeTicket.data() || {};
+      jobAutoLinked = true;
+    }
   }
   const proof = buildOvertimeProof(shiftSnap.data() || {}, ticketData);
+  const strength = proofStrength(proof);
 
   const existingSnap = await db.collection("staff_request_trackers")
     .where("staffId", "==", uid)
@@ -573,7 +612,8 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
     trackerId: trackerRef.id,
     staffId: uid,
     requestType: "OVERTIME_CLAIM",
-    jobId: jobId || null,
+    jobId: linkedJobId || null,
+    jobAutoLinked,
     estimatedMinutes,
     reason,
     status: "SUBMITTED",
@@ -584,9 +624,9 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
       { name: "Payroll Eligibility", status: "PENDING" },
     ],
     shiftId: shiftRef.id,
-    shiftDate: todayStr,
+    shiftDate,
     proof,
-    proofStrength: proofStrength(proof),
+    proofStrength: strength,
     createdAt: timestamp,
     updatedAt: timestamp,
   });
@@ -595,7 +635,9 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
     action: "STAFF_OVERTIME_REQUEST_SUBMITTED",
     actorUid: uid,
     trackerId: trackerRef.id,
-    jobId: jobId || null,
+    jobId: linkedJobId || null,
+    jobAutoLinked,
+    shiftDate,
     estimatedMinutes,
     timestamp,
   });
@@ -605,6 +647,10 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
   return {
     success: true,
     trackerId: trackerRef.id,
+    jobId: linkedJobId || null,
+    jobAutoLinked,
+    shiftDate,
+    proofStrength: strength,
     message: "Overtime request submitted for supervisor review.",
   };
 });

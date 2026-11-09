@@ -3,8 +3,22 @@ import { Alert, Button, Stack, TextField, Typography } from '@mui/material';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
-/** Overtime claim that Home and HR can open. The server still requires an active shift and 1–120 minutes. */
-export default function TechnicianOvertimeClaimCard({ isRTL = false }: { isRTL?: boolean }) {
+export type OvertimeProofStrength = 'SHIFT_ONLY' | 'SHIFT_AND_JOB' | 'SHIFT_JOB_GPS_PHOTOS';
+
+/** Plain-language proof level the server attached to the claim (P1-4). */
+export function overtimeProofLabel(strength: unknown, jobId?: unknown): string {
+  const job = String(jobId || '').trim();
+  const jobText = job ? `job ${job}` : 'the job';
+  if (strength === 'SHIFT_JOB_GPS_PHOTOS') return `Proof attached: shift clock and ${jobText} with arrival GPS and photos.`;
+  if (strength === 'SHIFT_AND_JOB') return `Proof attached: shift clock and ${jobText}. The job has no arrival GPS or photos yet.`;
+  return 'Proof attached: shift clock only. No active job was linked, so HR sees this as a shift-only claim.';
+}
+
+/**
+ * Overtime claim that Home and HR can open. The server still requires an active shift and 1–120 minutes.
+ * When jobId is not passed, the server links the technician's own active assigned job (P1-4).
+ */
+export default function TechnicianOvertimeClaimCard({ isRTL = false, jobId }: { isRTL?: boolean; jobId?: string | null }) {
   const [minutes, setMinutes] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,8 +34,9 @@ export default function TechnicianOvertimeClaimCard({ isRTL = false }: { isRTL?:
     setNotice(null);
     try {
       const requestOvertime = httpsCallable(functions, 'requestStaffOvertime');
-      const response: any = await requestOvertime({ estimatedMinutes, reason: reason.trim() });
-      setNotice({ type: 'success', text: response.data?.message || 'Overtime request submitted for review.' });
+      const response: any = await requestOvertime({ estimatedMinutes, reason: reason.trim(), ...(jobId ? { jobId } : {}) });
+      const base = response.data?.message || 'Overtime request submitted for review.';
+      setNotice({ type: 'success', text: `${base} ${overtimeProofLabel(response.data?.proofStrength, response.data?.jobId)}` });
       setMinutes('');
       setReason('');
     } catch (error: any) {

@@ -8,11 +8,14 @@ export type ShiftInput = {
   shiftDate: string; // YYYY-MM-DD (company-local)
   clockInMs: number;
   clockOutMs: number;
+  /** Unpaid break minutes inside the shift (staff_shifts.totalBreakMinutes). Deducted before overtime. */
+  breakMinutes?: number;
 };
 
 export type DayHours = {
   shiftDate: string;
   workedMinutes: number;
+  breakMinutes?: number; // unpaid break minutes deducted from the clock span
   overtimeMinutes: number; // capped at maxOvertimeMinutesPerDay
   uncappedOvertimeMinutes: number;
   nightOvertimeMinutes: number;
@@ -53,9 +56,13 @@ export function computeShiftHours(
   const restDays = opts.restDays || cfg.defaultRestDays;
   const start = Math.floor(shift.clockInMs / MINUTE) * MINUTE;
   const end = Math.floor(shift.clockOutMs / MINUTE) * MINUTE;
-  const workedMinutes = Number.isFinite(start) && Number.isFinite(end) && end > start
+  const spanMinutes = Number.isFinite(start) && Number.isFinite(end) && end > start
     ? Math.min(24 * 60, Math.round((end - start) / MINUTE))
     : 0;
+  // P1-3 (audit 9 Nov 2026): unpaid breaks are not worked time, so they never count toward overtime.
+  const rawBreak = Number(shift.breakMinutes);
+  const breakMinutes = Number.isFinite(rawBreak) && rawBreak > 0 ? Math.min(spanMinutes, Math.round(rawBreak)) : 0;
+  const workedMinutes = Math.max(0, spanMinutes - breakMinutes);
   const restDay = restDays.includes(weekdayOfDate(shift.shiftDate));
 
   if (restDay) {
@@ -64,7 +71,7 @@ export function computeShiftHours(
     // beyond a normal day.
     const payable = Math.min(workedMinutes, cfg.normalDailyMinutes + cfg.maxOvertimeMinutesPerDay);
     return {
-      shiftDate: shift.shiftDate, workedMinutes, restDay: true, restDayMinutes: payable,
+      shiftDate: shift.shiftDate, workedMinutes, breakMinutes, restDay: true, restDayMinutes: payable,
       overtimeMinutes: 0, uncappedOvertimeMinutes: 0, nightOvertimeMinutes: 0, ordinaryOvertimeMinutes: 0,
     };
   }
@@ -73,12 +80,13 @@ export function computeShiftHours(
   const overtimeMinutes = Math.min(uncappedOvertimeMinutes, cfg.maxOvertimeMinutesPerDay);
   // Overtime minutes are the first `overtimeMinutes` minutes after the normal day ends.
   let night = 0;
-  const otStart = start + cfg.normalDailyMinutes * MINUTE;
+  // Breaks sit inside the normal day, so overtime starts after the normal day plus the break time.
+  const otStart = start + (cfg.normalDailyMinutes + breakMinutes) * MINUTE;
   for (let i = 0; i < overtimeMinutes; i += 1) {
     if (isNightMinute(localParts(otStart + i * MINUTE, cfg.timeZone).minuteOfDay, cfg)) night += 1;
   }
   return {
-    shiftDate: shift.shiftDate, workedMinutes, restDay: false, restDayMinutes: 0,
+    shiftDate: shift.shiftDate, workedMinutes, breakMinutes, restDay: false, restDayMinutes: 0,
     overtimeMinutes, uncappedOvertimeMinutes, nightOvertimeMinutes: night,
     ordinaryOvertimeMinutes: overtimeMinutes - night,
   };

@@ -219,7 +219,7 @@ async function queuePayableShift(
     const payableShiftId = payableShiftDocId(uid);
     const ref = db.collection("staff_shifts").doc(payableShiftId);
     const snap = await ref.get();
-    const decision = payableDutyWrite(snap.exists ? (snap.data() || {}) : null, action, recordedClockIn, shiftDate);
+    const decision = payableDutyWrite(snap.exists ? (snap.data() || {}) : null, action, recordedClockIn, shiftDate, Date.now());
     if (!decision.write) return { payableShiftId, payableShift: decision.reason };
     const timestamp = FieldValue.serverTimestamp();
     const fields: Record<string, unknown> = {

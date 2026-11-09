@@ -48,7 +48,32 @@ const none = (reason: string): PayableShiftDecision => ({
   setClockOut: false,
 });
 
-export function payableShiftPatch(existing: Record<string, unknown> | null | undefined, action: PayableShiftAction): PayableShiftDecision {
+type BreakInterval = { startMs: number; endMs: number; minutes: number };
+
+const finiteMs = (value: unknown): number | null => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/**
+ * P1-3 (audit 9 Nov 2026): close the open break on the payable shift and add it to
+ * staff_shifts.breaks / totalBreakMinutes so the hours engine can deduct it.
+ */
+export function closeOpenBreakFields(existing: Record<string, unknown> | null | undefined, nowMs: number): Record<string, unknown> {
+  const startMs = finiteMs(existing?.breakStartedAtMs);
+  if (startMs === null) return {};
+  const endMs = Math.max(startMs, nowMs);
+  const minutes = Math.round((endMs - startMs) / 60_000);
+  const previous = Array.isArray(existing?.breaks) ? (existing!.breaks as BreakInterval[]) : [];
+  const previousTotal = Number(existing?.totalBreakMinutes);
+  return {
+    breaks: [...previous, { startMs, endMs, minutes }],
+    totalBreakMinutes: (Number.isFinite(previousTotal) && previousTotal > 0 ? previousTotal : 0) + minutes,
+    breakStartedAtMs: null,
+  };
+}
+
+export function payableShiftPatch(existing: Record<string, unknown> | null | undefined, action: PayableShiftAction, nowMs: number = Date.now()): PayableShiftDecision {
   const status = upper(existing?.status);
   const open = status === "ACTIVE" || status === "ON_BREAK";
   const hasClockIn = Boolean(existing?.clockInTime);
@@ -63,16 +88,19 @@ export function payableShiftPatch(existing: Record<string, unknown> | null | und
 
   if (action === "BREAK") {
     if (!open) return none("no_open_shift");
-    return { write: true, reason: "on_break", fields: { status: "ON_BREAK" }, setClockIn: false, setClockOut: false };
+    // A second BREAK tap while already on break keeps the original start.
+    const breakStart = finiteMs(existing?.breakStartedAtMs) ?? nowMs;
+    return { write: true, reason: "on_break", fields: { status: "ON_BREAK", breakStartedAtMs: breakStart }, setClockIn: false, setClockOut: false };
   }
 
   if (action === "RESUME") {
     if (!open) return none("no_open_shift");
-    return { write: true, reason: "resumed", fields: { status: "ACTIVE" }, setClockIn: false, setClockOut: false };
+    return { write: true, reason: "resumed", fields: { status: "ACTIVE", ...closeOpenBreakFields(existing, nowMs) }, setClockIn: false, setClockOut: false };
   }
 
   if (!open) return none("no_open_shift");
-  return { write: true, reason: "clocked_out", fields: { status: "COMPLETED" }, setClockIn: false, setClockOut: true };
+  // Clocking out during a break ends the break first (it is still unpaid).
+  return { write: true, reason: "clocked_out", fields: { status: "COMPLETED", ...closeOpenBreakFields(existing, nowMs) }, setClockIn: false, setClockOut: true };
 }
 
 /**
@@ -128,8 +156,9 @@ export function payableDutyWrite(
   action: PayableShiftAction,
   recordedClockIn: unknown,
   payableDateKey: string,
+  nowMs: number = Date.now(),
 ): PayableDutyWrite {
-  const decision = payableShiftPatch(existing, action);
+  const decision = payableShiftPatch(existing, action, nowMs);
   if (decision.setClockIn) {
     const recorded = sameDayRecordedClock(recordedClockIn, payableDateKey);
     if (recorded) {

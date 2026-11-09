@@ -210,7 +210,7 @@ export async function computeMonthlyOvertime(staffId: string, month: string, bas
         const clockInMs = millisOf(data.clockInTime);
         const clockOutMs = millisOf(data.clockOutTime);
         if (clockInMs === null || clockOutMs === null) continue;
-        days.push(computeShiftHours({ shiftDate: safeText(data.shiftDate), clockInMs, clockOutMs }));
+        days.push(computeShiftHours({ shiftDate: safeText(data.shiftDate), clockInMs, clockOutMs, breakMinutes: Number(data.totalBreakMinutes) || 0 }));
     }
     const trackers = await db.collection("staff_request_trackers").where("staffId", "==", staffId).limit(200).get();
     const approvedByDate: Record<string, number> = {};
@@ -1092,7 +1092,7 @@ export const getMyHours = onCall(
                 missedClockOut: clockInMs !== null && clockOutMs === null && shiftDate < dubaiDateOf(Date.now()),
             };
             if (clockInMs !== null && clockOutMs !== null) {
-                const h = computeShiftHours({ shiftDate, clockInMs, clockOutMs });
+                const h = computeShiftHours({ shiftDate, clockInMs, clockOutMs, breakMinutes: Number(data.totalBreakMinutes) || 0 });
                 engineDays.push(h);
                 Object.assign(row, h);
             }
