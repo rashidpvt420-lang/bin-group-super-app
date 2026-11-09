@@ -12,6 +12,7 @@ import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { appCheck, auth, functions, httpsCallable } from '../../lib/firebase';
 import { isValidLatLng } from '../../utils/geoAnchor';
+import { hasValidPropertyPin } from './propertyPinStatus';
 import { classifyOwnerQuoteFailure, ownerQuoteFailureOffersRetry, ownerQuoteFailureOffersSignIn, type OwnerQuoteFailureKind } from './ownerQuoteFailure';
 
 const badCopy = (value?: string) => {
@@ -37,7 +38,7 @@ type ServerQuote = {
     propertyQuotes: Array<{ propertyId: string; annualTotal: number }>;
 };
 
-const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void; onFixLocation: () => void }> = ({ onNext, onBack, onFixLocation }) => {
+const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void; onFixLocation: (propertyIndex?: number) => void }> = ({ onNext, onBack, onFixLocation }) => {
     const {
         companyProfile,
         properties,
@@ -56,12 +57,14 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     const [authReady, setAuthReady] = React.useState(false);
     const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
-    const missingGps = React.useMemo(
-        () => properties.some((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
+    // P1-1: name the first property that still needs a pin so "Fix property GPS" opens it.
+    const firstMissingGpsIndex = React.useMemo(
+        () => properties.findIndex((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
             String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
-            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng))),
+            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng)) || !hasValidPropertyPin(property as any)),
         [properties],
     );
+    const missingGps = React.useMemo(() => firstMissingGpsIndex !== -1, [firstMissingGpsIndex]);
 
     const copy = React.useCallback((key: string, fallback: string, variables?: Record<string, any>) => {
         const value = t(key, variables);
@@ -278,7 +281,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                     : copy('onboarding.review_info', 'Admin will verify the documents and property location during the site-visit workflow.')}
             </Alert>
             {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={missingGps
-                ? <Button color="inherit" size="small" onClick={onFixLocation}>{lang === 'ar' ? 'إصلاح موقع العقار' : 'Fix property GPS'}</Button>
+                ? <Button color="inherit" size="small" onClick={() => onFixLocation(firstMissingGpsIndex)}>{lang === 'ar' ? (properties.length > 1 ? `إصلاح موقع العقار ${firstMissingGpsIndex + 1}` : 'إصلاح موقع العقار') : (properties.length > 1 ? `Fix GPS for property ${firstMissingGpsIndex + 1}` : 'Fix property GPS')}</Button>
                 : (quoteNeedsSignIn
                     ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button>
                     : (quoteCanRetry

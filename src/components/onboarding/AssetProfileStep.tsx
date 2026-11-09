@@ -132,12 +132,14 @@ const unitsLabel = (type: string, ar: boolean) => {
   return ar ? pair[1] : pair[0];
 };
 
-const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = ({ onNext, onBack }) => {
+const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; initialIndex?: number }> = ({ onNext, onBack, initialIndex }) => {
   const { properties, updateProperty, addProperty, removeProperty } = useOnboardingStore();
   const { t, isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
   const label = (en: string, arText: string) => ar ? arText : en;
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(typeof initialIndex === 'number' && initialIndex >= 0 ? initialIndex : 0);
+  // P2-21: Add property opens the new blank card, not property 1.
+  React.useEffect(() => { if (typeof initialIndex === 'number' && initialIndex >= 0) setActiveIndex(initialIndex); }, [initialIndex]);
   const [scanning, setScanning] = useState(false);
   const [ocrError, setOcrError] = useState('');
   const [validationError, setValidationError] = useState('');

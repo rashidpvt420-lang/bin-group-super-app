@@ -37,6 +37,8 @@ export default function PropertyOnboardingPage() {
     const [guardError, setGuardError] = React.useState('');
     const [section, setSection] = React.useState(0);
     const requestedSectionRef = React.useRef<number | null>(null);
+    const [locationIndex, setLocationIndex] = React.useState<number | undefined>(undefined);
+    const [assetIndex, setAssetIndex] = React.useState<number | undefined>(undefined);
 
     const safePage = clampPage(step);
     const pageProgress = safePage * 20;
@@ -70,9 +72,14 @@ export default function PropertyOnboardingPage() {
     React.useEffect(() => {
         if (!addPropertyIntent || addIntentAppliedRef.current || !signedInSession) return;
         addIntentAppliedRef.current = true;
-        if (properties.length === 0) addProperty();
-        requestedSectionRef.current = 2;
-        if (Number(step) === 2) setSection(2);
+        // P2-21: start on the Property profile (type, size) of a NEW blank property card so the
+        // property is classified before the map pin and the quote; never edit property 1 again.
+        const newIndex = properties.length;
+        addProperty();
+        setAssetIndex(newIndex);
+        setLocationIndex(newIndex);
+        requestedSectionRef.current = 0;
+        if (Number(step) === 2) setSection(0);
         else setStep(2);
     }, [addProperty, addPropertyIntent, properties.length, setStep, signedInSession]);
 
@@ -115,8 +122,9 @@ export default function PropertyOnboardingPage() {
         goBackPage();
     };
 
-    const fixPropertyLocation = () => {
+    const fixPropertyLocation = (propertyIndex?: number) => {
         setGuardError('');
+        setLocationIndex(typeof propertyIndex === 'number' && propertyIndex >= 0 ? propertyIndex : undefined);
         requestedSectionRef.current = 2;
         if (Number(step) === 2) setSection(2);
         else setStep(2);
@@ -151,9 +159,9 @@ export default function PropertyOnboardingPage() {
                 : <AccountCreationStep onNext={advancePage} onBack={backSectionOrPage} brokerUid={brokerUid} />;
         }
         if (safePage === 2) {
-            if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} />;
+            if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} initialIndex={assetIndex} />;
             if (section === 1) return <PropertyPortfolioIntelligenceStep onNext={advanceSection} onBack={backSectionOrPage} />;
-            if (section === 2) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} />;
+            if (section === 2) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} initialIndex={locationIndex} />;
             return <SystemsDataStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
         if (safePage === 3) {
