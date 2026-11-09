@@ -8,6 +8,8 @@ export type ShiftInput = {
   shiftDate: string; // YYYY-MM-DD (company-local)
   clockInMs: number;
   clockOutMs: number;
+  /** P1-3: unpaid break minutes inside the shift; subtracted before the overtime split. */
+  breakMinutes?: number;
 };
 
 export type DayHours = {
@@ -53,9 +55,11 @@ export function computeShiftHours(
   const restDays = opts.restDays || cfg.defaultRestDays;
   const start = Math.floor(shift.clockInMs / MINUTE) * MINUTE;
   const end = Math.floor(shift.clockOutMs / MINUTE) * MINUTE;
-  const workedMinutes = Number.isFinite(start) && Number.isFinite(end) && end > start
+  const spanMinutes = Number.isFinite(start) && Number.isFinite(end) && end > start
     ? Math.min(24 * 60, Math.round((end - start) / MINUTE))
     : 0;
+  const breakMinutes = Math.min(spanMinutes, Math.max(0, Math.round(Number(shift.breakMinutes) || 0)));
+  const workedMinutes = Math.max(0, spanMinutes - breakMinutes);
   const restDay = restDays.includes(weekdayOfDate(shift.shiftDate));
 
   if (restDay) {
@@ -73,7 +77,7 @@ export function computeShiftHours(
   const overtimeMinutes = Math.min(uncappedOvertimeMinutes, cfg.maxOvertimeMinutesPerDay);
   // Overtime minutes are the first `overtimeMinutes` minutes after the normal day ends.
   let night = 0;
-  const otStart = start + cfg.normalDailyMinutes * MINUTE;
+  const otStart = start + (cfg.normalDailyMinutes + breakMinutes) * MINUTE;
   for (let i = 0; i < overtimeMinutes; i += 1) {
     if (isNightMinute(localParts(otStart + i * MINUTE, cfg.timeZone).minuteOfDay, cfg)) night += 1;
   }

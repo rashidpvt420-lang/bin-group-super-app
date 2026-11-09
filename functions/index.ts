@@ -38,7 +38,7 @@ import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from 
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
-import { SECOND_SAME_DAY_CLOCK_IN_MESSAGE, dubaiPayrollDateKey, legacyOpenShiftBackfill, payableDutyWrite, payableShiftDocId, sameDayRecordedClock, type PayableShiftAction } from "./technicianPayableShift";
+import { SECOND_SAME_DAY_CLOCK_IN_MESSAGE, dubaiPayrollDateKey, legacyOpenShiftBackfill, payableBreakPatch, payableDutyWrite, payableShiftDocId, sameDayRecordedClock, type PayableShiftAction } from "./technicianPayableShift";
 import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
@@ -232,6 +232,8 @@ async function queuePayableShift(
     if (decision.recordedClockIn) fields.clockInTime = decision.recordedClockIn;
     else if (decision.setClockIn) fields.clockInTime = timestamp;
     if (decision.setClockOut) fields.clockOutTime = timestamp;
+    // P1-3: keep unpaid break minutes on the payable day so overtime excludes them.
+    Object.assign(fields, payableBreakPatch(snap.exists ? (snap.data() || {}) : null, action, Date.now()));
     batch.set(ref, fields, { merge: true });
     return { payableShiftId, payableShift: decision.reason };
 }

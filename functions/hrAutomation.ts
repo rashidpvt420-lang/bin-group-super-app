@@ -8,6 +8,7 @@ import { stableCaseId } from "./hrCaseId";
 import { inclusiveDays, leaveSummary, splitSickDays, validateLeaveForm, type LeaveFormResult, type LeaveRecord } from "./hrLeaveEngine";
 import { ROSTER_SOURCE, dubaiParts, missedClockOutDue, startReminderDue, validateWeeklyRoster, type WeeklyRoster } from "./hrRosterEngine";
 import { PAYROLL_ELIGIBLE_ROLES, resolvePayrollBasicSalary } from "./hrPayrollEligibility";
+import { recordedBreakMinutes } from "./technicianPayableShift";
 import { computeShiftHours, monthDates, overtimePayFor, payableDays, type DayHours, type OvertimePay } from "./hrHoursEngine";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
@@ -211,7 +212,7 @@ export async function computeMonthlyOvertime(staffId: string, month: string, bas
         const clockInMs = millisOf(data.clockInTime);
         const clockOutMs = millisOf(data.clockOutTime);
         if (clockInMs === null || clockOutMs === null) continue;
-        days.push(computeShiftHours({ shiftDate: safeText(data.shiftDate), clockInMs, clockOutMs }));
+        days.push(computeShiftHours({ shiftDate: safeText(data.shiftDate), clockInMs, clockOutMs, breakMinutes: recordedBreakMinutes(data) }));
     }
     const trackers = await db.collection("staff_request_trackers").where("staffId", "==", staffId).limit(200).get();
     const approvedByDate: Record<string, number> = {};
@@ -1120,7 +1121,8 @@ export const getMyHours = onCall(
                 missedClockOut: clockInMs !== null && clockOutMs === null && shiftDate < dubaiDateOf(Date.now()),
             };
             if (clockInMs !== null && clockOutMs !== null) {
-                const h = computeShiftHours({ shiftDate, clockInMs, clockOutMs });
+                const h = computeShiftHours({ shiftDate, clockInMs, clockOutMs, breakMinutes: recordedBreakMinutes(data) });
+                row.breakMinutes = recordedBreakMinutes(data);
                 engineDays.push(h);
                 Object.assign(row, h);
             }
