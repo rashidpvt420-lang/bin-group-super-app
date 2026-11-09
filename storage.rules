@@ -311,7 +311,12 @@ service firebase.storage {
 
     match /staffDocuments/{staffId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == staffId || isHrManagerTier());
-      allow write: if isAuth() && (request.auth.uid == staffId || isHrManagerTier()) && isDocumentUpload(15);
+      // Nov 9 audit (P2-18): staff may only add new evidence. Overwriting or deleting
+      // an uploaded certificate / document is reserved for the HR manager tier.
+      allow write: if isAuth() && isDocumentUpload(15) && (
+        isHrManagerTier() ||
+        (request.auth.uid == staffId && resource == null)
+      );
       allow delete: if isHrManagerTier();
     }
 
