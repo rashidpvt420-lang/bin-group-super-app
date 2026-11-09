@@ -47,6 +47,21 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
   const [dutyError, setDutyError] = useState('');
   const [gpsError, setGpsError] = useState('');
   const [gpsSharedAt, setGpsSharedAt] = useState<Date | null>(null);
+  // Nov 9 audit (P1-9): show the HR roster for today on the Home duty card.
+  const [roster, setRoster] = useState<{ loaded: boolean; today: { start: string; end: string } | null; set: boolean }>({ loaded: false, today: null, set: false });
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    let cancelled = false;
+    httpsCallable(functions, 'getMyRoster')({}).then((res: any) => {
+      if (cancelled) return;
+      const weekly = res?.data?.weekly || null;
+      const dubaiWeekday = String(new Date(Date.now() + 4 * 3600 * 1000).getUTCDay());
+      const today = weekly && weekly[dubaiWeekday] && weekly[dubaiWeekday].start ? { start: String(weekly[dubaiWeekday].start), end: String(weekly[dubaiWeekday].end) } : null;
+      setRoster({ loaded: true, today, set: Boolean(weekly) });
+    }).catch(() => { if (!cancelled) setRoster({ loaded: false, today: null, set: false }); });
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -136,6 +151,11 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
             ? tx('tech.duty.onDutyHelp', 'You can receive new jobs. This button is also your paid clock. While you have no active job, your location is shared with dispatch every few minutes.')
             : tx('tech.duty.offDutyHelp', 'Start your shift to receive jobs and to record paid hours. New complaints are only routed to technicians who are on duty.')}
         </Typography>
+        {roster.loaded && (
+          <Typography variant="body2" data-testid="technician-roster-today" sx={{ color: '#111827', fontWeight: 700 }}>
+            {roster.today ? `${tx('tech.duty.rosterToday', "Today's shift (GST):")} ${roster.today.start}–${roster.today.end}` : roster.set ? tx('tech.duty.rosterRest', 'Today is a rest day on your roster.') : tx('tech.duty.rosterNone', 'HR has not set your weekly roster yet.')}
+          </Typography>
+        )}
         <Typography variant="body2" data-testid="technician-paid-clock-note" sx={{ color: '#111827', fontWeight: 700 }}>
           {tx('tech.duty.payNote', 'Starting duty clocks you in for pay. Ending the shift clocks you out. Hours are counted from this clock.')}
         </Typography>

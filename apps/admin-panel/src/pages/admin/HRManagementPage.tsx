@@ -13,6 +13,7 @@ import StaffAccessPage from './StaffAccessPage';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 import OvertimeClaimsReviewPanel from './OvertimeClaimsReviewPanel';
+import StaffRosterEditorDialog from './StaffRosterEditorDialog';
 import HrDocumentVerifyDialog, { type VerifiableDocument } from './HrDocumentVerifyDialog';
 import { credentialKindForDocument } from '../../lib/technicianCredentialForm';
 
@@ -83,6 +84,7 @@ export default function HRManagementPage() {
     const [staff, setStaff] = useState<StaffLifecycle[]>([]);
     const [hrOps, setHrOps] = useState<HrOps>({ attendance: [], leaveRequests: [], documents: [], staffUploads: [] });
     const [verifyDocument, setVerifyDocument] = useState<VerifiableDocument | null>(null);
+    const [rosterStaff, setRosterStaff] = useState<{ uid: string; displayName: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -338,7 +340,7 @@ export default function HRManagementPage() {
                                                 <TableCell><Stack spacing={.5}><Chip size="small" color={lifecycleColor(member.lifecycleState) as any} label={member.lifecycleState.replace(/_/g, ' ')} sx={{ width: 'fit-content', fontWeight: 900 }} /><Typography variant="caption" sx={{ color: member.emailVerified ? '#10b981' : '#f59e0b' }}>{member.emailVerified ? 'Email verified' : 'Email not verified'}</Typography></Stack></TableCell>
                                                 <TableCell><Stack direction="row" spacing={.5} flexWrap="wrap"><Chip size="small" label={member.employeeIdConfigured ? 'EMP ID ✓' : 'EMP ID !'} /><Chip size="small" label={member.emiratesIdConfigured ? 'EID ✓' : 'EID !'} /><Chip size="small" label={member.salaryConfigured ? 'SALARY ✓' : 'SALARY !'} /></Stack></TableCell>
                                                 <TableCell><Typography sx={{ color: '#fff' }}>{member.shiftName || 'Unassigned'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>{member.workingHours || 'No working hours'} · {member.offDay || 'No off day'}</Typography></TableCell>
-                                                <TableCell><Stack direction="row" spacing={1} flexWrap="wrap"><Button size="small" onClick={() => openProfile(member.uid)} data-testid={`admin-staff-profile-${member.uid}`}>PROFILE</Button>{canManageLifecycle && !member.emailVerified && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" disabled={actionBusy} onClick={() => void resendInvitation(member)}>{actionBusy ? <CircularProgress size={14} /> : 'RESEND INVITE'}</Button>}{isProvisioningAdmin && <Button size="small" onClick={() => setTab(4)}>ACCESS</Button>}{canManageLifecycle && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" color="error" disabled={actionBusy} onClick={() => void offboardStaff(member)}>{actionBusy ? <CircularProgress size={14} /> : 'OFFBOARD'}</Button>}</Stack></TableCell>
+                                                <TableCell><Stack direction="row" spacing={1} flexWrap="wrap"><Button size="small" onClick={() => openProfile(member.uid)} data-testid={`admin-staff-profile-${member.uid}`}>PROFILE</Button>{isHRStaff && <Button size="small" data-testid={`admin-staff-roster-${member.uid}`} onClick={() => setRosterStaff({ uid: member.uid, displayName: member.displayName })}>ROSTER</Button>}{canManageLifecycle && !member.emailVerified && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" disabled={actionBusy} onClick={() => void resendInvitation(member)}>{actionBusy ? <CircularProgress size={14} /> : 'RESEND INVITE'}</Button>}{isProvisioningAdmin && <Button size="small" onClick={() => setTab(4)}>ACCESS</Button>}{canManageLifecycle && !['SUSPENDED', 'OFFBOARDED'].includes(member.status) && <Button size="small" color="error" disabled={actionBusy} onClick={() => void offboardStaff(member)}>{actionBusy ? <CircularProgress size={14} /> : 'OFFBOARD'}</Button>}</Stack></TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -363,6 +365,7 @@ export default function HRManagementPage() {
                 </Stack>
             </Container>
 
+            <StaffRosterEditorDialog staff={rosterStaff} onClose={() => setRosterStaff(null)} onSaved={(message) => setNotice({ type: 'success', message })} />
             <StaffLifecycleDetailsDialog uid={selectedStaffUid} open={Boolean(selectedStaffUid)} onClose={closeProfile} onChanged={loadProtectedHr} />
         </Box>
     );

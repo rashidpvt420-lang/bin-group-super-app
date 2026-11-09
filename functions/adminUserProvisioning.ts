@@ -354,7 +354,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       uid, displayName, role, employeeType: role, department, specialization,
       status: "INVITED", suspended: true, onboardingStage: "INVITED", onboardingComplete: false,
       joiningDate: cleanString(payload.joiningDate) || null, offDay: cleanString(payload.offDay, "Sunday"),
-      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
+      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "8 AM - 4 PM"),
       employmentType: cleanString(payload.employmentType, "full_time"), createdAt: now, updatedAt: now,
     };
     const privateHrProfile = {
