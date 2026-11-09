@@ -3,7 +3,7 @@ import * as crypto from "crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 import { tenantUnitLinkMatches } from "./tenantUnitLink";
-import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
+import { assertPropertyServiceEntitlement, ownerServicesSuspended } from "./propertyServiceEntitlement";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -139,17 +139,22 @@ export const createTenantServiceTicket = onCall(
       }
 
       const ownerId = text(property.ownerUid || property.ownerId || unit.ownerUid || unit.ownerId, 160);
+      // D-03: a tenant emergency on a suspended owner's unit always goes through; other requests
+      // are refused while the owner's services are suspended (or the owner account is locked).
+      const emergencyRequest = kind === "EMERGENCY" ||
+        (kind === "AI_CONCIERGE" && text(details.priority, 20).toLowerCase() === "emergency");
       if (ownerId) {
         const ownerSnap = await transaction.get(db.collection("users").doc(ownerId));
         const ownerProfile = ownerSnap.data() || {};
-        if (ownerSnap.exists && text(ownerProfile.status, 60).toLowerCase() === "suspended") {
+        if (ownerSnap.exists && !emergencyRequest && ownerServicesSuspended(ownerProfile)) {
           throw new HttpsError(
             "failed-precondition",
-            "Maintenance dispatch is suspended for this property. Contact the property owner or manager.",
+            "Maintenance dispatch is suspended for this property. Only emergency requests are accepted. Contact the property owner or manager.",
+            { reason: "OWNER_SERVICES_SUSPENDED" },
           );
         }
       }
-      await assertPropertyServiceEntitlement(db, (ref) => transaction.get(ref), propertyId, property);
+      await assertPropertyServiceEntitlement(db, (ref) => transaction.get(ref), propertyId, property, { emergency: emergencyRequest });
 
       let canonicalGeo;
       try {
