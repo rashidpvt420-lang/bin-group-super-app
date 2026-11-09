@@ -77,18 +77,18 @@ export default function TenantProfileReadinessCard() {
 
   return (
     <Paper data-testid="tenant-profile-readiness" sx={{ p: { xs: 3, md: 4 }, mb: 4, borderRadius: 6, position: 'relative', zIndex: 2, bgcolor: '#FFFFFF', color: '#111827', border: `1px solid ${alpha(binThemeTokens.gold, 0.45)}`, boxShadow: '0 8px 24px rgba(17,24,39,0.08)', direction: isRTL ? 'rtl' : 'ltr', '&&': { bgcolor: '#FFFFFF', color: '#111827' } }}>
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center"><ShieldCheck color="#7A5C12" /><Typography variant="h5" fontWeight={950} sx={{ color: '#111827' }}>{copy('Tenant Profile Readiness', 'جاهزية ملف المستأجر')}</Typography></Stack>
+          <Stack direction={'row'} spacing={1.2} alignItems="center"><ShieldCheck color="#7A5C12" /><Typography variant="h5" fontWeight={950} sx={{ color: '#111827' }}>{copy('Tenant Profile Readiness', 'جاهزية ملف المستأجر')}</Typography></Stack>
           <Typography variant="body2" sx={{ color: '#374151' }} mt={0.5}>{copy('Identity, residence, unit-link, lease and move-in readiness.', 'جاهزية الهوية والسكن وربط الوحدة وعقد الإيجار والدخول.')}</Typography>
         </Box>
         <Button startIcon={loading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} onClick={() => void load()} disabled={loading} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{copy('Refresh', 'تحديث')}</Button>
       </Stack>
       {error && <Alert severity="warning" sx={{ mt: 2 }}>{error}</Alert>}
       {!!checks.length && <>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" mt={3} mb={1}><Typography sx={{ color: '#111827' }} fontWeight={900}>{progress === 100 ? copy('Profile ready', 'الملف جاهز') : copy('Profile setup in progress', 'إعداد الملف قيد التنفيذ')}</Typography><Typography sx={{ color: '#7A5C12' }} fontWeight={950}>{progress}%</Typography></Stack>
+        <Stack direction={'row'} justifyContent="space-between" mt={3} mb={1}><Typography sx={{ color: '#111827' }} fontWeight={900}>{progress === 100 ? copy('Profile ready', 'الملف جاهز') : copy('Profile setup in progress', 'إعداد الملف قيد التنفيذ')}</Typography><Typography sx={{ color: '#7A5C12' }} fontWeight={950}>{progress}%</Typography></Stack>
         <LinearProgress variant="determinate" value={progress} sx={{ height: 9, borderRadius: 99, mb: 3 }} />
-        <Grid container spacing={1.5}>{checks.map((item) => <Grid item xs={12} sm={6} md={3} key={item.key}><Box sx={{ p: 1.7, height: '100%', borderRadius: 3, bgcolor: item.ready ? '#ECFDF5' : '#FFFBEB', border: `1px solid ${item.ready ? '#6EE7B7' : '#FCD34D'}` }}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">{item.ready ? <CheckCircle2 size={17} color="#065F46" /> : <CircleDashed size={17} color="#92400E" />}<Typography variant="body2" fontWeight={900} sx={{ color: '#111827' }}>{copy(item.en, item.ar)}</Typography></Stack><Chip size="small" label={item.ready ? copy('Complete', 'مكتمل') : copy('Pending', 'معلق')} sx={{ mt: 1, fontWeight: 800, bgcolor: item.ready ? '#D1FAE5' : '#FEF3C7', color: item.ready ? '#065F46' : '#92400E', '& .MuiChip-label': { color: item.ready ? '#065F46' : '#92400E' } }} /></Box></Grid>)}</Grid>
+        <Grid container spacing={1.5}>{checks.map((item) => <Grid item xs={12} sm={6} md={3} key={item.key}><Box sx={{ p: 1.7, height: '100%', borderRadius: 3, bgcolor: item.ready ? '#ECFDF5' : '#FFFBEB', border: `1px solid ${item.ready ? '#6EE7B7' : '#FCD34D'}` }}><Stack direction={'row'} spacing={1} alignItems="center">{item.ready ? <CheckCircle2 size={17} color="#065F46" /> : <CircleDashed size={17} color="#92400E" />}<Typography variant="body2" fontWeight={900} sx={{ color: '#111827' }}>{copy(item.en, item.ar)}</Typography></Stack><Chip size="small" label={item.ready ? copy('Complete', 'مكتمل') : copy('Pending', 'معلق')} sx={{ mt: 1, fontWeight: 800, bgcolor: item.ready ? '#D1FAE5' : '#FEF3C7', color: item.ready ? '#065F46' : '#92400E', '& .MuiChip-label': { color: item.ready ? '#065F46' : '#92400E' } }} /></Box></Grid>)}</Grid>
       </>}
     </Paper>
   );

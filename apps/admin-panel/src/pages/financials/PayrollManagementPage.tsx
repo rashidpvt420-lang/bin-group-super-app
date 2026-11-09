@@ -24,7 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -48,14 +48,6 @@ export const canPreparePayroll = (user: any, mfaVerified: boolean): boolean => {
   return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || PREPARE_ROLES.has(role));
 };
 
-interface Technician {
-  uid: string;
-  displayName: string;
-  email: string;
-  specialization: string;
-  baseSalary?: number;
-}
-
 interface PayrollRecord {
   id: string;
   techId: string;
@@ -71,7 +63,6 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
   const { user, mfaVerified } = useAuth();
   const showPrepare = mode === 'prepare' && canPreparePayroll(user, mfaVerified);
   const showSettle = mode === 'settle' && canSettlePayroll(user, mfaVerified);
-  const [techs, setTechs] = useState<Technician[]>([]);
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
   const [openProcess, setOpenAdd] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -80,13 +71,6 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   useEffect(() => {
-    const qTechs = query(collection(db, 'users'), where('role', '==', 'technician'));
-    const unsubscribeTechs = onSnapshot(
-      qTechs,
-      (snap) => setTechs(snap.docs.map(d => ({ uid: d.id, ...d.data() } as Technician))),
-      (error) => setActionError(error.message || 'Technician payroll profiles could not be loaded.'),
-    );
-
     const qPayroll = query(collection(db, 'payroll'));
     const unsubscribePayroll = onSnapshot(
       qPayroll,
@@ -95,10 +79,44 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
     );
 
     return () => {
-      unsubscribeTechs();
       unsubscribePayroll();
     };
   }, []);
+
+  // P1-2: the preview comes from the server (private HR salary, all staff roles), never from users docs.
+  const [serverPreview, setServerPreview] = useState<{ count: number; total: number; skipped: string[] } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  useEffect(() => {
+    if (!openProcess) return;
+    let cancelled = false;
+    setPreviewLoading(true);
+    setServerPreview(null);
+    (async () => {
+      try {
+        const previewPayroll = httpsCallable<
+          { month: string; afterId?: string; preview: true },
+          { processed: number; previewTotal?: number; skipped: string[]; nextAfterId: string | null }
+        >(functions, 'adminGeneratePayrollBatch');
+        let afterId = '';
+        let count = 0;
+        let total = 0;
+        const skipped: string[] = [];
+        do {
+          const result = await previewPayroll({ month: currentMonth, preview: true, ...(afterId ? { afterId } : {}) });
+          count += Number(result.data.processed || 0);
+          total += Number(result.data.previewTotal || 0);
+          skipped.push(...(Array.isArray(result.data.skipped) ? result.data.skipped : []));
+          afterId = String(result.data.nextAfterId || '');
+        } while (afterId && !cancelled);
+        if (!cancelled) setServerPreview({ count, total: Math.round(total * 100) / 100, skipped });
+      } catch (err: any) {
+        if (!cancelled) setActionError(err?.message || 'Payroll preview could not be prepared on the server.');
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [openProcess, currentMonth]);
 
   const handleProcessPayroll = async () => {
     setProcessing(true);
@@ -161,10 +179,9 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
     .filter(p => p.month === currentMonth)
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const eligibleTechs = techs.filter(tech => !payroll.find(p => p.techId === tech.uid && p.month === currentMonth));
-  const payableTechs = eligibleTechs.filter(tech => (tech.baseSalary || 0) > 0);
-  const skippedTechs = eligibleTechs.filter(tech => !((tech.baseSalary || 0) > 0));
-  const previewTotal = payableTechs.reduce((sum, tech) => sum + (tech.baseSalary || 0), 0);
+  const previewCount = serverPreview?.count ?? 0;
+  const previewTotal = serverPreview?.total ?? 0;
+  const previewSkipped = serverPreview?.skipped ?? [];
 
   const formatAED = (val: number) => {
     return val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
@@ -251,11 +268,11 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
             {t('fin.gen_payroll_desc')}
           </Typography>
           <Alert severity="info" sx={{ textAlign: isRTL ? 'right' : 'left', direction: isRTL ? 'rtl' : 'ltr' }}>
-            {t('fin.gen_payroll_info', { count: payableTechs.length, currency: t('common.currency_aed'), amount: formatAED(previewTotal) })}
+            {previewLoading ? t('fin.gen_payroll_preview_loading') : t('fin.gen_payroll_info', { count: previewCount, currency: t('common.currency_aed'), amount: formatAED(previewTotal) })}
           </Alert>
-          {skippedTechs.length > 0 && (
+          {previewSkipped.length > 0 && (
             <Alert severity="warning" sx={{ mt: 2, textAlign: isRTL ? 'right' : 'left', direction: isRTL ? 'rtl' : 'ltr' }}>
-              {t('fin.gen_payroll_skipped', { count: skippedTechs.length, names: skippedTechs.map(tech => tech.displayName || tech.email).join(', ') })}
+              {t('fin.gen_payroll_skipped', { count: previewSkipped.length, names: previewSkipped.join(', ') })}
             </Alert>
           )}
         </DialogContent>

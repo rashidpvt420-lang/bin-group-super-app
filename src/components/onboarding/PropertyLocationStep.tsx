@@ -11,6 +11,7 @@ import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor'
 import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
 import { OWNER_MANUAL_GEO_SOURCE, isEmirateCentroid } from './ownerLocationRules';
 import { buildAddressQuery, createNominatimFetch, isNetworkFetchError, resolvePropertyAddress } from './propertyAddressLookup';
+import { firstUnpinnedPropertyIndex, hasValidPropertyPin } from './propertyPinStatus';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', en: 'Dubai', ar: 'دبي', lat: 25.2048, lng: 55.2708 },
@@ -78,11 +79,26 @@ const fieldSx = {
     }
 };
 
-const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
+const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void; initialIndex?: number }> = ({ onNext, onBack, initialIndex }) => {
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
-    const activeProperty = properties[0];
+    // P1-1: every property in the portfolio gets its own pin. Start on the requested property,
+    // otherwise on the first one that is still unpinned.
+    const clampIndex = (index: number) => Math.min(Math.max(0, index), Math.max(0, properties.length - 1));
+    const [activeIndex, setActiveIndex] = useState(() => {
+        if (typeof initialIndex === 'number' && initialIndex >= 0) return clampIndex(initialIndex);
+        const firstMissing = firstUnpinnedPropertyIndex(properties);
+        return firstMissing >= 0 ? clampIndex(firstMissing) : 0;
+    });
+    useEffect(() => {
+        if (typeof initialIndex === 'number' && initialIndex >= 0) setActiveIndex(clampIndex(initialIndex));
+    }, [initialIndex]);
+    useEffect(() => {
+        if (activeIndex >= properties.length && properties.length > 0) setActiveIndex(properties.length - 1);
+    }, [activeIndex, properties.length]);
+    const activeProperty = properties[activeIndex];
+    const propertyLabel = (index: number) => copy(`Property ${index + 1}`, `العقار ${index + 1}`);
     const fallbackEmirate = getEmirate(activeProperty?.emirate);
 
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -94,15 +110,41 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
 
-    const { isLoaded: mapsLoaded } = useGoogleMaps();
+    const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
+    const mapsUnavailable = !mapsLoaded && Boolean(mapsLoadError) && mapsLoadError?.message !== 'EMBEDDED_GOOGLE_MAPS_DISABLED';
     const mapDivRef = useRef<HTMLDivElement | null>(null);
     const mapObjRef = useRef<any>(null);
     const markerObjRef = useRef<any>(null);
     const commitGeoAnchorRef = useRef<(payload: any) => void>(() => {});
 
+    const [suggestedAddress, setSuggestedAddress] = useState<string | null>(null);
+    const activeAddressRef = useRef<string>('');
+    useEffect(() => { activeAddressRef.current = String(activeProperty?.address || '').trim(); });
+
     useEffect(() => {
-        if (!activeProperty?.emirate) updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
-    }, []);
+        if (!activeProperty?.emirate) updateProperty(activeIndex, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
+    }, [activeIndex]);
+
+    // P1-1: switching property loads that property's own pin and links, never the previous one's.
+    const loadedIndexRef = useRef(activeIndex);
+    useEffect(() => {
+        if (loadedIndexRef.current === activeIndex) return;
+        loadedIndexRef.current = activeIndex;
+        const property = properties[activeIndex];
+        setManualLat(String(property?.location?.lat || property?.geo?.lat || ''));
+        setManualLng(String(property?.location?.lng || property?.geo?.lng || ''));
+        setGoogleMapsUrlField(property?.googleMapsUrl || property?.location?.googleMapsUrl || '');
+        setPlusCodeField(property?.plusCode || property?.location?.plusCode || '');
+        setSuggestedAddress(null);
+        setLocationError(null);
+        const lat = Number(property?.geo?.lat || property?.location?.lat);
+        const lng = Number(property?.geo?.lng || property?.location?.lng);
+        if (mapObjRef.current && !isValidLatLng(lat, lng)) {
+            const emirate = getEmirate(property?.emirate);
+            mapObjRef.current.panTo({ lat: emirate.lat, lng: emirate.lng });
+            mapObjRef.current.setZoom?.(12);
+        }
+    }, [activeIndex]);
 
     const directGoogleMapsInput = useMemo(
         () => findGoogleMapsInput(googleMapsUrlField, activeProperty?.address),
@@ -130,19 +172,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             patch.googleMapsUrl = value;
             patch.location = { ...(activeProperty?.location || {}), googleMapsUrl: value };
         }
-        updateProperty(0, patch);
+        updateProperty(activeIndex, patch);
     };
 
     const handleGoogleMapsUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setGoogleMapsUrlField(value);
-        updateProperty(0, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
+        updateProperty(activeIndex, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
     };
 
     const handlePlusCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setPlusCodeField(value);
-        updateProperty(0, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
+        updateProperty(activeIndex, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
     };
 
     const commitGeoAnchor = (payload: {
@@ -184,7 +226,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 accuracyMeters: payload.accuracyMeters,
                 capturedAt: payload.capturedAt,
             });
-            updateProperty(0, {
+            updateProperty(activeIndex, {
                 address: geo.address,
                 emirate: geo.emirate,
                 city: geo.city,
@@ -270,10 +312,16 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const applyPin = (lat: number, lng: number) => {
             geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
                 const resolved = status === 'OK' ? results?.[0] : null;
+                // P2-19: a pin move never overwrites the address the owner typed. The map's
+                // reverse-geocoded address is only offered as a suggestion.
+                const typedAddress = activeAddressRef.current;
+                const reverseAddress = resolved?.formatted_address ? String(resolved.formatted_address) : '';
+                const keepTypedAddress = typedAddress.length >= 3 && !looksLikeGoogleMapsUrl(typedAddress);
+                setSuggestedAddress(keepTypedAddress && reverseAddress && reverseAddress !== typedAddress ? reverseAddress : null);
                 commitGeoAnchorRef.current({
                     lat,
                     lng,
-                    address: resolved?.formatted_address,
+                    address: keepTypedAddress ? typedAddress : (reverseAddress || undefined),
                     placeId: resolved?.place_id || 'MAP_PIN',
                     source: 'google_maps',
                     verified: false,
@@ -316,7 +364,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const handleEmirateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = event.target.value;
         const emirate = getEmirate(emirateId);
-        updateProperty(0, { emirate: emirateId, city: emirateId } as any);
+        updateProperty(activeIndex, { emirate: emirateId, city: emirateId } as any);
         // F-8: move the map view only; the Owner still has to pin the exact property location.
         if (mapObjRef.current && !isValidLatLng(Number(manualLat), Number(manualLng))) mapObjRef.current.panTo({ lat: emirate.lat, lng: emirate.lng });
     };
@@ -480,7 +528,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const currentGeo = activeProperty?.geo;
         const coordinatesUnchanged = currentGeo && sameCoordinate(currentGeo.lat, lat) && sameCoordinate(currentGeo.lng, lng);
         if (coordinatesUnchanged) {
-            updateProperty(0, {
+            updateProperty(activeIndex, {
                 address: activeProperty.address,
                 emirate: activeProperty.emirate,
                 city: activeProperty.city || activeProperty.emirate,
@@ -525,16 +573,26 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             });
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        const nextMissing = firstUnpinnedPropertyIndex(properties, activeIndex);
+        if (nextMissing >= 0) {
+            setActiveIndex(nextMissing);
+            setLocationError(copy(
+                `${propertyLabel(nextMissing)} still needs its exact pin. Pin it before continuing.`,
+                `${propertyLabel(nextMissing)} ما زال يحتاج إلى علامة موقعه الدقيقة. ضع العلامة قبل المتابعة.`
+            ));
+            return;
+        }
         onNext();
     };
 
+    const otherUnpinnedIndex = firstUnpinnedPropertyIndex(properties, activeIndex);
     const canProceed = Boolean(activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)) && !isEmirateCentroid(Number(manualLat), Number(manualLng), EMIRATES_LIST));
     const locationVerified = activeProperty?.geo?.verified === true;
     const dispatchReady = activeProperty?.geo?.dispatchReady === true;
 
     return (
         <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
-            <style>{`.pac-container, .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message { display: none !important; visibility: hidden !important; pointer-events: none !important; }`}</style>
+            <style>{`.pac-container { display: none !important; visibility: hidden !important; pointer-events: none !important; }`}</style>
             <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 6 } }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, fontSize: { xs: '1.65rem', md: '2.125rem' } }}>
                     {readable(t('onboarding.location_title'), copy('Property Location', 'موقع العقار'))}
@@ -547,13 +605,36 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             <Container maxWidth="md" sx={{ px: { xs: 0, sm: 3 } }}>
                 <Paper sx={{ p: { xs: 2, sm: 3, md: 6 }, borderRadius: { xs: 3, md: 6 }, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'visible' }}>
                     <Stack spacing={{ xs: 2.5, md: 4 }}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+                        {properties.length > 1 && (
+                            <Box data-testid="property-location-selector">
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800, mb: 1 }}>
+                                    {copy('Pin every property. Select a property to set its location.', 'ضع علامة لكل عقار. اختر عقاراً لتحديد موقعه.')}
+                                </Typography>
+                                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                    {properties.map((property, index) => {
+                                        const pinned = hasValidPropertyPin(property as any);
+                                        return (
+                                            <Chip
+                                                key={(property as any)?.id || index}
+                                                icon={pinned ? <ShieldCheck size={15} /> : <MapPin size={15} />}
+                                                onClick={() => setActiveIndex(index)}
+                                                label={`${propertyLabel(index)} · ${pinned ? copy('Pinned', 'تم التحديد') : copy('Pin needed', 'يحتاج علامة')}`}
+                                                color={index === activeIndex ? 'primary' : (pinned ? 'success' : 'warning')}
+                                                variant={index === activeIndex ? 'filled' : 'outlined'}
+                                                sx={{ fontWeight: 900 }}
+                                            />
+                                        );
+                                    })}
+                                </Stack>
+                            </Box>
+                        )}
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                             <Chip icon={locationVerified ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />} label={locationVerified ? copy('Location verified', 'الموقع موثّق') : copy('Location review required', 'مراجعة الموقع مطلوبة')} color={locationVerified ? 'success' : 'warning'} />
                             <Chip label={dispatchReady ? copy('Dispatch ready', 'جاهز للإرسال') : copy('Dispatch locked until review', 'الإرسال مقفل حتى المراجعة')} color={dispatchReady ? 'success' : 'default'} />
                             {activeProperty?.geo?.source && <Chip label={`${copy('Source', 'المصدر')}: ${activeProperty.geo.source}`} />}
                         </Stack>
 
-                        <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 1, flexDirection: 'row' }}>
                             <MapPin size={18} /> {readable(t('onboarding.property_address'), copy('Property Address', 'عنوان العقار'))}
                         </Typography>
 
@@ -580,13 +661,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             <Button variant="outlined" href={googleMapsUrl} target="_blank" rel="noreferrer" startIcon={<ExternalLink size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{copy('Open Google Maps', 'فتح خرائط Google')}</Button>
                         </Stack>
 
+                        {suggestedAddress && (
+                            <Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { updateProperty(activeIndex, { address: suggestedAddress } as any); setSuggestedAddress(null); }}>{copy('Use this address', 'استخدم هذا العنوان')}</Button>}>
+                                {copy('The map suggests this address for the pin:', 'تقترح الخريطة هذا العنوان للعلامة:')} {suggestedAddress}
+                            </Alert>
+                        )}
+                        {mapsUnavailable && <Alert severity="info" data-testid="map-unavailable">{copy('Map unavailable — enter coordinates or paste a Google Maps link.', 'الخريطة غير متاحة — أدخل الإحداثيات أو الصق رابط خرائط Google.')}</Alert>}
                         {hasShortGoogleMapsLink && <Alert severity="info">{copy('Short share links hide coordinates. Open the link and paste the expanded URL after Google Maps loads.', 'تخفي روابط المشاركة المختصرة الإحداثيات. افتح الرابط والصق الرابط الكامل بعد تحميل خرائط Google.')}</Alert>}
 
                         <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
                         <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.22)', overflow: 'hidden' }}>
-                            <Box sx={{ p: 2.5, display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexDirection: { xs: 'column', sm: isRTL ? 'row-reverse' : 'row' } }}>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Navigation size={20} color={binThemeTokens.gold} />{mapsLoaded ? copy('Tap or drag the pin to mark the exact property', 'اضغط أو اسحب العلامة لتحديد العقار بدقة') : copy('Live coordinate map preview', 'معاينة مباشرة لخريطة الإحداثيات')}</Typography>
+                            <Box sx={{ p: 2.5, display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                <Box sx={{ textAlign: 'start' }}>
+                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1, flexDirection: 'row' }}><Navigation size={20} color={binThemeTokens.gold} />{mapsLoaded ? copy('Tap or drag the pin to mark the exact property', 'اضغط أو اسحب العلامة لتحديد العقار بدقة') : copy('Live coordinate map preview', 'معاينة مباشرة لخريطة الإحداثيات')}</Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>{mapsLoaded ? copy('Click the map or drag the gold pin. Owner-selected coordinates remain untrusted until authoritative review.', 'اضغط على الخريطة أو اسحب العلامة الذهبية. تبقى الإحداثيات التي يختارها المالك غير موثوقة حتى المراجعة الرسمية.') : copy('Enter an address, expanded map link or coordinates, then select Find Property Address.', 'أدخل عنواناً أو رابط خريطة كاملاً أو إحداثيات، ثم اختر البحث عن عنوان العقار.')}</Typography>
                                 </Box>
                                 <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>{copy('Open Google Maps', 'فتح خرائط Google')}</Button>
@@ -597,9 +684,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                         </Paper>
 
                         {locationError && <Alert severity="warning">{locationError}</Alert>}
-                        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 2 }}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 2 }}>
                             <Button variant="outlined" onClick={onBack} fullWidth startIcon={!isRTL ? <ArrowLeft /> : undefined} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : undefined} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>{readable(t('onboarding.back'), copy('Back', 'رجوع'))}</Button>
-                            <Button variant="contained" size="large" onClick={handleContinue} fullWidth disabled={!canProceed} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>{readable(t('onboarding.continue'), copy('Continue', 'متابعة'))}</Button>
+                            <Button variant="contained" size="large" onClick={handleContinue} fullWidth disabled={!canProceed} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>{otherUnpinnedIndex >= 0 ? copy(`Save and pin ${propertyLabel(otherUnpinnedIndex)}`, `حفظ وتحديد ${propertyLabel(otherUnpinnedIndex)}`) : readable(t('onboarding.continue'), copy('Continue', 'متابعة'))}</Button>
                         </Stack>
                     </Stack>
                 </Paper>

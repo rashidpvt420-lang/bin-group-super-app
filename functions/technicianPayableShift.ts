@@ -152,3 +152,40 @@ export function payableDutyWrite(
   }
   return decision;
 }
+
+/**
+ * P1-3: break ledger on the payable staff_shifts day. Breaks are unpaid, so the
+ * hours engine subtracts totalBreakMinutes before the overtime split.
+ * Pure: returns the fields to merge for this action.
+ */
+export function payableBreakPatch(
+  existing: Record<string, unknown> | null | undefined,
+  action: PayableShiftAction,
+  nowMs: number,
+): Record<string, unknown> {
+  const status = String(existing?.status || "").toUpperCase();
+  const openStart = timestampToDate(existing?.breakStartedAt);
+  const priorTotal = Number(existing?.totalBreakMinutes) || 0;
+  const priorBreaks = Array.isArray(existing?.breaks) ? (existing?.breaks as unknown[]) : [];
+  const closeOpenBreak = () => {
+    if (!openStart) return {};
+    const minutes = Math.max(0, Math.round((nowMs - openStart.getTime()) / 60_000));
+    return {
+      breakStartedAt: null,
+      totalBreakMinutes: priorTotal + minutes,
+      breaks: [...priorBreaks, { start: openStart.toISOString(), end: new Date(nowMs).toISOString(), minutes }].slice(-50),
+    };
+  };
+  if (action === "BREAK") {
+    if (status === "ON_BREAK" && openStart) return {};
+    return { breakStartedAt: new Date(nowMs) };
+  }
+  if (action === "RESUME" || action === "CLOCK_OUT") return closeOpenBreak();
+  return {};
+}
+
+/** Unpaid break minutes recorded on a staff_shifts document. */
+export function recordedBreakMinutes(shift: Record<string, unknown> | null | undefined): number {
+  const total = Number(shift?.totalBreakMinutes);
+  return Number.isFinite(total) && total > 0 ? Math.round(total) : 0;
+}

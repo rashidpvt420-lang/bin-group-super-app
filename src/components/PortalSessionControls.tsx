@@ -96,7 +96,7 @@ export default function PortalSessionControls({
   const deleteAccountLabel = phrase('Request account deletion', 'طلب حذف الحساب');
 
   return (
-    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+    <Stack direction={'row'} spacing={1} alignItems="center">
       <Button
         type="button"
         data-testid={`${role}-language-toggle`}

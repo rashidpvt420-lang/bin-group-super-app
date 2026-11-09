@@ -68,12 +68,12 @@ export default function BlueprintOperationalPage({ eyebrow, title, subtitle, ite
                   boxShadow: dark ? 'none' : '0 12px 34px rgba(17,24,39,0.06)',
                 }}
               >
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start">
+                <Stack direction={'row'} spacing={1.5} alignItems="flex-start">
                   <Box sx={{ mt: 0.3, color }}>
                     <SafeIcon icon={item.status === 'ready' ? CheckCircle2 : item.status === 'configured' ? ShieldCheck : Circle} size={20} />
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1, gap: 1 }}>
+                    <Stack direction={'row'} spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1, gap: 1 }}>
                       <Typography sx={{ color: text, fontWeight: 950 }}>{item.title}</Typography>
                       <Chip
                         size="small"

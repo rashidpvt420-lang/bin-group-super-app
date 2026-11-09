@@ -37,6 +37,8 @@ export default function PropertyOnboardingPage() {
     const [guardError, setGuardError] = React.useState('');
     const [section, setSection] = React.useState(0);
     const requestedSectionRef = React.useRef<number | null>(null);
+    const [locationIndex, setLocationIndex] = React.useState<number | undefined>(undefined);
+    const [assetIndex, setAssetIndex] = React.useState<number | undefined>(undefined);
 
     const safePage = clampPage(step);
     const pageProgress = safePage * 20;
@@ -70,9 +72,14 @@ export default function PropertyOnboardingPage() {
     React.useEffect(() => {
         if (!addPropertyIntent || addIntentAppliedRef.current || !signedInSession) return;
         addIntentAppliedRef.current = true;
-        if (properties.length === 0) addProperty();
-        requestedSectionRef.current = 2;
-        if (Number(step) === 2) setSection(2);
+        // P2-21: start on the Property profile (type, size) of a NEW blank property card so the
+        // property is classified before the map pin and the quote; never edit property 1 again.
+        const newIndex = properties.length;
+        addProperty();
+        setAssetIndex(newIndex);
+        setLocationIndex(newIndex);
+        requestedSectionRef.current = 0;
+        if (Number(step) === 2) setSection(0);
         else setStep(2);
     }, [addProperty, addPropertyIntent, properties.length, setStep, signedInSession]);
 
@@ -115,8 +122,9 @@ export default function PropertyOnboardingPage() {
         goBackPage();
     };
 
-    const fixPropertyLocation = () => {
+    const fixPropertyLocation = (propertyIndex?: number) => {
         setGuardError('');
+        setLocationIndex(typeof propertyIndex === 'number' && propertyIndex >= 0 ? propertyIndex : undefined);
         requestedSectionRef.current = 2;
         if (Number(step) === 2) setSection(2);
         else setStep(2);
@@ -151,9 +159,9 @@ export default function PropertyOnboardingPage() {
                 : <AccountCreationStep onNext={advancePage} onBack={backSectionOrPage} brokerUid={brokerUid} />;
         }
         if (safePage === 2) {
-            if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} />;
+            if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} initialIndex={assetIndex} />;
             if (section === 1) return <PropertyPortfolioIntelligenceStep onNext={advanceSection} onBack={backSectionOrPage} />;
-            if (section === 2) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} />;
+            if (section === 2) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} initialIndex={locationIndex} />;
             return <SystemsDataStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
         if (safePage === 3) {
@@ -172,9 +180,9 @@ export default function PropertyOnboardingPage() {
     return (
         <Box className="white-platinum-onboarding" dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100dvh', bgcolor: '#FFFFFF', color: '#111827', py: { xs: 1.5, md: 4 } }}>
             <Container maxWidth="xl">
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
+                <Stack direction={'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
                     <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate(addPropertyIntent ? '/owner/dashboard' : '/')} sx={{ color: '#7A5C12', fontWeight: 900, minWidth: 0 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                    <Stack direction={'row'} spacing={1} alignItems="center">
                         {intakeId && <Chip size="small" icon={<Save size={14} />} label={label('Saved', 'محفوظ')} color="success" variant="outlined" />}
                         <Button size="small" variant="outlined" onClick={toggleLanguage} startIcon={<Languages size={16} />} aria-label={label('Switch to Arabic', 'التبديل إلى الإنجليزية')} sx={{ minWidth: 0, fontWeight: 900, borderRadius: 99 }}>{lang === 'ar' ? 'EN' : 'عربي'}</Button>
                     </Stack>

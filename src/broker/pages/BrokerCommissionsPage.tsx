@@ -156,7 +156,7 @@ export default function BrokerCommissionsPage() {
       title="Finance & Payouts"
       subtitle="Verified commission settlement and payout tracking"
       loading={loading}
-      actions={<Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+      actions={<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
         <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0 || hasMoreCommissions} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
           {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
         </Button>

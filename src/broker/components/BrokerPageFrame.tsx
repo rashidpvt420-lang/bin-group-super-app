@@ -32,12 +32,12 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
             {/* Header Area */}
             <Box sx={{ mb: 6 }}>
                 <Stack 
-                    direction={isRTL ? 'row-reverse' : 'row'} 
+                    direction={'row'} 
                     justifyContent="space-between" 
                     alignItems="flex-start"
                 >
                     <Box>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ mb: 1 }}>
+                        <Stack direction={'row'} spacing={2} alignItems="center" sx={{ mb: 1 }}>
                             {showBack && (
                                 <Button
                                     onClick={() => navigate(-1)}
@@ -74,7 +74,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                 {breadcrumbs.length > 0 && (
                     <Breadcrumbs
                         separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: '#9CA3AF' }} />}
-                        sx={{ mt: 2, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}
+                        sx={{ mt: 2, '& .MuiBreadcrumbs-ol': { flexDirection: 'row' } }}
                     >
                         <MuiLink
                             component="button"

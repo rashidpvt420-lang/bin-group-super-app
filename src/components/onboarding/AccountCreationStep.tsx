@@ -444,7 +444,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
             <Paper elevation={0} sx={{ ...card }}>
                 <Stack spacing={2.2}>
                     <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}` }}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" gap={1}>
+                        <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" gap={1}>
                             <Box sx={{ minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}>
                                 <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{fullName || '—'}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, wordBreak: 'break-all' }}>{profileEmail || '—'}</Typography>
@@ -473,7 +473,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
                                     {copy('Continue with Google', 'المتابعة باستخدام Google')}
                                 </Button>
                             )}
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" flexWrap="wrap" gap={1}>
+                            <Stack direction={'row'} justifyContent="space-between" flexWrap="wrap" gap={1}>
                                 <Button variant="text" onClick={handleReset} disabled={loading} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('Forgot password?', 'نسيت كلمة المرور؟')}</Button>
                                 <Button variant="text" onClick={() => { setMode('create'); setNotice(null); onBack(); }} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('Use a different email', 'استخدام بريد مختلف')}</Button>
                             </Stack>

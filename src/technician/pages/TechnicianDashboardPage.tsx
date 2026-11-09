@@ -72,6 +72,7 @@ import {
     normalizeTechnicianProfile,
 } from '../utils/normalizeTechnicianProfile';
 import Bi from '../../components/Bi';
+import { getTechnicianLocation, getTechnicianLocationUpdatedAt, isLocationStale, isTrackingActive } from '../../utils/liveTracking';
 
 const ui = {
     canvas: '#FFFFFF',
@@ -214,7 +215,8 @@ const readable = (...values: any[]) => {
 export default function TechnicianDashboardPage() {
     const { user } = useRole();
     const navigate = useNavigate();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
+    const tx = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
@@ -263,10 +265,13 @@ export default function TechnicianDashboardPage() {
         return () => { cancelled = true; };
     }, [user?.uid]);
 
+    // P1-5: a job that is only assigned (not yet accepted / started) is shown as such, never as an
+    // en-route mission with a confirmed tick.
     const activeMission = useMemo(() => {
         return activeJobs.find((j: any) =>
             ['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(String(j.status || ''))
-        ) || activeJobs[0] || null;
+        ) || activeJobs.find((j: any) => ['ACCEPTED', 'TECH_ACCEPTED'].includes(String(j.status || '').toUpperCase()))
+            || activeJobs[0] || null;
     }, [activeJobs]);
 
     useEffect(() => {
@@ -439,7 +444,7 @@ export default function TechnicianDashboardPage() {
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 8, md: 6 }, minWidth: 0, bgcolor: ui.canvas, color: ui.ink }}>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2.5 }}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: 2.5 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                     <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
                     <Typography variant="h3" fontWeight="950" sx={{ mt: 1, color: ui.ink, fontSize: { xs: '2.05rem', md: '2.8rem' }, letterSpacing: '-0.045em' }}><Bi en={"Technical Command Dashboard"} ar={"لوحة التحكم الفنية"} /></Typography>
@@ -465,37 +470,55 @@ export default function TechnicianDashboardPage() {
                 const locationTitle = String(activeMission.propertyName || activeMission.unitNumber || 'Property Location');
                 const addressDetail = String(activeMission.address || activeMission.serviceLocationDetail || 'UAE Field Site');
                 const remainingSla = getSlaTimeRemaining(activeMission);
+                const isAccepted = isEnRoute || isArrived || isInProgress || ['ACCEPTED', 'TECH_ACCEPTED'].includes(rawStatus);
+                // P1-5: "live GPS" only when tracking is on and the last point is under 2 minutes old.
+                const missionLocation = getTechnicianLocation(activeMission);
+                const gpsLive = Boolean(
+                    isTrackingActive(String(activeMission.status || ''), String((activeMission as any).trackingStatus || '')) &&
+                    missionLocation &&
+                    !isLocationStale(getTechnicianLocationUpdatedAt(activeMission, missionLocation), 2)
+                );
+                const missionAny = activeMission as any;
+                const startedValue = missionAny.startedAt || missionAny.workStartedAt;
+                const startedMs = typeof startedValue?.toMillis === 'function' ? startedValue.toMillis() : Date.parse(String(startedValue || ''));
+                const elapsedMinutes = Number.isFinite(startedMs) ? Math.max(0, Math.round((Date.now() - startedMs) / 60000)) : null;
 
                 let phaseTone = ui.blue;
-                let phaseBadge = 'PHASE 1: EN ROUTE (LIVE GPS 🚗)';
-                let phaseTitle = 'En Route to Property — Live GPS Streaming';
-                let phaseHelper = 'GPS coordinates are streaming live to the tenant. Drive safely to the location.';
-                let actionLabel = 'VIEW MISSION & CONFIRM ARRIVAL 📍';
+                let phaseBadge = gpsLive ? tx('EN ROUTE · GPS LIVE', 'في الطريق · GPS مباشر') : tx('EN ROUTE · GPS NOT LIVE', 'في الطريق · GPS غير مباشر');
+                let phaseTitle = tx('On the way to the property', 'في الطريق إلى العقار');
+                let phaseHelper = gpsLive
+                    ? tx('Your location is updating for the tenant while this app is open. Drive safely.', 'يتم تحديث موقعك للمستأجر ما دام التطبيق مفتوحاً. قد بأمان.')
+                    : tx('GPS not live: the tenant is not seeing a fresh location. Keep this app open with location allowed.', 'GPS غير مباشر: المستأجر لا يرى موقعاً حديثاً. أبقِ التطبيق مفتوحاً مع السماح بالموقع.');
+                let actionLabel = tx('OPEN JOB & CONFIRM ARRIVAL', 'فتح المهمة وتأكيد الوصول');
 
                 if (isArrived) {
                     phaseTone = ui.gold;
-                    phaseBadge = 'PHASE 2: ARRIVED ON SITE 📍';
-                    phaseTitle = 'Arrived at Property — GPS Verified';
-                    phaseHelper = 'GPS arrival was verified within 100m. Next: Inspect fault, capture before photos, and start labor timer.';
-                    actionLabel = 'START WORK & CAPTURE BEFORE PHOTOS 📸';
+                    phaseBadge = tx('ARRIVED ON SITE', 'وصلت إلى الموقع');
+                    phaseTitle = tx('Arrived at the property', 'تم الوصول إلى العقار');
+                    phaseHelper = tx('Arrival checked: within 250 m of the property pin. Next: inspect the fault and take before photos.', 'تم التحقق من الوصول: ضمن 250 م من علامة العقار. التالي: افحص العطل والتقط صور ما قبل العمل.');
+                    actionLabel = tx('START WORK & TAKE BEFORE PHOTOS', 'بدء العمل والتقاط صور ما قبل العمل');
                 } else if (isInProgress) {
                     phaseTone = ui.green;
-                    phaseBadge = 'PHASE 3: WORK IN PROGRESS ⏱️';
-                    phaseTitle = 'Work in Progress — Official Labor Timer Active';
-                    phaseHelper = 'Repair underway. When done, capture after-work evidence photo, record parts used, and submit for tenant sign-off.';
-                    actionLabel = 'COMPLETE WORK & ATTACH PROOF ✅';
+                    phaseBadge = tx('WORK IN PROGRESS', 'العمل جارٍ');
+                    phaseTitle = elapsedMinutes !== null
+                        ? tx(`Work in progress — started ${elapsedMinutes} min ago`, `العمل جارٍ — بدأ قبل ${elapsedMinutes} دقيقة`)
+                        : tx('Work in progress', 'العمل جارٍ');
+                    phaseHelper = tx('When done, take the after-work photo, record parts used, and send for tenant sign-off.', 'عند الانتهاء، التقط صورة ما بعد العمل وسجّل القطع المستخدمة وأرسل لتوقيع المستأجر.');
+                    actionLabel = tx('COMPLETE WORK & ATTACH PROOF', 'إنهاء العمل وإرفاق الإثبات');
                 } else if (!isEnRoute) {
                     phaseTone = ui.gold;
-                    phaseBadge = 'DISPATCH READY 📋';
-                    phaseTitle = 'Mission Assigned — Ready for Departure';
-                    phaseHelper = 'Accept mission to begin departure route and start streaming arrival tracking.';
-                    actionLabel = 'OPEN MISSION & COMMENCE ROUTE 🚗';
+                    phaseBadge = isAccepted ? tx('ACCEPTED', 'مقبولة') : tx('ASSIGNED — NOT ACCEPTED', 'مسندة — لم تُقبل بعد');
+                    phaseTitle = isAccepted ? tx('Job accepted — ready to leave', 'تم قبول المهمة — جاهز للانطلاق') : tx('New job assigned to you', 'مهمة جديدة مسندة إليك');
+                    phaseHelper = isAccepted
+                        ? tx('Start the route from the job screen. Location sharing starts then.', 'ابدأ الطريق من شاشة المهمة. تبدأ مشاركة الموقع عندها.')
+                        : tx('Open the job and accept it. Nothing is shared with the tenant until you start the route.', 'افتح المهمة واقبلها. لا يُشارك شيء مع المستأجر حتى تبدأ الطريق.');
+                    actionLabel = isAccepted ? tx('OPEN JOB & START ROUTE', 'فتح المهمة وبدء الطريق') : tx('OPEN JOB TO ACCEPT', 'فتح المهمة للقبول');
                 }
 
                 return (
                     <SectionCard sx={{ mb: 3.5, border: `2px solid ${phaseTone}`, bgcolor: '#FFFFFF', boxShadow: '0 12px 30px rgba(17,24,39,0.08)' }}>
-                        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 2 }}>
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 2 }}>
+                            <Stack direction={'row'} spacing={1.5} alignItems="center">
                                 <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(phaseTone, 0.12), color: phaseTone, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                                     {isEnRoute ? <Car size={24} /> : isArrived ? <MapPin size={24} /> : isInProgress ? <Timer size={24} /> : <Briefcase size={24} />}
                                 </Box>
@@ -526,31 +549,31 @@ export default function TechnicianDashboardPage() {
 
                         <Box sx={{ mt: 1.5, p: 2, bgcolor: ui.soft, borderRadius: 2.5, border: `1px solid ${ui.line}` }}>
                             <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, display: 'block', mb: 1 }}>
-                                WORK LIFECYCLE PROGRESSION & TIMESTAMPS
+                                {tx('JOB STEPS', 'خطوات المهمة')}
                             </Typography>
                             <Grid container spacing={1.5}>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
-                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: ui.green, color: '#fff', display: 'grid', placeItems: 'center' }}><Check size={14} /></Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>1. ASSIGNED</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>Confirmed</Typography></Box>
+                                        <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isAccepted ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isAccepted ? <Check size={14} /> : '1'}</Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('1. ACCEPTED', '1. القبول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isAccepted ? tx('Accepted', 'مقبولة') : tx('Not accepted yet', 'لم تُقبل بعد')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isEnRoute || isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isEnRoute || isArrived || isInProgress ? <Check size={14} /> : '2'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>2. EN ROUTE</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isEnRoute ? 'Live GPS 🚗' : isArrived || isInProgress ? 'Passed' : 'Pending'}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('2. EN ROUTE', '2. في الطريق')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isEnRoute ? (gpsLive ? tx('GPS live', 'GPS مباشر') : tx('GPS not live', 'GPS غير مباشر')) : isArrived || isInProgress ? tx('Done', 'تم') : tx('Pending', 'قيد الانتظار')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isArrived || isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isArrived || isInProgress ? <Check size={14} /> : '3'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>3. ARRIVED</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isArrived ? 'On Site 📍' : isInProgress ? 'Verified' : 'Pending'}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('3. ARRIVED', '3. الوصول')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isArrived ? tx('On site', 'في الموقع') : isInProgress ? tx('Arrival checked', 'تم التحقق من الوصول') : tx('Pending', 'قيد الانتظار')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: isInProgress ? ui.green : ui.line, color: '#fff', display: 'grid', placeItems: 'center' }}>{isInProgress ? <Check size={14} /> : '4'}</Box>
-                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>4. EXECUTION</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isInProgress ? 'In Progress ⏱️' : 'Before proof'}</Typography></Box>
+                                        <Box><Typography variant="caption" fontWeight="950" sx={{ color: ui.ink, display: 'block' }}>{tx('4. WORK', '4. العمل')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontSize: 11 }}>{isInProgress ? tx('In progress', 'جارٍ') : tx('Not started', 'لم يبدأ')}</Typography></Box>
                                     </Stack>
                                 </Grid>
                             </Grid>
@@ -563,33 +586,33 @@ export default function TechnicianDashboardPage() {
             })()}
 
             <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+                    <Stack direction={'row'} spacing={2} alignItems="center">
                         <Box sx={{ p: 1.5, bgcolor: alpha(ui.gold, 0.15), borderRadius: 2, color: ui.gold }}><Clock size={30} /></Box>
                         <Box>
-                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>STATUTORY OVERTIME & WORK HOURS PROOF</Typography>
+                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>{tx('OVERTIME & WORK HOURS', 'العمل الإضافي وساعات العمل')}</Typography>
                             <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink }}>
-                                UAE Labor Law Multi-Point Proof Engine
+                                {tx('My hours and overtime', 'ساعاتي والعمل الإضافي')}
                             </Typography>
                             <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>
-                                Federal Decree-Law No. 33 of 2021 (Art. 19): Daily overtime is capped at 120 minutes (2 hours). Every minute is verified with GPS arrival, shift timestamps, and before/after photos.
+                                {tx('Overtime counts only when it is on the clock (max 2 h/day) and HR approves it; proof level is shown on each claim.', 'يُحتسب العمل الإضافي فقط عندما يكون مسجلاً في الدوام (حد أقصى ساعتان يومياً) وتوافق عليه الموارد البشرية؛ ويظهر مستوى الإثبات في كل طلب.')}
                             </Typography>
                         </Box>
                     </Stack>
                     <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-                        <Chip label={`Max Overtime: 120 min/day`} sx={{ bgcolor: '#FFFFFF', color: ui.ink, border: `1px solid ${ui.line}`, fontWeight: 900 }} />
-                        <Chip label={`Clocked OT: ${Math.round(hoursSummary.clockedOvertimeMinutes)} min`} sx={{ bgcolor: '#FFFFFF', color: ui.blue, border: `1px solid ${alpha(ui.blue, 0.35)}`, fontWeight: 900 }} />
-                        <Chip label={`Payable OT: ${Math.round(hoursSummary.payableOvertimeMinutes)} min`} sx={{ bgcolor: '#FFFFFF', color: ui.green, border: `1px solid ${alpha(ui.green, 0.35)}`, fontWeight: 900 }} />
+                        <Chip label={tx('Max overtime: 120 min/day', 'الحد الأقصى للعمل الإضافي: 120 دقيقة/يوم')} sx={{ bgcolor: '#FFFFFF', color: ui.ink, border: `1px solid ${ui.line}`, fontWeight: 900 }} />
+                        <Chip label={`${tx('Clocked OT', 'العمل الإضافي المسجل')}: ${Math.round(hoursSummary.clockedOvertimeMinutes)} ${tx('min', 'دقيقة')}`} sx={{ bgcolor: '#FFFFFF', color: ui.blue, border: `1px solid ${alpha(ui.blue, 0.35)}`, fontWeight: 900 }} />
+                        <Chip label={`${tx('Approved OT', 'العمل الإضافي المعتمد')}: ${Math.round(hoursSummary.payableOvertimeMinutes)} ${tx('min', 'دقيقة')}`} sx={{ bgcolor: '#FFFFFF', color: ui.green, border: `1px solid ${alpha(ui.green, 0.35)}`, fontWeight: 900 }} />
                         <Button variant="outlined" onClick={() => navigate('/technician/hr#overtime')} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, bgcolor: '#FFFFFF' }}>
-                            VIEW PROOF & MY HOURS
+                            {tx('VIEW PROOF & MY HOURS', 'عرض الإثبات وساعاتي')}
                         </Button>
                     </Stack>
                 </Stack>
             </SectionCard>
 
             <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+                    <Stack direction={'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                         <Box sx={{ p: 1.5, bgcolor: alpha(ui.gold, 0.13), borderRadius: 2, color: ui.gold }}><BadgeCheck size={30} /></Box>
                         <Box sx={{ minWidth: 0 }}>
                             <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>TECHNICIAN IDENTITY</Typography>
@@ -621,14 +644,14 @@ export default function TechnicianDashboardPage() {
             {availabilityGpsError && <Alert severity="info" sx={{ mb: 2.5 }} data-testid="technician-availability-gps-error"><Bi en={"Dispatch location not shared:"} ar={"لم تتم مشاركة موقع الإرسال:"} /> {availabilityGpsError}</Alert>}
 
             <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
-                <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={12} md={6}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{isBreakDuty ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{dutyDisplay}</Typography></Box></Stack></Grid>
-                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{isOffDuty ? <Button variant="contained" onClick={() => handleDutyToggle('ON_DUTY')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(isBreakDuty ? 'ON_DUTY' : 'ON_BREAK')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{isBreakDuty ? 'RESUME OPS' : 'STANDBY / BREAK'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF_DUTY')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
+                <Grid container spacing={3} alignItems="center" sx={{ flexDirection: 'row' }}>
+                    <Grid item xs={12} md={6}><Stack direction={'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{isBreakDuty ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{dutyDisplay}</Typography></Box></Stack></Grid>
+                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{isOffDuty ? <Button variant="contained" onClick={() => handleDutyToggle('ON_DUTY')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(isBreakDuty ? 'ON_DUTY' : 'ON_BREAK')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{isBreakDuty ? 'RESUME OPS' : 'STANDBY / BREAK'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF_DUTY')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
                 </Grid>
             </SectionCard>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}><Bi en={"No active missions assigned. Keep duty status active to receive dispatches."} ar={"لا توجد مهام نشطة. أبقِ حالة الدوام نشطة لاستلام المهام."} /></Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={getSlaTimeRemaining(job)} sx={{ bgcolor: '#FFFFFF', color: getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, border: `1px solid ${alpha(getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
+                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}><Bi en={"No active missions assigned. Keep duty status active to receive dispatches."} ar={"لا توجد مهام نشطة. أبقِ حالة الدوام نشطة لاستلام المهام."} /></Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={getSlaTimeRemaining(job)} sx={{ bgcolor: '#FFFFFF', color: getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, border: `1px solid ${alpha(getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
                 <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<Award size={20} />} title="Performance Command" /><DetailRow label="Completed this month" value={stats.completedMonth} /><DetailRow label="Quality score" value={qualityDisplay} /><DetailRow label="SLA health" value={slaDisplay} /><DetailRow label="Open SLA risks" value={stats.slaRisk} /><Box sx={{ mt: 2 }}><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900 }}>MONTHLY OPS PROGRESS</Typography><LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: ui.gold } }} /></Box><Divider sx={{ my: 2.5 }} />{recentCompleted.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted }}><Bi en={"No completed jobs recorded this month."} ar={"لا توجد مهام مكتملة هذا الشهر."} /></Typography> : <Stack spacing={1}>{recentCompleted.slice(0, 3).map((job) => <Typography key={job.id} variant="body2" sx={{ color: ui.ink, fontWeight: 750 }}>• {String(job.category || 'Completed job')}</Typography>)}</Stack>}</SectionCard></Grid>
             </Grid>
 

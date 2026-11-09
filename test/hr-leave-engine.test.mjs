@@ -54,3 +54,23 @@ test('approval writes the deduction server-side and the fixed "30" default is go
   assert.doesNotMatch(page, /leaveBalance,\s*'30'/);
   assert.match(page, /httpsCallable\(functions, 'getMyLeaveBalance'\)/);
 });
+
+test('Nov 9 P2-23: annual leave beyond the balance needs an 8+ character override reason', () => {
+  const over = L.annualLeaveOverrideCheck({ leaveType: 'annual_leave', days: 10, balance: 4 });
+  assert.equal(over.required, true);
+  assert.equal(over.ok, false);
+  assert.equal(L.annualLeaveOverrideCheck({ leaveType: 'annual_leave', days: 10, balance: 4, overrideReason: 'short' }).ok, false);
+  const withReason = L.annualLeaveOverrideCheck({ leaveType: 'annual_leave', days: 10, balance: 4, overrideReason: 'CEO approved family emergency' });
+  assert.equal(withReason.ok, true);
+  assert.equal(withReason.reason, 'CEO approved family emergency');
+  assert.equal(L.annualLeaveOverrideCheck({ leaveType: 'annual_leave', days: 3, balance: 4 }).required, false);
+  assert.equal(L.annualLeaveOverrideCheck({ leaveType: 'annual_leave', days: 1, balance: null }).required, true);
+  assert.equal(L.annualLeaveOverrideCheck({ leaveType: 'sick_leave', days: 30, balance: 0 }).required, false);
+});
+
+test('Nov 9 P2-23: the review callable refuses approval without the override', () => {
+  const ops = readFileSync('functions/adminHrOperations.ts', 'utf8');
+  assert.match(ops, /annualLeaveOverrideCheck\(/);
+  assert.match(ops, /LEAVE_OVERRIDE_REASON_REQUIRED/);
+  assert.match(ops, /overrideReason: override\.reason/);
+});

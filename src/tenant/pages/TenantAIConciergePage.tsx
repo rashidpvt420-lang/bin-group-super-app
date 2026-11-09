@@ -351,7 +351,7 @@ export default function TenantAIConciergePage() {
         <Box sx={{ flex: 1, overflowY: 'auto', bgcolor: '#020617', p: { xs: 2, md: 3 }, minHeight: 340, maxHeight: 480 }}>
           <Stack spacing={2}>
             {messages.map((msg) => (
-              <Stack key={msg.id} direction={msg.from === 'user' ? (isRTL ? 'row' : 'row-reverse') : (isRTL ? 'row-reverse' : 'row')} spacing={1.5} alignItems="flex-end">
+              <Stack key={msg.id} direction={msg.from === 'user' ? (isRTL ? 'row' : 'row-reverse') : ('row')} spacing={1.5} alignItems="flex-end">
                 {msg.from === 'bot' && (
                   <Box sx={{ width: 32, height: 32, borderRadius: '50%', bgcolor: alpha(binThemeTokens.gold, 0.1), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mb: 0.5 }}>
                     <SafeIcon icon={Bot} size={16} style={{ color: binThemeTokens.gold }} />

@@ -164,7 +164,7 @@ export default function TicketsManagementPage() {
 
   const fetchTechnicians = async () => {
       try {
-          const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+          const q = query(collection(db, 'users'), where('role', '==', 'technician'), limit(500));
           const snap = await getDocs(q);
           const techs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
           setTechnicians(techs);

@@ -289,7 +289,7 @@ export default function HomeDiscoveryInventoryPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={3}>
         <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${alpha(gold, 0.28)}`, boxShadow: '0 20px 55px rgba(17,24,39,0.08)' }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>{copy('owner.home.v2Title', 'Home Discovery Inventory', 'مخزون اكتشاف المنازل')}</Typography>
               <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 820, fontWeight: 700 }}>{copy('owner.home.v2Desc', 'Upload real property photos directly, submit the verified facts, and let BIN Admin control what becomes public.', 'ارفع صور العقار الحقيقية مباشرة وأرسل البيانات الموثقة، ويتحكم مسؤول BIN فيما يتم نشره للعامة.')}</Typography>
@@ -311,7 +311,7 @@ export default function HomeDiscoveryInventoryPage() {
           ].map((item) => (
             <Grid item xs={12} md={4} key={item.label}>
               <Paper sx={{ p: 2.5, borderRadius: 4, border: `1px solid ${binThemeTokens.border}`, bgcolor: '#fff' }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+                <Stack direction={'row'} spacing={1.5} alignItems="center">
                   <Box sx={{ color: gold }}><SafeIcon icon={item.icon} size={25} /></Box>
                   <Box><Typography variant="h5" sx={{ fontWeight: 950 }}>{item.value}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{item.label}</Typography></Box>
                 </Stack>
@@ -352,7 +352,7 @@ export default function HomeDiscoveryInventoryPage() {
 
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 4, borderStyle: 'dashed', borderColor: alpha(gold, 0.55), bgcolor: alpha(gold, 0.035) }}>
               <Stack spacing={1.5}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center"><SafeIcon icon={ImageIcon} size={22} color={gold} /><Box><Typography sx={{ fontWeight: 950 }}>{copy('owner.home.photoHeading', 'Real property photos', 'صور العقار الحقيقية')}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{copy('owner.home.photoRule', '3–12 images · JPG/PNG/HEIC/WebP · up to 10 MB each', 'من 3 إلى 12 صورة · حتى 10 ميجابايت لكل صورة')}</Typography></Box></Stack>
+                <Stack direction={'row'} spacing={1.2} alignItems="center"><SafeIcon icon={ImageIcon} size={22} color={gold} /><Box><Typography sx={{ fontWeight: 950 }}>{copy('owner.home.photoHeading', 'Real property photos', 'صور العقار الحقيقية')}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{copy('owner.home.photoRule', '3–12 images · JPG/PNG/HEIC/WebP · up to 10 MB each', 'من 3 إلى 12 صورة · حتى 10 ميجابايت لكل صورة')}</Typography></Box></Stack>
                 <Button component="label" variant="outlined" startIcon={<SafeIcon icon={Upload} size={18} />} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', borderColor: gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
                   {copy('owner.home.choosePhotos', 'Choose property photos', 'اختر صور العقار')}
                   <input hidden multiple accept="image/*" type="file" onChange={onPhotoSelection} />
@@ -371,8 +371,8 @@ export default function HomeDiscoveryInventoryPage() {
         {(listingRequests.length > 0 || liveListings.length > 0) && <Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${binThemeTokens.border}` }}>
           <Typography variant="h6" sx={{ fontWeight: 950, mb: 2 }}>{copy('owner.home.status', 'Your Home Discovery status', 'حالة إعلاناتك')}</Typography>
           <Stack spacing={1.2}>
-            {listingRequests.slice(0, 6).map((request) => <Paper key={request.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{request.unitTitle || request.title}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{request.propertyAddress} · {money(request.annualRent)}</Typography></Box><Chip label={request.stage || request.status || 'REVIEW'} /></Stack></Paper>)}
-            {liveListings.slice(0, 6).map((listing) => <Paper key={listing.id} variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: alpha('#16A34A', 0.3) }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{listing.unitTitle || listing.title || listing.propertyName}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{listing.area || listing.emirate} · {money(listing.annualRent)} · {listing.imageUrls?.length || 0} <Bi en={"photos"} ar={"صور"} /></Typography></Box><Chip color="success" label={copy('owner.home.liveBadge', 'LIVE VERIFIED', 'منشور وموثق')} /></Stack></Paper>)}
+            {listingRequests.slice(0, 6).map((request) => <Paper key={request.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}><Stack direction={'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{request.unitTitle || request.title}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{request.propertyAddress} · {money(request.annualRent)}</Typography></Box><Chip label={request.stage || request.status || 'REVIEW'} /></Stack></Paper>)}
+            {liveListings.slice(0, 6).map((listing) => <Paper key={listing.id} variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: alpha('#16A34A', 0.3) }}><Stack direction={'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{listing.unitTitle || listing.title || listing.propertyName}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{listing.area || listing.emirate} · {money(listing.annualRent)} · {listing.imageUrls?.length || 0} <Bi en={"photos"} ar={"صور"} /></Typography></Box><Chip color="success" label={copy('owner.home.liveBadge', 'LIVE VERIFIED', 'منشور وموثق')} /></Stack></Paper>)}
           </Stack>
         </Paper>}
 
@@ -382,7 +382,7 @@ export default function HomeDiscoveryInventoryPage() {
           <Stack spacing={1.2}>
             {applications.slice(0, 20).map((application) => (
               <Paper key={application.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={1.5}>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 950 }}>{application.listingTitle || application.unitTitle || application.title || application.propertyName || application.listingId || copy('owner.home.unknownListing', 'Home listing', 'إعلان عقار')}</Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4 }}>{application.tenantName || application.tenantEmail || copy('owner.home.unknownApplicant', 'Tenant applicant', 'طالب الإيجار')}</Typography>

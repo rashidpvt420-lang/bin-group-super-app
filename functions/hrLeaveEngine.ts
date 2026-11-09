@@ -63,6 +63,19 @@ export function serviceYearStart(joinDate: string, asOf: string): string {
   return `${jy + years}-${String(jm).padStart(2, "0")}-${String(jd).padStart(2, "0")}`;
 }
 
+/**
+ * Nov 9 audit (P2-23): approving annual leave beyond the balance (or when the balance
+ * cannot be computed because the join date is missing) needs a written override reason.
+ */
+export const LEAVE_OVERRIDE_MIN_CHARS = 8;
+export function annualLeaveOverrideCheck(input: { leaveType: string; days: number; balance: number | null; overrideReason?: unknown }) {
+    const reason = String(input.overrideReason ?? "").trim().slice(0, 500);
+    if (input.leaveType !== "annual_leave") return { required: false, ok: true, reason: null as string | null };
+    const required = input.balance === null || input.days > input.balance;
+    if (!required) return { required: false, ok: true, reason: null as string | null };
+    return { required: true, ok: reason.length >= LEAVE_OVERRIDE_MIN_CHARS, reason: reason || null };
+}
+
 export function splitSickDays(alreadyUsedThisYear: number, requestedDays: number, cfg = LEAVE_CONFIG) {
   const tiers = [
     ["fullPayDays", cfg.sickFullPayDays],

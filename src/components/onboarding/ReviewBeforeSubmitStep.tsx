@@ -12,6 +12,7 @@ import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { appCheck, auth, functions, httpsCallable } from '../../lib/firebase';
 import { isValidLatLng } from '../../utils/geoAnchor';
+import { hasValidPropertyPin } from './propertyPinStatus';
 import { classifyOwnerQuoteFailure, ownerQuoteFailureOffersRetry, ownerQuoteFailureOffersSignIn, type OwnerQuoteFailureKind } from './ownerQuoteFailure';
 
 const badCopy = (value?: string) => {
@@ -37,7 +38,7 @@ type ServerQuote = {
     propertyQuotes: Array<{ propertyId: string; annualTotal: number }>;
 };
 
-const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void; onFixLocation: () => void }> = ({ onNext, onBack, onFixLocation }) => {
+const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void; onFixLocation: (propertyIndex?: number) => void }> = ({ onNext, onBack, onFixLocation }) => {
     const {
         companyProfile,
         properties,
@@ -56,12 +57,14 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     const [authReady, setAuthReady] = React.useState(false);
     const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
-    const missingGps = React.useMemo(
-        () => properties.some((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
+    // P1-1: name the first property that still needs a pin so "Fix property GPS" opens it.
+    const firstMissingGpsIndex = React.useMemo(
+        () => properties.findIndex((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
             String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
-            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng))),
+            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng)) || !hasValidPropertyPin(property as any)),
         [properties],
     );
+    const missingGps = React.useMemo(() => firstMissingGpsIndex !== -1, [firstMissingGpsIndex]);
 
     const copy = React.useCallback((key: string, fallback: string, variables?: Record<string, any>) => {
         const value = t(key, variables);
@@ -278,7 +281,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                     : copy('onboarding.review_info', 'Admin will verify the documents and property location during the site-visit workflow.')}
             </Alert>
             {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={missingGps
-                ? <Button color="inherit" size="small" onClick={onFixLocation}>{lang === 'ar' ? 'إصلاح موقع العقار' : 'Fix property GPS'}</Button>
+                ? <Button color="inherit" size="small" onClick={() => onFixLocation(firstMissingGpsIndex)}>{lang === 'ar' ? (properties.length > 1 ? `إصلاح موقع العقار ${firstMissingGpsIndex + 1}` : 'إصلاح موقع العقار') : (properties.length > 1 ? `Fix GPS for property ${firstMissingGpsIndex + 1}` : 'Fix property GPS')}</Button>
                 : (quoteNeedsSignIn
                     ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button>
                     : (quoteCanRetry
@@ -286,7 +289,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                         : undefined))}>{quoteError}</Alert>}
             {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{authReady ? copy('onboarding.server_quote_loading', 'Generating the protected server quotation…') : (lang === 'ar' ? 'جارٍ استعادة جلسة المالك الآمنة…' : 'Restoring your secure Owner session…')}</Alert>}
 
-            <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+            <Grid container spacing={3} sx={{ flexDirection: 'row' }}>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 3, height: '100%', borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.07)', textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.owner_company', 'Owner')}</Typography>
@@ -309,7 +312,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                 <Grid item xs={12} md={7}>
                     <Paper sx={{ p: 3, height: '100%', borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.07)', textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.contract_perf', 'Service Scope')}</Typography>
-                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, flexDirection: 'row' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{copy(`onboarding.plan.${planKey}`, planFallback)}</Typography>
                             <Chip label={copy(`onboarding.sla.${primaryProperty?.slaTier}`, primaryProperty?.slaTier || 'Standard')} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                         </Stack>
@@ -318,7 +321,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                                 lang === 'ar' ? 'تم احتساب العرض من بيانات العقار المقدمة.' : 'Quotation calculated from the submitted property facts.',
                                 lang === 'ar' ? 'سيتم التحقق من الموقع والنطاق خلال زيارة العقار.' : 'Location and scope will be verified during the property visit.',
                             ]).map((explanation: string, index: number) => (
-                                <Stack key={index} direction="row" spacing={1} alignItems="flex-start" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <Stack key={index} direction="row" spacing={1} alignItems="flex-start" sx={{ flexDirection: 'row' }}>
                                     <CheckCircle2 size={12} color={binThemeTokens.gold} style={{ marginTop: 2 }} />
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textAlign: isRTL ? 'right' : 'left' }}>{explanation}</Typography>
                                 </Stack>
@@ -331,8 +334,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                     <Paper sx={{ p: 3, height: '100%', borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.07), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.financial_recap', 'Pre-Inspection Quotation')}</Typography>
                         <Stack spacing={2} sx={{ mt: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Annual Value')}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">{quoteAvailable ? `AED ${formatAED(serverQuote?.annualContractValue || 0)}` : '—'}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Selected Schedule')}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(installmentValue || 0)}` : '—'}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Annual Value')}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">{quoteAvailable ? `AED ${formatAED(serverQuote?.annualContractValue || 0)}` : '—'}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Selected Schedule')}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(installmentValue || 0)}` : '—'}</Typography></Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2 }}><Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{lang === 'ar' ? '15٪ مستحقة فقط بعد زيارة العقار' : '15% Due Only After Property Visit'}</Typography><Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(serverQuote?.activationDeposit || 0)}` : '—'}</Typography></Box>
                         </Stack>
@@ -340,11 +343,11 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                 </Grid>
 
                 {localQuote?.riskFlags && localQuote.riskFlags.length > 0 && (
-                    <Grid item xs={12}><Paper sx={{ p: 2, bgcolor: alpha('#EF4444', 0.05), border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4 }}><Stack direction="row" spacing={1} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}><AlertTriangle size={18} color="#EF4444" /><Typography variant="body2" fontWeight="900" color="#EF4444">{copy('onboarding.risk_advisory', 'Inspection Advisory')}: {localQuote.riskFlags.join(', ')}</Typography></Stack></Paper></Grid>
+                    <Grid item xs={12}><Paper sx={{ p: 2, bgcolor: alpha('#EF4444', 0.05), border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4 }}><Stack direction="row" spacing={1} alignItems="center" sx={{ flexDirection: 'row' }}><AlertTriangle size={18} color="#EF4444" /><Typography variant="body2" fontWeight="900" color="#EF4444">{copy('onboarding.risk_advisory', 'Inspection Advisory')}: {localQuote.riskFlags.join(', ')}</Typography></Stack></Paper></Grid>
                 )}
             </Grid>
 
-            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: 'row' }}>
                 <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold }}>{copy('onboarding.back', 'Back')}</Button>
                 <Button variant="contained" size="large" onClick={handleNext} disabled={missingGps || quoteLoading || quoteExpired || Boolean(quoteError)} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
             </Box>

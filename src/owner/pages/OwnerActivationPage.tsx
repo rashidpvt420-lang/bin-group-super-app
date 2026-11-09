@@ -512,12 +512,12 @@ export default function OwnerActivationPage() {
 
         <ActivationTimeline gates={activationGates} />
 
-        <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <Grid container spacing={3} sx={{ flexDirection: 'row' }}>
           <Grid item xs={12} md={7}>
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.64)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
               <Stack spacing={3}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                <Stack direction={'row'} justifyContent="space-between" alignItems="center">
+                  <Stack direction={'row'} spacing={2} alignItems="center">
                     <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}>
                       <FileSignature />
                     </Box>
@@ -638,14 +638,14 @@ export default function OwnerActivationPage() {
                     '15% mobilization must be submitted and verified.',
                     'Admin payment verification unlocks full owner dashboard access.',
                   ].map((item) => (
-                    <Stack key={item} direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
+                    <Stack key={item} direction={'row'} spacing={1.2} alignItems="center">
                       <ShieldCheck size={16} color={binThemeTokens.gold} />
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>{item}</Typography>
                     </Stack>
                   ))}
                 </Stack>
                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)', my: 1 }} />
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                <Stack direction={'row'} spacing={1} alignItems="center">
                   <WalletCards size={18} color={binThemeTokens.gold} />
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 800 }}>
                     PSP-ready fields: ownerSigned, signedAt, paymentStatus, mobilizationAmount, activeContractId, paymentVerified.

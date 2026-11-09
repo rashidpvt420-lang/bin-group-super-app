@@ -16,7 +16,7 @@ export default function JobEvidenceSteps({ steps, title, isRTL }: { steps: Evide
       <Typography sx={{ ...uiType.caption, color: ui.goldText, textTransform: 'uppercase' }}>{title}</Typography>
       <Box component="ol" sx={{ listStyle: 'none', p: 0, m: 0, mt: 1, display: 'grid', gap: 0.75 }}>
         {steps.map((s, i) => (
-          <Box component="li" key={s.key} data-done={s.done ? 'true' : 'false'} sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexDirection: isRTL ? 'row-reverse' : 'row', minHeight: 36 }}>
+          <Box component="li" key={s.key} data-done={s.done ? 'true' : 'false'} sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexDirection: 'row', minHeight: 36 }}>
             <Box aria-hidden sx={{ width: 28, height: 28, flex: '0 0 28px', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, bgcolor: s.done ? ui.okBg : i === current ? ui.gold : '#F1EDE2', color: s.done ? ui.okText : ui.ink }}>
               {s.done ? <SafeIcon icon={Check} size={16} /> : i + 1}
             </Box>

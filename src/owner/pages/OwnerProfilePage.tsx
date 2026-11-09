@@ -166,13 +166,13 @@ export default function OwnerProfilePage() {
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
       <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
           <Avatar src={profilePhoto || undefined} sx={{ width: 104, height: 104, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>{displayName?.charAt(0) || <User size={42} />}</Avatar>
           <Box sx={{ width: '100%', textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' } }}>
             <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Owner', 'المالك')}</Typography>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
-            {companyName && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Building2 size={16} /><Typography variant="body2">{companyName}</Typography></Stack>}
+            <Stack direction={'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
+            <Stack direction={'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+            {companyName && <Stack direction={'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Building2 size={16} /><Typography variant="body2">{companyName}</Typography></Stack>}
           </Box>
         </Stack>
 
@@ -192,14 +192,14 @@ export default function OwnerProfilePage() {
         <OwnerPhoneVerificationCard currentPhone={phone} isRTL={isRTL} lang={lang} onVerified={handleVerifiedPhone} />
         <OwnerReferralCard />
 
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
           <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
           <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}</Button>
         </Stack>
       </Paper>
 
       <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
+        <Stack direction={'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
       </Paper>
     </Box>
   );

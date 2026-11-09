@@ -130,13 +130,13 @@ export default function AuditorPortalPage() {
             }}
         >
             <Stack
-                direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }}
+                direction={{ xs: 'column', md: 'row' }}
                 justifyContent="space-between"
                 alignItems={{ xs: 'stretch', md: 'center' }}
                 spacing={2}
                 sx={{ mb: 3 }}
             >
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                <Stack direction={'row'} spacing={2} alignItems="center">
                     <Box
                         sx={{
                             width: 52,

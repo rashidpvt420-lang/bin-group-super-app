@@ -6,7 +6,8 @@ import ts from 'typescript';
 
 const page = fs.readFileSync('apps/admin-panel/src/pages/financials/PayrollManagementPage.tsx', 'utf8');
 const app = fs.readFileSync('apps/admin-panel/src/App.tsx', 'utf8');
-const seg = page.slice(page.indexOf('const SETTLE_ROLES'), page.indexOf('interface Technician'));
+// Nov 9 P1-2 removed the client-side Technician interface; slice up to the component instead.
+const seg = page.slice(page.indexOf('const SETTLE_ROLES'), page.indexOf('export default function PayrollManagementPage'));
 const mod = await import('data:text/javascript,' + encodeURIComponent(ts.transpileModule(seg, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText));
 
 test('separate routes for HR prep and Finance settle', () => {

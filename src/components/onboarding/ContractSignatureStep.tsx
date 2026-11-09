@@ -171,18 +171,18 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         </Box>
 
         <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 2, border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" mb={2}><FileSignature size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography></Stack>
+          <Stack direction={'row'} spacing={1} alignItems="center" mb={2}><FileSignature size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography></Stack>
           <TextField fullWidth label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')} value={typedName} onChange={(event) => setTypedName(event.target.value)} sx={{ mb: 2 }} InputProps={{ sx: { color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' } }} />
           <FormControlLabel control={<Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)' }}>{copy(`I, ${typedName || '___'}, accept this five-page property application, the inspection-first sequence, the locked server quotation, and the UAE legal terms.`, `أنا ${typedName || '___'} أوافق على طلب العقار المكون من خمس صفحات وتسلسل الفحص أولاً وعرض الخادم المقفل والشروط القانونية الإماراتية.`)}</Typography>} />
           <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
           {contractOtpVerificationId ? <Alert severity="success">{copy('Email OTP verified for this property application.', 'تم التحقق من رمز البريد لهذا الطلب.')}</Alert> : <Stack spacing={2}>
             <Button variant="outlined" disabled={!canRequestOtp || otpBusy || quoteLoading} onClick={() => void requestOtp()}>{otpBusy ? <CircularProgress size={20} /> : copy('SEND SIGNATURE OTP', 'إرسال رمز التوقيع')}</Button>
-            {otpRequestId && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}><TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6 }} /><Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button></Stack>}
+            {otpRequestId && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6 }} /><Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button></Stack>}
           </Stack>}
         </Box>
       </Paper>
 
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <Button variant="outlined" onClick={onBack} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
         <Button variant="contained" onClick={onNext} disabled={!isValid || !lockedQuote} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 100 }}><ScrollText size={18} style={{ marginInlineEnd: 8 }} />{copy('Sign & Continue to Final Submission', 'التوقيع والمتابعة إلى الإرسال النهائي')}</Button>
       </Stack>

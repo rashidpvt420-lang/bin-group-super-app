@@ -109,7 +109,7 @@ const GovernmentPropertyPage: React.FC = () => {
                     <Box sx={{ position: 'absolute', top: 0, right: 0, p: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ShieldCheck size={16} /> SOVEREIGN PROTOCOL ACTIVE
                     </Box>
-                    <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
                         <Box sx={{ p: 2, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 2 }}>
                             <Landmark size={48} />
                         </Box>

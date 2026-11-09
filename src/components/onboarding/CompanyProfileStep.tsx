@@ -140,14 +140,14 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                                     <Box sx={{ color: binThemeTokens.gold, mb: 2 }}><Icon size={26} /></Box>
                                                     <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>{card.title}</Typography>
                                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.65, mb: 2 }}>{card.desc}</Typography>
-                                                    <Stack spacing={1}>{card.points.map((point) => <Box key={point} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 750, lineHeight: 1.5 }}>{point}</Typography></Box>)}</Stack>
+                                                    <Stack spacing={1}>{card.points.map((point) => <Box key={point} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexDirection: 'row' }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 750, lineHeight: 1.5 }}>{point}</Typography></Box>)}</Stack>
                                                 </Box>
                                             </Grid>
                                         );
                                     })}
                                 </Grid>
                                 <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.12) }} />
-                                <Grid container spacing={1.5}>{miniProof.map((item) => <Grid item xs={12} sm={6} md={4} key={item.label}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.5, borderRadius: 3, bgcolor: alpha('#FFFFFF', 0.025), color: binThemeTokens.textSecondary, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography variant="caption" fontWeight="850">{item.label}</Typography></Box></Grid>)}</Grid>
+                                <Grid container spacing={1.5}>{miniProof.map((item) => <Grid item xs={12} sm={6} md={4} key={item.label}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.5, borderRadius: 3, bgcolor: alpha('#FFFFFF', 0.025), color: binThemeTokens.textSecondary, flexDirection: 'row' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography variant="caption" fontWeight="850">{item.label}</Typography></Box></Grid>)}</Grid>
                             </Stack>
                         </Paper>
                     </Grid>

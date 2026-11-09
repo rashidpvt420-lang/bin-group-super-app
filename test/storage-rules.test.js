@@ -423,6 +423,12 @@ describe('Storage Security Rules', () => {
       const own = testEnv.authenticatedContext('staff_mfa', { role: 'hr_staff' }).storage();
       await assertSucceeds(getBytes(ref(own, path)));
       await assertSucceeds(uploadString(ref(own, 'staffDocuments/staff_mfa/own.pdf'), 'x', 'raw', pdf));
+      // Nov 9 audit P2-18: the employee cannot overwrite or delete uploaded evidence.
+      await assertFails(uploadString(ref(own, 'staffDocuments/staff_mfa/own.pdf'), 'y', 'raw', pdf));
+      await assertFails(uploadString(ref(own, path), 'y', 'raw', pdf));
+      await assertFails(deleteObject(ref(own, path)));
+      const hrManager = testEnv.authenticatedContext('hr_manager_u', { role: 'hr_manager' }).storage();
+      await assertSucceeds(deleteObject(ref(hrManager, 'staffDocuments/staff_mfa/own.pdf')));
       const other = testEnv.authenticatedContext('staff_other', { role: 'staff' }).storage();
       await assertFails(getBytes(ref(other, path)));
     });

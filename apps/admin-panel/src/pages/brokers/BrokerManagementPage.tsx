@@ -193,7 +193,7 @@ export default function BrokerManagementPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const brokerQuery = query(collection(db, 'users'), where('role', 'in', ['broker', 'BROKER']));
+        const brokerQuery = query(collection(db, 'users'), where('role', 'in', ['broker', 'BROKER']), limit(500));
         const unsubscribe = onSnapshot(brokerQuery, (snapshot) => {
             const fetched = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as Broker[];
             setBrokers(fetched.sort((a, b) => statusText(a.status).localeCompare(statusText(b.status))));

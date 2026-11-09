@@ -213,8 +213,8 @@ export default function OwnerPropertyPassportContractDetailPage() {
       <Stack spacing={4}>
         {passport.provisional && <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}><Bi en={"This provisional property passport is generated from the linked active asset or active contract. Official passport issuance is pending."} ar={"هذا جواز عقار مؤقت من الأصل أو العقد النشط المرتبط. إصدار الجواز الرسمي قيد الانتظار."} /></Alert>}
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.66)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 6 }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={3}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2.5} alignItems="center">
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3}>
+            <Stack direction={'row'} spacing={2.5} alignItems="center">
               <Box sx={{ width: 64, height: 64, borderRadius: 4, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}><Building2 size={32} /></Box>
               <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>PROPERTY PASSPORT</Typography><Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{passport.propertyName}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{passport.address || passport.zone || passport.emirate}</Typography></Box>
             </Stack>
@@ -233,7 +233,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
         </Paper>
 
         {activeTab === 'map' && (
-          <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Grid container spacing={3} sx={{ flexDirection: 'row' }}>
             <Grid item xs={12} md={8}>
               <UaePropertyMap title={passport.propertyName} address={propertyLocation.address || passport.address || passport.zone} emirate={propertyLocation.emirate || passport.emirate} lat={propertyLocation.latitude} lng={propertyLocation.longitude} googleMapsUrl={propertyLocation.googleMapsUrl} locationQuality={propertyLocation.locationQuality} requireExactPin />
             </Grid>

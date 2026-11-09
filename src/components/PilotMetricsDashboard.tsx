@@ -24,7 +24,7 @@ export default function PilotMetricsDashboard({ values = [], isRTL = false }: Pi
   return (
     <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
           <Box>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>90-DAY PILOT METRICS</Typography>
             <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>Market leadership proof board</Typography>
@@ -41,8 +41,8 @@ export default function PilotMetricsDashboard({ values = [], isRTL = false }: Pi
             return (
               <Grid item xs={12} md={6} key={metric.id}>
                 <Box sx={{ p: 2, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center">
+                  <Stack direction={'row'} justifyContent="space-between" alignItems="center" spacing={2}>
+                    <Stack direction={'row'} spacing={1.25} alignItems="center">
                       <Box sx={{ color: value?.healthy ? '#6ee7b7' : binThemeTokens.gold }}>{value?.healthy ? <CheckCircle2 size={18} /> : <BarChart3 size={18} />}</Box>
                       <Typography sx={{ color: '#fff', fontWeight: 950 }}>{metric.label}</Typography>
                     </Stack>

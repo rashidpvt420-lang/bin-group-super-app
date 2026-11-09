@@ -174,7 +174,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             <Typography sx={{ color: binThemeTokens.textSecondary, maxWidth: 900, mx: 'auto', mt: 1 }}>{label(copy.intro, ar)}</Typography>
           </Box>
 
-          {properties.length > 1 && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+          {properties.length > 1 && <Stack direction={'row'} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
             {properties.map((property, index) => <Chip key={property.id || index} label={property.address || property.propertyType || `Property ${index + 1}`} color={index === activePropertyIndex ? 'primary' : 'default'} onClick={() => setActivePropertyIndex(index)} />)}
           </Stack>}
           <Grid container spacing={2.5} alignItems="stretch">
@@ -188,7 +188,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                         {group.systems.map((system) => {
                           const checked = Boolean((activeProperty as any)[system.key]);
                           return (
-                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', bgcolor: checked ? 'rgba(198,167,94,.14)' : binThemeTokens.softCanvas, border: `1px solid ${checked ? 'rgba(198,167,94,.65)' : binThemeTokens.border}`, transition: '150ms ease', '&:hover': { borderColor: 'rgba(198,167,94,.7)' } }}>
+                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: 'row', bgcolor: checked ? 'rgba(198,167,94,.14)' : binThemeTokens.softCanvas, border: `1px solid ${checked ? 'rgba(198,167,94,.65)' : binThemeTokens.border}`, transition: '150ms ease', '&:hover': { borderColor: 'rgba(198,167,94,.7)' } }}>
                               <Checkbox checked={checked} onClick={(e) => e.stopPropagation()} onChange={(e) => setSystem(system.key, e.target.checked)} sx={{ p: 0, color: binThemeTokens.textSecondary, '&.Mui-checked': { color: binThemeTokens.gold } }} />
                               <Typography sx={{ color: checked ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, fontWeight: 850, lineHeight: 1.22, fontSize: { xs: 14, md: 13.5 }, textAlign: isRTL ? 'right' : 'left' }}>{label(system.label, ar)}</Typography>
                             </Paper>
@@ -213,10 +213,10 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                     const unavailable = !locked && SYSTEM_DRIVEN_ADDON_IDS.has(addon.id);
                     return (
                       <Paper key={addon.id} onClick={() => setAddOn(addon.id, !checked)} sx={{ p: 1.2, borderRadius: 3, cursor: locked || unavailable ? 'default' : 'pointer', opacity: unavailable ? 0.72 : 1, bgcolor: checked ? 'rgba(198,167,94,.1)' : binThemeTokens.softCanvas, border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : binThemeTokens.border}` }}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-start">
+                        <Stack direction={'row'} spacing={1} alignItems="flex-start">
                           <Checkbox checked={checked} disabled={locked || unavailable} inputProps={{ 'aria-label': label(addon.name, ar) }} onClick={(e) => e.stopPropagation()} onChange={(e) => setAddOn(addon.id, e.target.checked)} sx={{ p: 0.2, color: binThemeTokens.textSecondary, '&.Mui-checked': { color: binThemeTokens.gold } }} />
                           <Box sx={{ minWidth: 0, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.75} alignItems="center" flexWrap="wrap">
+                            <Stack direction={'row'} spacing={0.75} alignItems="center" flexWrap="wrap">
                               <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, fontSize: 13 }}>{label(addon.name, ar)}</Typography>
                               {locked && <Chip label={label(copy.required, ar)} size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
                             </Stack>
@@ -258,7 +258,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                     <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>{label(copy.commercialTitle, ar)}</Typography>
                     <Stack spacing={1}>
                       {selectedAddOnRows.map((addon) => (
-                        <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, flexDirection: 'row' }}>
                           <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 850, lineHeight: 1.4 }}>{label(addon.name, ar)}</Typography>
                           <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{aed(addon.price)}</Typography>
                         </Box>

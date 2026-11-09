@@ -22,9 +22,14 @@ test('live tracking startup is idempotent for the same technician mission', () =
   assert.match(tracking, /if \(trackingStartKey === startKey\) return trackingStartPromise/);
 });
 
-test('GPS cleanup follows the hydrated technician identity on unmount', () => {
-  assert.match(source, /stopLiveTracking\(user\.uid\)/);
-  assert.match(source, /\}, \[user\?\.uid\]\);/);
+test('GPS cleanup is owned by the technician portal, not the job page (Nov 9 P1-6)', () => {
+  const owner = readFileSync('src/technician/components/TechnicianLiveTrackingOwner.tsx', 'utf8');
+  const app = readFileSync('src/technician/TechnicianApp.tsx', 'utf8');
+  assert.match(owner, /stopLiveTracking\(uid\)/);
+  assert.match(owner, /\}, \[uid\]\);/);
+  assert.match(app, /<TechnicianLiveTrackingOwner \/>/);
+  // Leaving the job page while EN_ROUTE must not stop the feed.
+  assert.doesNotMatch(source, /stopLiveTracking\(user\.uid\)\.catch/);
 });
 
 

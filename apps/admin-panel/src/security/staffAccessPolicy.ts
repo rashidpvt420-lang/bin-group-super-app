@@ -26,6 +26,8 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and duty command' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
+    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -77,6 +79,8 @@ export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
     manager: ['dashboard', 'reports'],
     admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
+    finance_manager: [],
+    finance_controller: [],
 };
 
 const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [
