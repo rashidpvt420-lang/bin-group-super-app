@@ -8,16 +8,15 @@ if (!admin.apps.length) admin.initializeApp();
 const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 const text = (value: unknown) => String(value || "").trim();
 
+// Nov 9 follow-up (from #1996 D-01): a generic admin/isAdmin boolean only counts when the account
+// carries no explicit role, matching hasAdminClaimCycleFree() in firestore.rules. A staff account with
+// an explicit non-finance role (e.g. operations_admin, hr_admin) never gains money authority from a
+// stray boolean claim. superAdmin / super_admin / ceo flags and the role set are unchanged.
 function claimsGrantFinanceAdmin(claims: Record<string, any>): boolean {
   const role = text(claims.role || claims.userRole || claims.primaryRole).toLowerCase();
-  return (
-    claims.admin === true ||
-    claims.isAdmin === true ||
-    claims.superAdmin === true ||
-    claims.super_admin === true ||
-    claims.ceo === true ||
-    FINANCE_ADMIN_ROLES.has(role)
-  );
+  if (FINANCE_ADMIN_ROLES.has(role)) return true;
+  if (claims.superAdmin === true || claims.super_admin === true || claims.ceo === true) return true;
+  return role === "" && (claims.admin === true || claims.isAdmin === true);
 }
 
 export async function requireMfaFinanceAdminActor(request: any): Promise<{ uid: string; email: string }> {
