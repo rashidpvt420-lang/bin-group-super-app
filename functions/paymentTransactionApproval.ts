@@ -4,6 +4,7 @@ import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { requireMfaPaymentDecisionActor } from "./financeAdminMfa";
 import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
@@ -32,7 +33,6 @@ const ts = () => FieldValue.serverTimestamp();
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();
 const money = normalizeAedMoney;
-const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "operations_admin", "finance_admin"]);
 
 function lockedActivationSchedule(
   source: Record<string, any>,
@@ -50,21 +50,13 @@ function lockedActivationSchedule(
   }
 }
 
+// D-01: the payment decision gate is shared with securePaymentApproval.ts (finance roles only,
+// MFA, live custom claims). operations_admin and other staff roles are refused here as well, so the
+// inner handler is safe even if it is ever wired up without the outer wrapper.
 async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
-  const claims = auth.token || {};
-  if (claims.suspended === true) throw new HttpsError("permission-denied", "Suspended admin account.");
-  const userRecord = await admin.auth().getUser(auth.uid);
-  if (userRecord.disabled) throw new HttpsError("permission-denied", "Disabled admin account.");
-  const role = roleOf(claims.role || claims.userRole || claims.primaryRole);
-  if (
-    ADMIN_ROLES.has(role) ||
-    claims.superAdmin === true ||
-    claims.super_admin === true ||
-    claims.ceo === true ||
-    (role === "" && (claims.admin === true || claims.isAdmin === true))
-  ) return;
-  throw new HttpsError("permission-denied", "Admin permission required.");
+  if (auth.token?.suspended === true) throw new HttpsError("permission-denied", "Suspended admin account.");
+  await requireMfaPaymentDecisionActor({ auth });
 }
 
 function resolvePaymentId(data: any) {

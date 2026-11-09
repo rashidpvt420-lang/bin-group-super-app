@@ -1,4 +1,4 @@
-import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
+import { requireMfaPaymentDecisionActor } from "./financeAdminMfa";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
@@ -31,8 +31,8 @@ const isRentCollectionPayment = (payment: any) =>
 const resolvePaymentId = (data: any) => text(data?.paymentId || data?.id);
 
 async function requireMfaFinanceAdmin(auth: any) {
-  // Shared gate: Finance Admin role + MFA + active account + LIVE custom claims (stale-token guard).
-  await requireMfaFinanceAdminActor({ auth });
+  // Shared gate (D-01): finance roles only + MFA + active account + LIVE custom claims (stale-token guard).
+  await requireMfaPaymentDecisionActor({ auth });
 }
 
 

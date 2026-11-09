@@ -171,8 +171,8 @@ test('CP-001: UI and transaction creation bind server-authoritative policy befor
   assert.match(approval, /requireMfaFinanceAdmin/);
   // MFA check is centralised in financeAdminMfa.ts (live-claims gate); approval must delegate to it.
   const financeAdminMfa = await read('functions/financeAdminMfa.ts');
-  assert.match(approval, /import \{ requireMfaFinanceAdminActor \} from "\.\/financeAdminMfa"/);
-  assert.match(approval, /requireMfaFinanceAdminActor\(\{ auth/);
+  assert.match(approval, /import \{ requireMfaPaymentDecisionActor \} from "\.\/financeAdminMfa"/);
+  assert.match(approval, /requireMfaPaymentDecisionActor\(\{ auth/);
   assert.match(financeAdminMfa, /sign_in_second_factor/);
   assert.match(approval, /resolveStoredOwnerActivationPaymentBinding\(payment, activeConfiguration\)/);
   assert.match(transactionApproval, /transaction\.get\(paymentConfigurationRef\)/);
@@ -287,7 +287,7 @@ test('protected non-production Owner activation chain retains App Check, Admin M
   assert.match(approval, /adminApprovePayment = onCall/);
   assert.match(approval, /enforceAppCheck: true/);
   const financeAdminMfa = await read('functions/financeAdminMfa.ts');
-  assert.match(approval, /requireMfaFinanceAdminActor\(\{ auth/);
+  assert.match(approval, /requireMfaPaymentDecisionActor\(\{ auth/);
   assert.match(financeAdminMfa, /A verified Admin MFA session is required/);
   assert.match(transactionApproval, /const alreadyApproved = roleOf\(payment\.status\) === "approved"/);
   assert.match(transactionApproval, /idempotent: approvalWasIdempotent/);

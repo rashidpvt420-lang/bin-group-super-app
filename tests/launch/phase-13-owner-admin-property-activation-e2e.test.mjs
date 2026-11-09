@@ -97,7 +97,7 @@ test('Phase 13 preserves activation fail-closed payment and physical evidence au
   for (const token of [
     'Every property visit must be verified before final payment approval',
     'Immutable 15% receipt evidence is required before final approval',
-    'await requireMfaFinanceAdminActor({ auth })',
+    'await requireMfaPaymentDecisionActor({ auth })',
     'payment.inspectionVerified !== true',
     'Immutable 15% receipt evidence is required before final approval',
   ]) assert.ok(approval.includes(token), `Final activation gate missing ${token}`);

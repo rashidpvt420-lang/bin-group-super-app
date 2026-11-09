@@ -7,7 +7,7 @@ import * as crypto from "crypto";
 import { generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { buildOwnerSuspensionNotice, decideSuspension, type SuspensionDecision } from "./ownerServiceSuspension";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
-import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
+import { requireMfaPaymentDecisionActor } from "./financeAdminMfa";
 import {
   assertChequeClearanceTransition,
   buildOwnerLedgerRow,
@@ -24,11 +24,11 @@ import {
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const text = (value: unknown) => String(value ?? "").trim();
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
+const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin", "finance_manager", "finance_controller"]);
 
 function isAdminToken(token: Record<string, any>): boolean {
   const role = text(token.role || token.userRole || token.primaryRole).toLowerCase();
-  return token.suspended !== true && (ADMIN_ROLES.has(role) || token.admin === true || token.isAdmin === true ||
+  return token.suspended !== true && (ADMIN_ROLES.has(role) || (role === "" && (token.admin === true || token.isAdmin === true)) ||
     token.superAdmin === true || token.super_admin === true || token.ceo === true);
 }
 
@@ -40,7 +40,7 @@ function isAdminToken(token: Record<string, any>): boolean {
  */
 export const adminSetOwnerChequeClearance = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requirePrivilegedMfaSession(request.auth);
-  const actor = await requireMfaFinanceAdminActor(request);
+  const actor = await requireMfaPaymentDecisionActor(request);
   const paymentId = text(request.data?.paymentId);
   const clearance = text(request.data?.clearance).toUpperCase();
   const note = text(request.data?.note).slice(0, 500);
@@ -280,7 +280,7 @@ export const enforceOwnerPaymentSuspensions = onSchedule({ schedule: "every day 
 /** Finance Admin records a replacement CASH/CHEQUE payment against a reopened 15% invoice or a returned-cheque fee. */
 export const adminRecordReplacementInvoicePayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requirePrivilegedMfaSession(request.auth);
-  const actor = await requireMfaFinanceAdminActor(request);
+  const actor = await requireMfaPaymentDecisionActor(request);
   const invoiceId = text(request.data?.invoiceId);
   const method = text(request.data?.paymentMethod || request.data?.method).toUpperCase();
   const reference = text(request.data?.paymentReferenceId || request.data?.reference).slice(0, 180);
@@ -313,7 +313,7 @@ export const adminRecordReplacementInvoicePayment = onCall({ cors: true, enforce
  */
 export const adminVerifyReplacementInvoicePayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requirePrivilegedMfaSession(request.auth);
-  const actor = await requireMfaFinanceAdminActor(request);
+  const actor = await requireMfaPaymentDecisionActor(request);
   const invoiceId = text(request.data?.invoiceId);
   if (!invoiceId) throw new HttpsError("invalid-argument", "invoiceId is required.");
   const invoiceRef = db.collection("invoices").doc(invoiceId);

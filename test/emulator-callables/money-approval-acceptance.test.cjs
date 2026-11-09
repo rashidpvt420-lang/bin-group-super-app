@@ -88,7 +88,9 @@ const { adminApprovePayment, adminRejectPayment, financeDecidePaintingPayment } 
 test('payment approval: denied roles and stale/suspended admins refused, payment untouched', async () => {
   await db.doc('payment_transactions/pay_tx_acc').set({ status: 'PENDING_VERIFICATION', amount: 100, paymentMethod: 'CASH' });
   const actors = [];
-  for (const role of ['manager', 'operations_admin', 'hr_admin', 'finance_staff', 'finance_manager']) actors.push(await createUser(`pa_${role}`, { role }, { tokenExtra: MFA }));
+  // finance_manager / finance_controller now pass the payment gate (audit D-01, finance roles only); see
+  // payment-approval-finance-roles.test.cjs. payroll_admin is a non-payment finance tier and stays refused.
+  for (const role of ['manager', 'operations_admin', 'hr_admin', 'finance_staff', 'payroll_admin', 'operations_manager']) actors.push(await createUser(`pa_${role}`, { role }, { tokenExtra: MFA }));
   const stale = await createUser('pa_fa_stale', { role: 'finance_admin' }, { tokenExtra: MFA });
   await admin.auth().setCustomUserClaims(stale.uid, { role: 'hr_admin' });
   const susp = await createUser('pa_admin_susp', { role: 'admin', admin: true }, { tokenExtra: MFA });

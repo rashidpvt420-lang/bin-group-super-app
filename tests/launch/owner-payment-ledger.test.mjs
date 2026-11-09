@@ -81,7 +81,7 @@ test('server wiring: evidence captures cheque details + receiver, approval gates
   const callables = read('functions/ownerPaymentLedgerCallables.ts');
   assert.match(callables, /export const adminSetOwnerChequeClearance = onCall\(\{ cors: true, enforceAppCheck: true \}/);
   assert.match(callables, /export const getOwnerPaymentLedger = onCall\(\{ cors: true, enforceAppCheck: true \}/);
-  assert.match(callables, /requireMfaFinanceAdminActor/);
+  assert.match(callables, /requireMfaPaymentDecisionActor/); // finance-only MFA gate (audit D-01)
 });
 
 test('contract + invoice + receipt PDFs carry the CASH/CHEQUE payment terms in EN/AR without invented numbers', () => {

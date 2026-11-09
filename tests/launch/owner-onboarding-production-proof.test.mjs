@@ -128,7 +128,7 @@ for (const token of [
 }
 // MFA is enforced via the shared live-claims gate in functions/financeAdminMfa.ts (static path read).
 const financeAdminMfa = fs.readFileSync('functions/financeAdminMfa.ts', 'utf8');
-assert.ok(secureApproval.includes('await requireMfaFinanceAdminActor({ auth })'), 'Secure final approval must delegate to the live-claims MFA gate');
+assert.ok(secureApproval.includes('await requireMfaPaymentDecisionActor({ auth })'), 'Secure final approval must delegate to the live-claims MFA gate');
 assert.ok(financeAdminMfa.includes('sign_in_second_factor'), 'Live-claims MFA gate is missing: sign_in_second_factor');
 for (const token of [
   'Every property visit must be verified before final payment approval',
