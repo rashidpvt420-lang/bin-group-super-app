@@ -13,6 +13,7 @@ const { submitOwnerInspectionFirstOnboarding } = lib('canonicalOwnerSubmission.j
 const { previewOwnerInspectionQuote, adminRecordOwnerMobilizationPaymentEvidence } = lib('inspectionFirstOwnerOnboarding.js');
 const { adminApprovePayment: secureApprovePayment } = lib('securePaymentApproval.js');
 const { adminDecideOwnerApplication } = lib('adminOwnerApplicationDecision.js');
+const { adminSetOwnerChequeClearance } = lib('ownerPaymentLedgerCallables.js');
 
 const HASH = 'c'.repeat(64);
 const MFA = { firebase: { sign_in_provider: 'password', sign_in_second_factor: 'phone' } };
@@ -128,6 +129,13 @@ for (const method of ['CASH', 'CHEQUE']) {
     assert.equal(await isActive(id), false, 'evidence alone does not activate');
     await expectHttpsError(call(secureApprovePayment, financeA, { paymentId: id }), 'failed-precondition');
     assert.equal(await isActive(id), false);
+    if (method === 'CHEQUE') {
+      // Clause 9D: a cheque counts as paid only once the bank has cleared it (ported from #1791).
+      const early = await expectHttpsError(call(secureApprovePayment, financeB, { paymentId: id }), 'failed-precondition');
+      assert.match(early.message, /cleared by the bank/);
+      assert.equal(await isActive(id), false, 'an uncleared cheque never activates');
+      await call(adminSetOwnerChequeClearance, financeA, { paymentId: id, clearance: 'CLEARED' });
+    }
     const results = await Promise.allSettled([call(secureApprovePayment, financeB, { paymentId: id }), call(secureApprovePayment, financeB, { paymentId: id })]);
     assert.ok(results.some((r) => r.status === 'fulfilled'), JSON.stringify(results.map((r) => r.reason?.message)));
     await call(secureApprovePayment, financeB, { paymentId: id });
