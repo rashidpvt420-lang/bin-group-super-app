@@ -37,7 +37,7 @@ export default function OwnerRecentComplaintsCard() {
 
   return (
     <Paper data-testid="owner-recent-complaints" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 5, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction={'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{tx('owner.recentComplaints.title', 'Latest complaints')}</Typography>
         <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
       </Stack>
@@ -54,7 +54,7 @@ export default function OwnerRecentComplaintsCard() {
             onClick={() => navigate(`/owner/ticket/${ticket.id}`)}
             sx={{ p: 1.5, borderRadius: 3, cursor: 'pointer', border: '1px solid #E5E7EB', textAlign: isRTL ? 'right' : 'left', '&:hover': { borderColor: binThemeTokens.gold } }}
           >
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={1}>
+            <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" spacing={1}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800, wordBreak: 'break-word' }}>
                   {ticket.category || tx('owner.recentComplaints.maintenance', 'Maintenance')}{ticket.description ? ` — ${ticket.description}` : ''}

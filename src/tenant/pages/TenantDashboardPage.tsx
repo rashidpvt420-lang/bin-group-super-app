@@ -228,7 +228,7 @@ export default function TenantDashboardPage() {
   return (
     <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row', gap: 2 }}>
           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('dash.terminal.tenant', 'TENANT DASHBOARD')}</Typography>
             <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1 }}>{tx('dash.hello', 'Hello')}, {user?.displayName?.split(' ')[0] || tx('dash.resident', 'Resident')}</Typography>

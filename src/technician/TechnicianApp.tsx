@@ -68,13 +68,13 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.025} compact />
             <AppBar position="sticky" sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: shell.ink, backdropFilter: 'blur(20px)', borderBottom: `1px solid ${shell.border}`, px: { xs: 1, md: 4 }, zIndex: 1200, boxShadow: '0 10px 28px rgba(17,24,39,0.06)' }} elevation={0}>
-                <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.4, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: 'row', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.4, flexDirection: 'row', minWidth: 0 }}>
                         {!isDashboard && <Button aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => navigate(-1)} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: shell.ink, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
-                        <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'BIN Technician', 'فني BIN')}</Typography>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'BIN Technician', 'فني BIN')}</Typography>
                     </Box>
                     {isPhoneHeader ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexDirection: isRTL ? 'row-reverse' : 'row', flexShrink: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexDirection: 'row', flexShrink: 0 }}>
                         <NotificationBell />
                         <PortalHeaderMenu role="technician" items={[
                             { key: 'jobs', label: label('tech.quick.jobs', 'Jobs', 'المهام'), onClick: () => navigate('/technician/jobs') },
@@ -85,7 +85,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         ]} />
                     </Box>
                     ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
                         <Button data-testid="technician-nav-overtime" onClick={() => navigate('/technician/hr#overtime')} sx={quickButtonSx}>{label('tech.quick.hr', 'HR & overtime', 'الموارد والعمل الإضافي')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
@@ -102,7 +102,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 <PortalConnectionStrip />
                 <TechnicianInstallationRegistration />
                 <TechnicianSyncStatusStrip />
-                {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: 'row' }}>
                     <Button variant="text" onClick={() => navigate('/technician')} sx={{ color: shell.muted, fontWeight: 800 }}>{label('nav.dashboard', 'DASHBOARD', 'لوحة التحكم')}</Button>
                     {pathnames.slice(1).map((value, index) => {
                         const normalizedPath = value.toLowerCase().replaceAll('-', '_');

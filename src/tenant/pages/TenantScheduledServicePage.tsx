@@ -379,7 +379,7 @@ export default function TenantScheduledServicePage() {
               </Grid>
 
               <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.055), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 4 }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start">
+                <Stack direction={'row'} spacing={1.5} alignItems="flex-start">
                   <ServiceIcon size={24} color={binThemeTokens.goldHover} />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{service.label}</Typography>
@@ -398,7 +398,7 @@ export default function TenantScheduledServicePage() {
               {preferredDate && (
                 <Paper sx={{ p: 2.5, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}>
                   <Stack spacing={2}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center">
+                    <Stack direction={'row'} spacing={1.25} alignItems="center">
                       <CalendarDays size={20} color={binThemeTokens.goldHover} />
                       <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.liveAvailability', 'Live provider availability')}</Typography>
@@ -431,7 +431,7 @@ export default function TenantScheduledServicePage() {
                                 <Stack spacing={0.7} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
                                   <Typography sx={{ fontWeight: 950, ...readableTextSx }}>{slot.vendorName}</Typography>
                                   <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{slot.timeWindow} · {slot.remaining} {tx('tenant.scheduled.remaining', 'remaining')}</Typography>
-                                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap">
+                                  <Stack direction={'row'} spacing={1} flexWrap="wrap">
                                     {slot.priceFrom > 0 && <Chip size="small" label={`From ${slot.currency} ${slot.priceFrom.toFixed(2)}`} />}
                                     {selected && <Chip size="small" color="success" label={tx('tenant.scheduled.selected', 'Selected')} />}
                                   </Stack>
@@ -489,7 +489,7 @@ export default function TenantScheduledServicePage() {
               {accessMethod === 'smart-lock' && (
                 <Paper sx={{ p: 2.5, bgcolor: alpha('#7C3AED', 0.05), border: `1px solid ${alpha('#7C3AED', 0.22)}`, borderRadius: 4 }}>
                   <Stack spacing={2}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><ShieldCheck size={22} color="#7C3AED" /><Box><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.secureCode', 'Secure temporary access code')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.secureCodeDesc', 'The code is encrypted by the backend, expires automatically and can only be revealed to authorized Operations personnel with an audit record.')}</Typography></Box></Stack>
+                    <Stack direction={'row'} spacing={1.25} alignItems="center"><ShieldCheck size={22} color="#7C3AED" /><Box><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.secureCode', 'Secure temporary access code')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.secureCodeDesc', 'The code is encrypted by the backend, expires automatically and can only be revealed to authorized Operations personnel with an audit record.')}</Typography></Box></Stack>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}><TextField fullWidth required type="password" label={tx('tenant.scheduled.accessCode', 'Temporary access code')} value={temporaryAccessCode} onChange={(event) => setTemporaryAccessCode(event.target.value)} inputProps={{ maxLength: 32 }} /></Grid>
                       <Grid item xs={12} md={6}><TextField fullWidth required type="datetime-local" label={tx('tenant.scheduled.accessExpiry', 'Code expiry')} value={accessCodeExpiresAt} onChange={(event) => setAccessCodeExpiresAt(event.target.value)} InputLabelProps={{ shrink: true }} /></Grid>
@@ -500,7 +500,7 @@ export default function TenantScheduledServicePage() {
 
               {tenantAway && (
                 <Box sx={{ p: 2.5, bgcolor: alpha('#2563EB', 0.055), border: `1px solid ${alpha('#2563EB', 0.2)}`, borderRadius: 4 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start"><KeyRound size={22} color="#2563EB" /><Box sx={{ minWidth: 0 }}><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4, ...readableTextSx }}>{tx('tenant.scheduled.awayDesc', 'The request is marked as an unoccupied-unit service. Operations must confirm the appointment, access method and security readiness before entry.')}</Typography><FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} /></Box></Stack>
+                  <Stack direction={'row'} spacing={1.5} alignItems="flex-start"><KeyRound size={22} color="#2563EB" /><Box sx={{ minWidth: 0 }}><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4, ...readableTextSx }}>{tx('tenant.scheduled.awayDesc', 'The request is marked as an unoccupied-unit service. Operations must confirm the appointment, access method and security readiness before entry.')}</Typography><FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} /></Box></Stack>
                 </Box>
               )}
 
@@ -512,10 +512,10 @@ export default function TenantScheduledServicePage() {
                 </Stack>
               </Paper>
 
-              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><CalendarDays size={20} color={binThemeTokens.goldHover} /><Clock3 size={20} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.confirmation', 'This creates a pending scheduling and quotation request. No paid service is dispatched until Operations publishes the final quote and the tenant approves it.')}</Typography></Stack></Box>
+              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}><Stack direction={'row'} spacing={1.25} alignItems="center"><CalendarDays size={20} color={binThemeTokens.goldHover} /><Clock3 size={20} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.confirmation', 'This creates a pending scheduling and quotation request. No paid service is dispatched until Operations publishes the final quote and the tenant approves it.')}</Typography></Stack></Box>
 
               <Button type="submit" variant="contained" size="large" disabled={submitting} sx={{ py: 1.7, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{submitting ? <CircularProgress size={24} color="inherit" /> : tx('tenant.scheduled.submit', 'SUBMIT SCHEDULED SERVICE')}</Button>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="center"><CheckCircle2 size={17} color="#10B981" /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.audit', 'Availability, quote, recurrence, occupancy, access and policy decisions are saved with the request for Operations and audit history.')}</Typography></Stack>
+              <Stack direction={'row'} spacing={1} alignItems="center" justifyContent="center"><CheckCircle2 size={17} color="#10B981" /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.audit', 'Availability, quote, recurrence, occupancy, access and policy decisions are saved with the request for Operations and audit history.')}</Typography></Stack>
             </Stack>
           </form>
         </Paper>

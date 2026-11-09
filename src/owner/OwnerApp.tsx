@@ -76,8 +76,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
         <Box className="owner-shell" data-testid="owner-shell" sx={{ '--bin-adaptive-text': binThemeTokens.textPrimary, '--bin-adaptive-text-muted': '#4B5563', minHeight: '100vh', bgcolor: binThemeTokens.canvas, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate', background: `linear-gradient(180deg, ${binThemeTokens.canvas} 0%, ${binThemeTokens.softCanvas} 100%)` }}>
             <BrandWatermark label="BIN GROUPS" opacity={binThemeTokens.watermarkOpacity} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: alpha(binThemeTokens.canvas, 0.94), backdropFilter: 'blur(18px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17,24,39,0.06)', zIndex: 1200 }}>
-                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: 'row', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: 'row', minWidth: 0 }}>
                         {!isHome && <IconButton type="button" data-testid="owner-header-back" aria-label={phrase('Back', 'رجوع')} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
                         <IconButton type="button" data-testid="owner-header-dashboard" aria-label={phrase('Owner dashboard', 'لوحة المالك')} onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldText, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
@@ -86,7 +86,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </Box>
                     </Box>
                     {isPhoneHeader ? (
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+                    <Stack direction={'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
                         <OwnerNotificationBell label="Alerts" />
                         <PortalHeaderMenu role="owner" items={[
                             { key: 'approvals', label: approvalsLabel, onClick: () => navigate('/owner/approvals') },
@@ -94,7 +94,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         ]} />
                     </Stack>
                     ) : (
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                    <Stack direction={'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Badge badgeContent={approvalCount} color="warning" max={99} data-testid="owner-approvals-count">
                           <Button aria-label={approvalsLabel} onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         </Badge>

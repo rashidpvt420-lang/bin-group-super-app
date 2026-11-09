@@ -26,7 +26,7 @@ const SupportPage: React.FC = () => {
                         {label('Secure communication channel for owners, tenants, brokers, technicians, and property partners. For property onboarding, submit the property first; BIN GROUP review and physical inspection come before the final quotation, contract, payment and activation.', 'قناة تواصل آمنة للملاك والمستأجرين والوسطاء والفنيين وشركاء العقارات. لتسجيل العقار، قدّم العقار أولاً؛ تأتي مراجعة BIN GROUP والفحص الميداني قبل عرض السعر النهائي والعقد والدفع والتفعيل.')}
                     </Typography>
 
-                    <Grid container spacing={4} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Grid container spacing={4} sx={{ flexDirection: 'row' }}>
                         <Grid item xs={12} md={4}>
                             <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 2, textAlign: 'center' }}>
                                 <Mail size={32} color={binThemeTokens.gold} style={{ marginBottom: '16px' }} />

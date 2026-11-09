@@ -96,7 +96,7 @@ export default function ContractSignatureOtpControl({
           'تحقق من التوقيع عبر الرمز المرسل إلى بريدك الإلكتروني المسجل. لا يمكن توقيع العقد دون هذا الإثبات من الخادم.',
         )}
       </Typography>
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
         <Button
           variant="outlined"
           disabled={busy || !contractId || !contractHash || !signatureName.trim()}

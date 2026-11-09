@@ -180,9 +180,9 @@ export default function PropertyOnboardingPage() {
     return (
         <Box className="white-platinum-onboarding" dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100dvh', bgcolor: '#FFFFFF', color: '#111827', py: { xs: 1.5, md: 4 } }}>
             <Container maxWidth="xl">
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
+                <Stack direction={'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
                     <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate(addPropertyIntent ? '/owner/dashboard' : '/')} sx={{ color: '#7A5C12', fontWeight: 900, minWidth: 0 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                    <Stack direction={'row'} spacing={1} alignItems="center">
                         {intakeId && <Chip size="small" icon={<Save size={14} />} label={label('Saved', 'محفوظ')} color="success" variant="outlined" />}
                         <Button size="small" variant="outlined" onClick={toggleLanguage} startIcon={<Languages size={16} />} aria-label={label('Switch to Arabic', 'التبديل إلى الإنجليزية')} sx={{ minWidth: 0, fontWeight: 900, borderRadius: 99 }}>{lang === 'ar' ? 'EN' : 'عربي'}</Button>
                     </Stack>

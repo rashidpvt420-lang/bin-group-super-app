@@ -121,15 +121,15 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
   return (
     <Paper data-testid="technician-duty-card" sx={{ p: { xs: 2, md: 3 }, borderRadius: '18px', boxShadow: 'none', border: `1px solid ${alpha(tone, 0.3)}`, bgcolor: alpha(tone, 0.04) }}>
       <Stack spacing={2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between">
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between">
+          <Stack direction={'row'} spacing={1.5} alignItems="center">
             <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: alpha(tone, 0.1), color: tone, display: 'flex' }}>{duty === 'ON_BREAK' ? <Coffee size={24} /> : <Power size={24} />}</Box>
             <Box>
               <Typography variant="caption" sx={{ color: '#475569', fontWeight: 800, letterSpacing: 1 }}>{tx('tech.duty.title', 'DUTY STATUS')}</Typography>
               <Typography variant="h6" data-testid="technician-duty-state" sx={{ color: tone, fontWeight: 800 }}>{label}</Typography>
             </Box>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             {duty === 'OFF_DUTY' ? (
               <Button data-testid="technician-activate-duty" variant="contained" disabled={updating} onClick={() => changeDuty('ON_DUTY')} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 800, px: 3, '&:hover': { bgcolor: binThemeTokens.goldHover } }}>
                 {tx('tech.duty.activate', 'ACTIVATE DUTY')}
@@ -159,7 +159,7 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
         <Typography variant="body2" data-testid="technician-paid-clock-note" sx={{ color: '#111827', fontWeight: 700 }}>
           {tx('tech.duty.payNote', 'Starting duty clocks you in for pay. Ending the shift clocks you out. Hours are counted from this clock.')}
         </Typography>
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           <Button variant="text" onClick={() => navigate('/technician/hr')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 800, px: 0 }}>
             {tx('tech.duty.paidHours', 'See paid hours')}
           </Button>
@@ -168,7 +168,7 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
           </Button>
         </Stack>
         {onDuty && activeJobCount === 0 && !gpsError && gpsSharedAt && (
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" data-testid="technician-availability-gps-ok">
+          <Stack direction={'row'} spacing={1} alignItems="center" data-testid="technician-availability-gps-ok">
             <MapPin size={16} color="#047857" />
             <Typography variant="caption" sx={{ color: '#047857', fontWeight: 800 }}>
               {tx('tech.duty.gpsShared', 'Dispatch location shared')} {gpsSharedAt.toLocaleTimeString()}

@@ -251,18 +251,18 @@ export default function BrokerProfilePage() {
             </Paper>
 
             <Paper sx={{ mt: 3, p: 4, borderRadius: 7, border: '1px solid #E5E7EB' }}>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
+              <Stack direction={'row'} justifyContent="space-between" alignItems="center">
                 <Typography fontWeight="950">{label('Profile readiness', 'جاهزية الملف')}</Typography>
                 <Typography fontWeight="950" color={binThemeTokens.gold}>{summary?.kyc.profileCompletionScore || 0}%</Typography>
               </Stack>
               <LinearProgress variant="determinate" value={summary?.kyc.profileCompletionScore || 0} sx={{ mt: 2, height: 8, borderRadius: 99 }} />
-              <Stack spacing={1.5} sx={{ mt: 3 }}>{readinessItems.map((item) => <Box key={item.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" fontWeight="800">{item.label}</Typography><Chip size="small" icon={item.complete ? <ShieldCheck size={14} /> : <ShieldX size={14} />} label={item.value} color={item.complete ? 'success' : 'warning'} /></Box>)}</Stack>
+              <Stack spacing={1.5} sx={{ mt: 3 }}>{readinessItems.map((item) => <Box key={item.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: 'row' }}><Typography variant="body2" fontWeight="800">{item.label}</Typography><Chip size="small" icon={item.complete ? <ShieldCheck size={14} /> : <ShieldX size={14} />} label={item.value} color={item.complete ? 'success' : 'warning'} /></Box>)}</Stack>
             </Paper>
           </Grid>
 
           <Grid item xs={12} lg={8}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 7, border: '1px solid #E5E7EB' }}>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={3}><Briefcase color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Professional profile', 'الملف المهني')}</Typography></Stack>
+              <Stack direction={'row'} spacing={1.5} alignItems="center" mb={3}><Briefcase color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Professional profile', 'الملف المهني')}</Typography></Stack>
               <Grid container spacing={2.5}>
                 <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Professional legal name', 'الاسم القانوني المهني')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} sx={inputSx} /></Grid>
                 <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Phone', 'الهاتف')} value={phone} onChange={(event) => setPhone(event.target.value)} sx={inputSx} /></Grid>
@@ -272,7 +272,7 @@ export default function BrokerProfilePage() {
               </Grid>
 
               <Divider sx={{ my: 4 }} />
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={1}><Award color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Submit new or corrected private KYC', 'إرسال تحقق خاص جديد أو مصحح')}</Typography></Stack>
+              <Stack direction={'row'} spacing={1.5} alignItems="center" mb={1}><Award color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Submit new or corrected private KYC', 'إرسال تحقق خاص جديد أو مصحح')}</Typography></Stack>
               <Typography variant="body2" color="text.secondary" mb={3}>{label('Masked existing values are shown above. Re-enter all full sensitive fields only when submitting a correction or renewal.', 'تظهر القيم الحالية مقنّعة أعلاه. أعد إدخال الحقول الحساسة كاملة فقط عند إرسال تصحيح أو تجديد.')}</Typography>
               <Grid container spacing={2.5}>
                 <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Full RERA licence number', 'رقم رخصة ريرا الكامل')} value={reraLicense} onChange={(event) => setReraLicense(event.target.value)} placeholder={summary?.kyc.reraLicenseMasked || ''} sx={inputSx} /></Grid>
@@ -285,7 +285,7 @@ export default function BrokerProfilePage() {
               </Grid>
               <FormControlLabel sx={{ mt: 3 }} control={<Checkbox checked={commissionAgreementAccepted} onChange={(event) => setCommissionAgreementAccepted(event.target.checked)} />} label={label(`I accept Broker commission terms ${CURRENT_TERMS_VERSION}.`, `أوافق على شروط عمولة الوسيط ${CURRENT_TERMS_VERSION}.`)} />
               {summary?.kyc.reviewReason && <Alert severity={String(summary.kyc.brokerKycStatus).toUpperCase() === 'REJECTED' ? 'error' : 'info'} sx={{ mt: 2 }}>{summary.kyc.reviewReason}</Alert>}
-              <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 3 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 3 }}>
                 <Button variant="contained" startIcon={updating ? <CircularProgress size={18} /> : <Save size={18} />} disabled={updating} onClick={() => void handleSave()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{label('SUBMIT KYC FOR REVIEW', 'إرسال التحقق للمراجعة')}</Button>
                 <Button variant="outlined" startIcon={<KeyRound size={18} />} disabled={resetting} onClick={() => void handlePasswordReset()}>{label('Password reset', 'إعادة تعيين كلمة المرور')}</Button>
               </Stack>

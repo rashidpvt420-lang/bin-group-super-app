@@ -234,9 +234,9 @@ export default function ContractorMarketplacePage() {
     <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4}>
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: darkCard, border, borderRadius: 5 }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
+              <Stack direction={'row'} spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
                 <Box sx={{ p: 1, bgcolor: alpha(gold, 0.12), borderRadius: 2, color: gold, display: 'inline-flex' }}><SafeIcon icon={Home} size={22} /></Box>
                 <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 4 }}>{copy('owner.home.overline', 'HOME DISCOVERY INVENTORY', 'عقارات البحث عن منزل')}</Typography>
               </Stack>
@@ -269,7 +269,7 @@ export default function ContractorMarketplacePage() {
           ].map((item) => (
             <Grid item xs={12} md={4} key={item.label}>
               <Paper sx={{ p: 2.5, bgcolor: darkCard, border, borderRadius: 4 }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+                <Stack direction={'row'} spacing={1.5} alignItems="center">
                   <Box sx={{ color: gold }}><SafeIcon icon={item.icon} size={25} /></Box>
                   <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography sx={{ color: gold, fontWeight: 950, fontSize: '1.7rem', lineHeight: 1 }}>{item.value}</Typography>
@@ -353,7 +353,7 @@ export default function ContractorMarketplacePage() {
           <Grid item xs={12} lg={6}>
             <Stack spacing={3}>
               <Paper sx={{ p: 3.5, bgcolor: darkCard, border, borderRadius: 5 }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Stack direction={'row'} justifyContent="space-between" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                   <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>{copy('owner.home.reviewQueue', 'BIN listing review queue', 'قائمة مراجعة الإعلانات')}</Typography>
                     <Typography variant="body2" sx={{ color: alpha('#fff', 0.55) }}>{copy('owner.home.reviewQueueDesc', 'A request stays here until BIN validates the owner contract and listing facts.', 'يبقى الطلب هنا حتى تتحقق BIN من عقد المالك وبيانات الإعلان.')}</Typography>
@@ -366,7 +366,7 @@ export default function ContractorMarketplacePage() {
                     <Typography sx={{ color: alpha('#fff', 0.48), fontWeight: 800 }}>{copy('owner.home.noRequests', 'No vacancy requests yet.', 'لا توجد طلبات عقارات شاغرة بعد.')}</Typography>
                   ) : homeRequests.slice(0, 6).map((request) => (
                     <Paper key={request.id} sx={{ p: 2, bgcolor: alpha(gold, 0.05), border: `1px solid ${alpha(gold, 0.12)}`, borderRadius: 3 }}>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}>
+                      <Stack direction={'row'} justifyContent="space-between" spacing={2}>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                           <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{request.unitTitle || request.title}</Typography>
                           <Typography variant="caption" sx={{ color: alpha('#fff', 0.52) }}>{[titleCase(request.propertyType), request.area, request.emirate].filter(Boolean).join(' · ') || request.propertyAddress}</Typography>
@@ -386,7 +386,7 @@ export default function ContractorMarketplacePage() {
                   ) : tenantApplications.map((application) => (
                     <Card key={application.id} sx={{ bgcolor: alpha('#fff', 0.04), border: `1px solid ${alpha('#fff', 0.08)}`, borderRadius: 3 }}>
                       <CardContent>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}>
+                        <Stack direction={'row'} justifyContent="space-between" spacing={2}>
                           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                             <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{application.tenantName || application.tenantEmail || copy('owner.home.tenant', 'Home seeker', 'باحث عن منزل')}</Typography>
                             <Typography variant="caption" sx={{ color: alpha('#fff', 0.52) }}>{application.listingTitle}</Typography>
@@ -411,7 +411,7 @@ export default function ContractorMarketplacePage() {
               <Grid item xs={12} md={6} key={home.id}>
                 <Paper sx={{ p: 2.5, bgcolor: alpha('#fff', 0.04), border: `1px solid ${alpha('#fff', 0.08)}`, borderRadius: 3 }}>
                   <Stack spacing={1.1} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                    <Stack direction={'row'} spacing={1} alignItems="center">
                       <SafeIcon icon={Building2} size={17} style={{ color: gold }} />
                       <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{home.unitTitle || home.title || home.propertyName}</Typography>
                     </Stack>

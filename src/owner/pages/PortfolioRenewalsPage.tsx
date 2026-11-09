@@ -142,7 +142,7 @@ export default function PortfolioRenewalsPage() {
             <Card key={record.id} sx={{ bgcolor: '#FFFFFF', color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}>
               <CardContent>
                 <Stack spacing={1.5}>
-                  <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} useFlexGap flexWrap="wrap">
                     <Typography sx={{ fontWeight: 900 }}>
                       {record.propertyName || tx('owner.renewals.property', 'Property')}
                       {record.unitNumber ? ` · ${tx('owner.renewals.unit', 'Unit')} ${record.unitNumber}` : ''}
@@ -169,7 +169,7 @@ export default function PortfolioRenewalsPage() {
                     </Typography>
                   )}
 
-                  <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
                     <Button
                       variant="outlined"
                       onClick={() => navigate(record.contractId ? `/owner/contracts?contractId=${encodeURIComponent(record.contractId)}` : '/owner/contracts')}

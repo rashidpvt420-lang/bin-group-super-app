@@ -211,7 +211,7 @@ export default function OwnerUnitRegistryPage() {
           <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.units.registry_title', 'Unit Ledger')}</Typography>
           <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.units.subtitle', 'All units linked to your approved properties.')}</Typography>
         </Box>
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <Button variant="contained" startIcon={<Plus size={16} />} disabled={properties.length === 0} onClick={() => setWizardOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
             {tx('owner.units.generate_units', 'Generate Units')}
           </Button>

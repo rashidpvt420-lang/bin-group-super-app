@@ -345,7 +345,7 @@ export default function TenantMarketplacePage() {
         <Paper sx={{ p: { xs: 3, md: 4.5 }, bgcolor: '#fff', border: `1px solid ${alpha(gold, 0.24)}`, borderRadius: 6, boxShadow: '0 22px 60px rgba(15,23,42,0.09)', overflow: 'hidden', position: 'relative' }}>
           <Box sx={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', bgcolor: alpha(gold, 0.08), top: -110, right: isRTL ? 'auto' : -80, left: isRTL ? -80 : 'auto' }} />
           <Stack spacing={2.3} sx={{ position: 'relative' }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+            <Stack direction={'row'} spacing={1} alignItems="center">
               <Box sx={{ width: 44, height: 44, display: 'grid', placeItems: 'center', borderRadius: 3, bgcolor: alpha(gold, 0.14), color: binThemeTokens.goldText }}><SafeIcon icon={Search} size={22} /></Box>
               <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2.4 }}>
                 {copy('tenant.home.overline', 'BIN HOME DISCOVERY', 'اكتشف منزلك مع BIN')}
@@ -373,7 +373,7 @@ export default function TenantMarketplacePage() {
 
         <Paper sx={{ p: { xs: 2.2, md: 3 }, bgcolor: '#fff', border: `1px solid ${binThemeTokens.border}`, borderRadius: 5, boxShadow: '0 12px 36px rgba(15,23,42,0.05)' }}>
           <Stack spacing={2.2}>
-            <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
               <TextField
                 fullWidth
                 value={filters.query}
@@ -431,8 +431,8 @@ export default function TenantMarketplacePage() {
               </Grid>
             </Grid>
 
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+            <Stack direction={'row'} justifyContent="space-between" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction={'row'} spacing={1} alignItems="center">
                 <SafeIcon icon={SlidersHorizontal} size={17} style={{ color: binThemeTokens.goldText }} />
                 <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>
                   {copy('tenant.home.matches', `${filteredListings.length} homes match`, `${filteredListings.length} عقار مطابق`)}
@@ -460,7 +460,7 @@ export default function TenantMarketplacePage() {
                         <Typography variant="caption" sx={{ mt: 1, fontWeight: 850, color: binThemeTokens.textSecondary }}>{copy('tenant.home.photoPending', 'Property photos pending BIN review', 'صور العقار قيد مراجعة BIN')}</Typography>
                       </Stack>
                     )}
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} sx={{ position: 'absolute', top: 12, left: isRTL ? 'auto' : 12, right: isRTL ? 12 : 'auto' }}>
+                    <Stack direction={'row'} spacing={1} sx={{ position: 'absolute', top: 12, left: isRTL ? 'auto' : 12, right: isRTL ? 12 : 'auto' }}>
                       <Chip size="small" icon={<SafeIcon icon={ShieldCheck} size={13} />} label="BIN VERIFIED" sx={{ bgcolor: alpha('#fff', 0.92), color: '#166534', fontWeight: 950 }} />
                     </Stack>
                     <IconButton aria-label={favorite ? 'Remove saved home' : 'Save home'} onClick={() => toggleFavorite(listing.id)} sx={{ position: 'absolute', top: 10, right: isRTL ? 'auto' : 10, left: isRTL ? 10 : 'auto', bgcolor: alpha('#fff', 0.94), color: favorite ? '#DC2626' : '#475467', '&:hover': { bgcolor: '#fff' } }}>
@@ -474,7 +474,7 @@ export default function TenantMarketplacePage() {
                         <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, lineHeight: 1.2 }}>
                           {listing.unitTitle || listing.title || listing.propertyName || copy('tenant.home.defaultTitle', 'Available BIN home', 'عقار BIN متاح')}
                         </Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.7} alignItems="center" sx={{ mt: 0.8 }}>
+                        <Stack direction={'row'} spacing={0.7} alignItems="center" sx={{ mt: 0.8 }}>
                           <MapPin size={15} color={binThemeTokens.goldHover} />
                           <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 750 }}>{locationLabel(listing)}</Typography>
                         </Stack>
@@ -556,7 +556,7 @@ export default function TenantMarketplacePage() {
                     </Grid>
                   )}
 
-                  <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                       <Typography variant="h4" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(selected.monthlyRent)}</Typography>
                       <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 750 }}>{locationLabel(selected)}</Typography>
@@ -612,7 +612,7 @@ export default function TenantMarketplacePage() {
                   </Box>
 
                   <Box>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <Stack direction={'row'} spacing={1} alignItems="center" sx={{ mb: 1 }}>
                       <SafeIcon icon={Wrench} size={17} style={{ color: binThemeTokens.goldText }} />
                       <Typography variant="h6" sx={{ fontWeight: 950 }}>{copy('tenant.home.repairHistory', 'Maintenance history', 'سجل الصيانة')}</Typography>
                     </Stack>

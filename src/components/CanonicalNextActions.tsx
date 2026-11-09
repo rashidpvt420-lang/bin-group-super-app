@@ -56,10 +56,10 @@ export default function CanonicalNextActions({ actions, dark = false }: Props) {
                 '&:hover': { bgcolor: alpha(action.urgent ? binThemeTokens.danger : binThemeTokens.gold, dark ? 0.24 : 0.15) },
               }}
             >
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.4} alignItems="center" sx={{ minWidth: 0 }}>
+              <Stack direction={'row'} spacing={1.4} alignItems="center" sx={{ minWidth: 0 }}>
                 <Box sx={{ color: action.urgent ? binThemeTokens.danger : binThemeTokens.goldHover, display: 'flex', flexShrink: 0 }}><SafeIcon icon={CircleAlert} size={19} /></Box>
                 <Box sx={{ minWidth: 0 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                  <Stack direction={'row'} spacing={1} alignItems="center">
                     <Typography sx={{ color: ink, fontWeight: 950 }}>{action.label}</Typography>
                     {typeof action.count === 'number' && <Typography variant="caption" sx={{ color: action.urgent ? binThemeTokens.danger : binThemeTokens.goldHover, fontWeight: 950 }}>({action.count})</Typography>}
                   </Stack>

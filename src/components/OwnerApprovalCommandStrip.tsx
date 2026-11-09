@@ -60,7 +60,7 @@ export default function OwnerApprovalCommandStrip({
   return (
     <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: urgentTotal ? alpha('#ef4444', 0.075) : alpha(binThemeTokens.gold, 0.045), border: `1px solid ${urgentTotal ? alpha('#ef4444', 0.24) : alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" spacing={2}>
           <Box>
             <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>{ar ? 'مركز قرارات المالك' : 'OWNER COMMAND STRIP'}</Typography>
             <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950 }}>{ar ? 'ما الذي يحتاج إلى موافقتي اليوم؟' : 'What needs my approval today?'}</Typography>

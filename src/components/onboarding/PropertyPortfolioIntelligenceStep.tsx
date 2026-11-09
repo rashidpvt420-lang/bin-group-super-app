@@ -28,9 +28,9 @@ export default function PropertyPortfolioIntelligenceStep({ onNext, onBack }: Pr
   const active = properties[activeIndex];
   return (
     <Box>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" gap={2} flexWrap="wrap" sx={{ mb: 2 }}>
+      <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" gap={2} flexWrap="wrap" sx={{ mb: 2 }}>
         <Box>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+          <Stack direction={'row'} spacing={1} alignItems="center">
             <Sparkles size={20} />
             <Typography variant="h5" fontWeight={950}>{label('Rooms, floor plan & property AI', 'الغرف والمخطط وذكاء العقار')}</Typography>
           </Stack>
@@ -38,7 +38,7 @@ export default function PropertyPortfolioIntelligenceStep({ onNext, onBack }: Pr
             {label('Add what is actually inside each property. AI suggestions stay unverified until you confirm them and BIN GROUP verifies the property visit.', 'أضف ما هو موجود فعلياً داخل كل عقار. تبقى اقتراحات الذكاء الاصطناعي غير موثقة حتى تؤكدها ويتحقق فريق BIN GROUP أثناء زيارة العقار.')}
           </Typography>
         </Box>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap>
           {properties.map((property, index) => (
             <Chip
               key={property.id || index}
@@ -63,7 +63,7 @@ export default function PropertyPortfolioIntelligenceStep({ onNext, onBack }: Pr
         isRTL={isRTL}
       />
 
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="space-between" sx={{ mt: 4 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" sx={{ mt: 4 }}>
         <Button variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : undefined} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : undefined}>
           {label('Back to property profile', 'الرجوع إلى ملف العقار')}
         </Button>

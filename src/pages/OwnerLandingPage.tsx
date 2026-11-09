@@ -132,7 +132,7 @@ const OwnerLandingPage: React.FC = () => {
             {/* 1. The Top Navigation Bar */}
             <AppBar position="sticky" sx={{ bgcolor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(30px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: 'none', zIndex: 1200 }}>
                 <Container maxWidth="xl">
-                    <Toolbar sx={{ justifyContent: 'space-between', py: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Toolbar sx={{ justifyContent: 'space-between', py: 1.5, flexDirection: 'row' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box sx={{ p: 0.8, borderRadius: 1.5, bgcolor: binThemeTokens.gold }}>
                                 <ShieldCheck size={24} color="#000" />

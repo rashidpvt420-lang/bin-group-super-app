@@ -153,12 +153,12 @@ export default function TenantTicketsPage() {
                                 '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(15, 23, 42, 0.88)', transform: 'translateY(-2px)' },
                             }}
                         >
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                            <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" spacing={2}>
                                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', flex: 1, minWidth: 0 }}>
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                                         {ticket.serviceLabel || ticket.description || ticket.category || t('ticket.no_description') || 'No Description'}
                                     </Typography>
-                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: binThemeTokens.textOnDarkMuted, flexWrap: 'wrap' }}>
+                                    <Stack direction={'row'} spacing={1} alignItems="center" sx={{ color: binThemeTokens.textOnDarkMuted, flexWrap: 'wrap' }}>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{t('common.ref') || 'REF'}: #{ticket.id.substring(0, 8).toUpperCase()}</Typography>
                                         <Typography variant="caption">•</Typography>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{ticket.category}</Typography>
@@ -166,7 +166,7 @@ export default function TenantTicketsPage() {
 
                                     {isScheduledService && (
                                         <Stack spacing={1} sx={{ mt: 1.5 }}>
-                                            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap">
+                                            <Stack direction={'row'} spacing={1} flexWrap="wrap">
                                                 <Chip size="small" icon={<CalendarClock size={12} />} label={appointmentText(ticket)} sx={{ bgcolor: alpha('#38bdf8', 0.12), color: '#7dd3fc', '& .MuiChip-icon': { color: '#7dd3fc' } }} />
                                                 <Chip size="small" label={`Quote: ${label(ticket.quoteStatus || 'PENDING')}`} sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#92400E' }} />
                                                 {ticket.recurrenceFrequency && ticket.recurrenceFrequency !== 'one-time' && <Chip size="small" icon={<Repeat2 size={12} />} label={`${label(ticket.recurrenceFrequency)} · ${ticket.recurrenceSequence || 1}/${ticket.recurrenceOccurrences || 1}`} sx={{ bgcolor: alpha('#8b5cf6', 0.12), color: '#c4b5fd', '& .MuiChip-icon': { color: '#c4b5fd' } }} />}
@@ -184,7 +184,7 @@ export default function TenantTicketsPage() {
                                     )}
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 700, mt: 1, display: 'block' }}>{ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : ''}</Typography>
                                 </Box>
-                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexShrink={0}>
+                                <Stack direction={'row'} spacing={1} alignItems="center" flexShrink={0}>
                                     <Chip icon={<Icon size={14} />} label={label(status)} sx={{ bgcolor: alpha(config.color, 0.1), color: config.color, fontWeight: 950, fontSize: '0.65rem', height: 24, borderRadius: 2, border: `1px solid ${alpha(config.color, 0.2)}`, '& .MuiChip-icon': { color: config.color } }} />
                                     <ChevronRight size={18} color="rgba(255,255,255,0.18)" style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                 </Stack>

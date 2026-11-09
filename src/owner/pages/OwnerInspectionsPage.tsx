@@ -191,7 +191,7 @@ export default function OwnerInspectionsPage() {
               <Grid item xs={12} md={6} key={inspection.id}>
                 <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(color, 0.18)}`, bgcolor: '#fff' }}>
                   <Stack spacing={1.5}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={2}>
+                    <Stack direction={'row'} justifyContent="space-between" alignItems="center" gap={2}>
                       <Box>
                         <Typography sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>{inspection.propertyName || inspection.propertyId || tx('owner.inspections.property', 'Property')}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{String(inspection.inspectionType || inspection.type || 'INSPECTION').replace(/_/g, ' ')} · {inspection.unitNumber || inspection.unitId || tx('owner.inspections.unitPending', 'Unit pending')}</Typography>
@@ -213,7 +213,7 @@ export default function OwnerInspectionsPage() {
                       {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} <Bi en={"flagged condition item(s)"} ar={"بند/بنود حالة مُعلّمة"} /></Typography>}
                     </Paper>
 
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack direction={'row'} spacing={1} flexWrap="wrap" useFlexGap>
                       {urls.map((url, index) => (
                         <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 950 }}>
                           <Bi en={"Evidence"} ar={"الإثبات"} /> {index + 1}

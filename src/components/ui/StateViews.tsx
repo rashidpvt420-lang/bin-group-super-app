@@ -13,7 +13,7 @@ export function EmptyState({ title, detail, isRTL }: { title: string; detail?: s
 /** Shown when live data fails to load. Never replace an error with a fake 0. */
 export function ErrorState({ title, onRetry, retryLabel = 'Try again', isRTL }: { title: string; onRetry?: () => void; retryLabel?: string; isRTL?: boolean }) {
   return (
-    <Box role="alert" sx={{ py: 1.5, px: 1.5, borderRadius: '12px', bgcolor: ui.badBg, color: ui.badText, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+    <Box role="alert" sx={{ py: 1.5, px: 1.5, borderRadius: '12px', bgcolor: ui.badBg, color: ui.badText, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexDirection: 'row' }}>
       <Typography sx={{ ...uiType.small, fontWeight: 700, color: ui.badText }}>{title}</Typography>
       {onRetry && <Button onClick={onRetry} sx={{ minHeight: 40, color: ui.badText, fontWeight: 800 }}>{retryLabel}</Button>}
     </Box>

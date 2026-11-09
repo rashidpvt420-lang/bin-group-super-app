@@ -194,18 +194,18 @@ export default function TenantProfilePage() {
         historical?: boolean;
     }) => (
         <Box sx={{ mb: 4 }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack direction={'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Typography variant="h6" fontWeight={950} color="#FFF">{label(titleEn, titleAr)}</Typography>
                 <Chip label={records.length} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.goldText, fontWeight: 950 }} />
             </Stack>
             {records.length ? (
-                <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <Grid container spacing={2} sx={{ flexDirection: 'row' }}>
                     {records.map((record) => {
                         const property = propertiesById.get(String(record.propertyId || '')) || {};
                         return (
                             <Grid item xs={12} md={6} key={record.id}>
                                 <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" gap={2} alignItems="flex-start">
+                                    <Stack direction={'row'} justifyContent="space-between" gap={2} alignItems="flex-start">
                                         <Box>
                                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Property', 'العقار')}</Typography>
                                             <Typography variant="h6" fontWeight={950} color="#FFF">{property.name || property.propertyName || record.propertyName || label('Assigned Property', 'العقار المخصص')}</Typography>
@@ -214,7 +214,7 @@ export default function TenantProfilePage() {
                                         <Chip label={localizedStatus(record)} size="small" color={historical ? 'default' : 'success'} />
                                     </Stack>
                                     <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-                                    <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                    <Grid container spacing={2} sx={{ flexDirection: 'row' }}>
                                         <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Unit', 'الوحدة')}</Typography><Typography fontWeight={900} color="#FFF">{record.unitNumber || record.unit || '—'}</Typography></Grid>
                                         <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Floor', 'الطابق')}</Typography><Typography fontWeight={900} color="#FFF">{record.floorNumber || record.floor || '—'}</Typography></Grid>
                                         <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Lease start', 'بداية العقد')}</Typography><Typography variant="body2" color="#FFF">{formatDate(record.leaseStart || record.startDate)}</Typography></Grid>
@@ -254,14 +254,14 @@ export default function TenantProfilePage() {
             </Typography>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
             <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
                     <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>
                         {displayName.charAt(0) || user?.displayName?.charAt(0) || <User size={40} />}
                     </Avatar>
                     <Box sx={{ textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' }, width: '100%' }}>
                         <Typography variant="h5" fontWeight={900} color="#FFF">{displayName || label('Resident', 'المقيم')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+                        <Stack direction={'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
+                        <Stack direction={'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
                     </Box>
                 </Stack>
                 <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ mb: 3 }}>

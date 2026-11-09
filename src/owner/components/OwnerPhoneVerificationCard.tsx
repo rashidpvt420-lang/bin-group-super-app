@@ -147,7 +147,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
 
   return (
     <Paper data-testid="owner-phone-verification-card" sx={{ p: 3, mt: 3, borderRadius: 4, border: `1px solid ${binThemeTokens.gold}55`, bgcolor: 'rgba(198,167,94,0.06)' }}>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction={'row'} spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
         <BadgeCheck size={22} color={binThemeTokens.gold} />
         <Box>
           <Typography variant="subtitle1" fontWeight="950" color={binThemeTokens.textPrimary}>{label('Verify Owner Mobile by SMS', 'توثيق هاتف المالك برسالة نصية')}</Typography>
@@ -185,7 +185,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
               inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }}
               sx={{ '& .MuiOutlinedInput-root': { color: '#FFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}
             />
-            <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <Button data-testid="owner-phone-verify-otp" variant="contained" disabled={busy || otp.length !== 6} onClick={verifyOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                 {busy ? <CircularProgress size={18} /> : label('Verify and Save Phone', 'توثيق الهاتف وحفظه')}
               </Button>

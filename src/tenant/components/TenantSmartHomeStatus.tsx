@@ -135,7 +135,7 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
   return (
     <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'linear-gradient(135deg, rgba(15,23,42,.88), rgba(2,6,23,.92))', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
       <Box sx={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at ${isRTL ? '10%' : '90%'} 0%, ${alpha(binThemeTokens.gold, 0.16)}, transparent 34%)`, pointerEvents: 'none' }} />
-      <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={3} sx={{ position: 'relative', zIndex: 1, mb: 3 }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3} sx={{ position: 'relative', zIndex: 1, mb: 3 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('smart.home_status', 'MY HOME STATUS')}</Typography>
           <Typography 
@@ -258,7 +258,7 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
 
       {activeTicket && (
         <Box sx={{ mt: 3, p: 2.5, borderRadius: 4, bgcolor: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 1 }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography sx={{ color: '#fff', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><SafeIcon icon={ShieldCheck} size={18} style={{ color: binThemeTokens.gold }} /> {tx('smart.technician_command', 'Technician Live Command')}</Typography>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{tx('smart.command_desc', 'Accept → On the way → On-site → before/after proof → tenant approve/dispute.')}</Typography>

@@ -74,7 +74,7 @@ export default function OwnerPortfolioHomeCard() {
             onClick={() => navigate('/owner/properties')}
           />
         ))}
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.25}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
           <UiButton tone="primary" onClick={addProperty} data-testid="owner-add-property">{t('owner.home.addProperty', 'Add property', 'إضافة عقار')}</UiButton>
           <UiButton tone="outline" onClick={() => navigate('/owner/find-room-rent')} data-testid="owner-list-empty-unit">{t('owner.home.list', 'List empty unit', 'عرض وحدة شاغرة')}</UiButton>
           <UiButton tone="outline" onClick={() => navigate('/owner/tenants')}>{t('owner.home.invite', 'Invite tenant', 'دعوة مستأجر')}</UiButton>
