@@ -30,7 +30,7 @@ export function staffShiftDocId(uid: string, dubaiDateKey: string): string {
   return `SHIFT_${uid}_${dubaiDateKey}`;
 }
 
-/** "Day Shift, 8 AM - 4 PM · Off day Friday" from the HR profile, or "" when HR recorded nothing. */
+/** "Day Shift, 8 AM - 5 PM (1 h unpaid break) · Off day Friday" from the HR profile, or "" when HR recorded nothing. */
 export function formatHrShiftSchedule(hr: HrShiftSchedule | null | undefined): string {
   if (!hr) return "";
   const name = clean(hr.shiftName);

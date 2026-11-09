@@ -16,10 +16,10 @@ test('technician Home duty card shows the roster for today', () => {
   assert.match(card, /data-testid="technician-roster-today"/);
 });
 
-test('default working hours are 8 hours', () => {
+test('default working hours are 8 hours (8 AM - 5 PM with a 1 h unpaid break)', () => {
   for (const f of ['functions/adminStaffLifecycle.ts', 'functions/adminUserProvisioning.ts']) {
     const src = readFileSync(f, 'utf8');
-    assert.doesNotMatch(src, /9 AM - 4 PM/);
-    assert.match(src, /"8 AM - 4 PM"/);
+    assert.doesNotMatch(src, /9 AM - 4 PM|"8 AM - 4 PM"/);
+    assert.match(src, /DEFAULT_WORKING_HOURS/);
   }
 });

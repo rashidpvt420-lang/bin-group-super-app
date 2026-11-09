@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { DEFAULT_WORKING_HOURS } from "./hrPayConfig";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -354,7 +355,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       uid, displayName, role, employeeType: role, department, specialization,
       status: "INVITED", suspended: true, onboardingStage: "INVITED", onboardingComplete: false,
       joiningDate: cleanString(payload.joiningDate) || null, offDay: cleanString(payload.offDay, "Sunday"),
-      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "8 AM - 4 PM"),
+      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, DEFAULT_WORKING_HOURS),
       employmentType: cleanString(payload.employmentType, "full_time"), createdAt: now, updatedAt: now,
     };
     const privateHrProfile = {

@@ -29,6 +29,7 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 import TechnicianCredentialsPanel from './TechnicianCredentialsPanel';
+import { DEFAULT_WORKING_HOURS } from '../../lib/staffScheduleDefaults';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
 
@@ -303,7 +304,7 @@ export default function StaffLifecycleDetailsDialog({
                     <Grid item xs={12} md={4}><TextField fullWidth type="date" InputLabelProps={{ shrink: true }} label="Contract end" value={profile.contractEndDate} disabled={!canManage} onChange={(e) => setProfile({ ...profile, contractEndDate: e.target.value })} /></Grid>
                     <Grid item xs={12} md={4}><TextField fullWidth label="Employment type" value={profile.employmentType} disabled={!canManage} onChange={(e) => setProfile({ ...profile, employmentType: e.target.value })} /></Grid>
                     <Grid item xs={12} md={4}><TextField fullWidth label="Shift" value={profile.shiftName} disabled={!canManage} onChange={(e) => setProfile({ ...profile, shiftName: e.target.value })} /></Grid>
-                    <Grid item xs={12} md={4}><TextField fullWidth label="Working hours" value={profile.workingHours} disabled={!canManage} onChange={(e) => setProfile({ ...profile, workingHours: e.target.value })} /></Grid>
+                    <Grid item xs={12} md={4}><TextField fullWidth label="Working hours" value={profile.workingHours} placeholder={DEFAULT_WORKING_HOURS} helperText={`Blank = default: ${DEFAULT_WORKING_HOURS}`} disabled={!canManage} onChange={(e) => setProfile({ ...profile, workingHours: e.target.value })} /></Grid>
                     <Grid item xs={12} md={4}><TextField fullWidth label="Off day" value={profile.offDay} disabled={!canManage} onChange={(e) => setProfile({ ...profile, offDay: e.target.value })} /></Grid>
                   </Grid>
 
