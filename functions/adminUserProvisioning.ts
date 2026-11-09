@@ -31,6 +31,10 @@ const STAFF_ROLES = new Set([
   // and the issuer of an invoice can never approve it.
   "finance_manager",
   "finance_controller",
+  // Payroll Admin (Rashid, 9 Nov): prepares the monthly payroll batch only (adminGeneratePayrollBatch,
+  // with an MFA session). No admin modules and no money authority: settling payroll and every payment
+  // approval stay with MFA Finance Admin. Assigned through this same MFA, audited provisioning path.
+  "payroll_admin",
 ]);
 
 const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
@@ -49,6 +53,7 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
   finance_manager: [],
   finance_controller: [],
+  payroll_admin: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
@@ -67,6 +72,7 @@ const ROLE_DEFAULT_MODULES: Record<string, readonly string[]> = {
   finance_admin: ["dashboard", "financials", "transactions", "reports"],
   finance_manager: [],
   finance_controller: [],
+  payroll_admin: [],
 };
 
 const MODULE_PERMISSION_MAP: Record<string, readonly string[]> = {

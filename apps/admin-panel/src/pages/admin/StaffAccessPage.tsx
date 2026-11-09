@@ -27,6 +27,7 @@ const STAFF_ROLES = [
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
     { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
     { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Prepares the monthly payroll batch only, with MFA. Cannot settle payroll or approve payments. — يجهّز دفعة الرواتب الشهرية فقط مع التحقق الثنائي، ولا يمكنه صرف الرواتب أو اعتماد الدفعات' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -71,6 +72,7 @@ const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
     finance_manager: [],
     finance_controller: [],
+    payroll_admin: [],
 };
 
 const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
@@ -89,6 +91,7 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
     finance_manager: [],
     finance_controller: [],
+    payroll_admin: [],
 };
 
 interface StaffMember {
@@ -387,6 +390,8 @@ export default function StaffAccessPage() {
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>SERVER-ENFORCED MODULE SCOPE</Typography>
                                 {formData.role === 'technician' ? (
                                     <Alert severity="info" sx={{ mt: 2 }}>Technicians use the Technician portal and receive no Admin-panel modules.</Alert>
+                                ) : formData.role === 'payroll_admin' ? (
+                                    <Alert severity="info" data-testid="payroll-admin-role-note" sx={{ mt: 2 }}>Opens only the payroll preparation page and their own HR page. Preparing payroll needs MFA. Settling payroll and approving payments stay with Finance Admin. — يفتح صفحة تجهيز الرواتب وصفحة الموارد البشرية الخاصة به فقط. يتطلب تجهيز الرواتب التحقق الثنائي، ويبقى صرف الرواتب واعتماد الدفعات لدى مسؤول المالية.</Alert>
                                 ) : (formData.role === 'finance_manager' || formData.role === 'finance_controller') ? (
                                     <Alert severity="info" data-testid="painting-finance-role-note" sx={{ mt: 2 }}>Opens only the Painting payments page and their own HR page. Every approval needs MFA, and they can never approve an invoice they issued. — يفتح صفحة دفعات الدهان وصفحة الموارد البشرية الخاصة به فقط. كل موافقة تتطلب التحقق الثنائي، ولا يمكنه أبداً اعتماد فاتورة أصدرها.</Alert>
                                 ) : (

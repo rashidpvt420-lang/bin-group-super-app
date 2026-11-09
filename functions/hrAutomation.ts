@@ -63,7 +63,7 @@ function requirePayrollAdmin(auth: any) {
     if (
         token.admin === true ||
         token.isAdmin === true ||
-        ["admin", "super_admin", "ceo", "hr_admin", "hr_manager", "finance_admin"].includes(role)
+        ["admin", "super_admin", "ceo", "hr_admin", "hr_manager", "finance_admin", "payroll_admin"].includes(role)
     ) return;
     throw new HttpsError("permission-denied", "Payroll permission required.");
 }

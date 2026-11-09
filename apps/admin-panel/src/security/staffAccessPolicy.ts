@@ -18,6 +18,10 @@ export const STAFF_PORTAL_ROLES = new Set([
 // Painting payment reviewers: MFA-gated, read invoices/proofs and decide via financeDecidePaintingPayment only.
 export const PAINTING_FINANCE_ROLES = new Set(['finance_manager', 'finance_controller']);
 export const PAINTING_FINANCE_PATH = '/finance/painting-payments';
+// Payroll Admin: opens only the payroll preparation page (and their own HR page). The server decides
+// (adminGeneratePayrollBatch with MFA); settling payroll stays with MFA Finance Admin.
+export const PAYROLL_ADMIN_ROLES = new Set(['payroll_admin']);
+export const PAYROLL_PREP_PATH = '/hr/payroll-prep';
 
 export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'technician', label: 'Technician', description: 'Technician mobile portal only' },
@@ -28,6 +32,7 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
     { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
     { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Prepares the monthly payroll batch only, with MFA. Cannot settle payroll or approve payments. — يجهّز دفعة الرواتب الشهرية فقط مع التحقق الثنائي، ولا يمكنه صرف الرواتب أو اعتماد الدفعات' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
@@ -81,6 +86,7 @@ export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
     finance_manager: [],
     finance_controller: [],
+    payroll_admin: [],
 };
 
 const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [
@@ -146,7 +152,10 @@ export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     // Staff HR self-service: every approved employee (incl. painting finance) may open their own
     // records page; the Firestore own-record rules decide what is actually readable.
     if (normalizedPath === MY_HR_PATH) {
-        return !user?.claims?.suspended && (STAFF_PORTAL_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(role));
+        return !user?.claims?.suspended && (STAFF_PORTAL_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(role) || PAYROLL_ADMIN_ROLES.has(role));
+    }
+    if (PAYROLL_ADMIN_ROLES.has(role)) {
+        return !user?.claims?.suspended && normalizedPath === PAYROLL_PREP_PATH;
     }
     if (PAINTING_FINANCE_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(normalizeRole(user?.claims?.financeRole))) {
         if (normalizedPath === PAINTING_FINANCE_PATH) return true;

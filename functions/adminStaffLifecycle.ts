@@ -24,7 +24,7 @@ const STAFF_ROLES = new Set([
   "technician", "manager", "operations_admin", "hr_admin", "support_admin",
   "hr_staff", "hr_manager", "finance_staff", "dispatcher", "admin_assistant",
   "account_manager", "operations_manager", "finance_admin",
-  "finance_manager", "finance_controller",
+  "finance_manager", "finance_controller", "payroll_admin",
 ]);
 const ONBOARDING_STAGES = new Set([
   "INVITED",

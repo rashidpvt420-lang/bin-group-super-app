@@ -34,7 +34,7 @@ import { useAuth } from '../../context/AuthContext';
 // UI only; adminGeneratePayrollBatch / adminSettlePayrollRecord stay the authority server-side.
 export type PayrollScreenMode = 'prepare' | 'settle';
 const SETTLE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
-const PREPARE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'hr_admin', 'hr_manager']);
+const PREPARE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'hr_admin', 'hr_manager', 'payroll_admin']);
 export const canSettlePayroll = (user: any, mfaVerified: boolean): boolean => {
   const claims = user?.claims || {};
   const role = String(user?.role || claims.role || '').trim().toLowerCase();

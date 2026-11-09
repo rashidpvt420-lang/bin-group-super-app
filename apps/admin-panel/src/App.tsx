@@ -114,7 +114,7 @@ function AppContent() {
                     <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
                     <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage mode="settle" /></ProtectedRoute>} />
                     <Route path="/my-hr" element={<ProtectedRoute><MyHrSelfServicePage /></ProtectedRoute>} />
-                    <Route path="/hr/payroll-prep" element={<ProtectedRoute adminOnly><PayrollManagementPage mode="prepare" /></ProtectedRoute>} />
+                    <Route path="/hr/payroll-prep" element={<ProtectedRoute adminOnly extraRoles={['payroll_admin']}><PayrollManagementPage mode="prepare" /></ProtectedRoute>} />
                     <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/broker-attributions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
