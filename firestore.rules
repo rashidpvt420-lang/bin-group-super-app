@@ -1129,7 +1129,9 @@ service cloud.firestore {
         'approvedBy',
         'activeContractId',
         'activationStatus',
-        'contractActivated'
+        'contractActivated',
+        'serviceSuspended',
+        'serviceSuspension'
       ];
     }
 

@@ -1336,7 +1336,9 @@ export const createAiMaintenanceTicket = onCall({ cors: true, enforceAppCheck: t
     }
     if (!isAdminCaller) {
         // Owner AI tickets need the same active, payment-verified service contract as the portal.
-        await assertPropertyServiceEntitlement(db, (ref) => ref.get(), String(propertyId), propertyData);
+        await assertPropertyServiceEntitlement(db, (ref) => ref.get(), String(propertyId), propertyData, {
+            emergency: String(priority || "").trim().toLowerCase() === "emergency",
+        });
     }
 
     const now = FieldValue.serverTimestamp();
