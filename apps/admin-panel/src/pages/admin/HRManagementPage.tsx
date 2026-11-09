@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Alert, Avatar, Box, Button, Chip, CircularProgress, Container, Grid, MenuItem, Paper, Stack,
+    Alert, Avatar, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Paper, Stack,
     Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField,
     Typography, alpha,
 } from '@mui/material';
@@ -189,7 +189,29 @@ export default function HRManagementPage() {
 
     const recordAttendance = async () => run('adminRecordStaffAttendance', attendanceForm, 'Attendance status saved. Hours stay on the shift clock and were not changed.');
     const createLeave = async () => run('adminCreateStaffLeaveRequest', leaveForm, 'Leave request created in the HR workflow.');
-    const reviewLeave = async (requestId: string, decision: string) => run('adminReviewStaffLeaveRequest', { requestId, decision }, `Leave request ${decision.toLowerCase()}.`);
+    // Nov 9 audit (P2-23): approving beyond the annual balance needs a written override reason.
+    const [leaveOverride, setLeaveOverride] = useState<{ requestId: string; message: string; reason: string } | null>(null);
+    const reviewLeave = async (requestId: string, decision: string, overrideReason?: string) => {
+        if (actionBusyRef.current) return;
+        actionBusyRef.current = true;
+        setActionBusy(true);
+        setNotice(null);
+        try {
+            await httpsCallable(functions, 'adminReviewStaffLeaveRequest')({ requestId, decision, ...(overrideReason ? { overrideReason } : {}) });
+            setNotice({ type: 'success', message: overrideReason ? `Leave request ${decision.toLowerCase()} with a balance override. The reason is in the audit log.` : `Leave request ${decision.toLowerCase()}.` });
+            setLeaveOverride(null);
+            await loadProtectedHr();
+        } catch (error: any) {
+            if (decision === 'APPROVED' && error?.details?.code === 'LEAVE_OVERRIDE_REASON_REQUIRED') {
+                setLeaveOverride({ requestId, message: errorText(error), reason: overrideReason || '' });
+            } else {
+                setNotice({ type: 'error', message: errorText(error) });
+            }
+        } finally {
+            actionBusyRef.current = false;
+            setActionBusy(false);
+        }
+    };
     // Credential documents (medical card, driving licence, certificate) of technicians can be
     // verified here; the decision sets the technician's dispatch readiness. Upload alone never does.
     const renderVerification = (source: 'staffHrDocuments' | 'staffDocuments', entry: any) => {
@@ -365,6 +387,17 @@ export default function HRManagementPage() {
                 </Stack>
             </Container>
 
+            <Dialog open={Boolean(leaveOverride)} onClose={() => setLeaveOverride(null)} maxWidth="sm" fullWidth data-testid="leave-override-dialog">
+                <DialogTitle>Approve beyond the leave balance? — الموافقة بما يتجاوز رصيد الإجازة؟</DialogTitle>
+                <DialogContent>
+                    <Alert severity="warning" sx={{ mb: 2 }}>{leaveOverride?.message}</Alert>
+                    <TextField fullWidth multiline minRows={2} label="Override reason (min 8 characters) — سبب الاستثناء (8 أحرف على الأقل)" value={leaveOverride?.reason || ''} onChange={(e) => setLeaveOverride((v) => (v ? { ...v, reason: e.target.value } : v))} inputProps={{ 'data-testid': 'leave-override-reason', maxLength: 500 }} />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setLeaveOverride(null)}>Cancel — إلغاء</Button>
+                    <Button variant="contained" color="warning" disabled={actionBusy || (leaveOverride?.reason.trim().length || 0) < 8} onClick={() => leaveOverride && void reviewLeave(leaveOverride.requestId, 'APPROVED', leaveOverride.reason.trim())}>Approve with override — موافقة باستثناء</Button>
+                </DialogActions>
+            </Dialog>
             <StaffRosterEditorDialog staff={rosterStaff} onClose={() => setRosterStaff(null)} onSaved={(message) => setNotice({ type: 'success', message })} />
             <StaffLifecycleDetailsDialog uid={selectedStaffUid} open={Boolean(selectedStaffUid)} onClose={closeProfile} onChanged={loadProtectedHr} />
         </Box>

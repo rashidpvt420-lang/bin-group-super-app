@@ -1069,6 +1069,18 @@ async function recordLeaveDeduction(requestId: string, data: FirebaseFirestore.D
     await writeHrAudit("HR_LEAVE_DEDUCTED", requestId, { uid, leaveType, days });
 }
 
+/** Annual balance before approving a request (null when the join date is missing). */
+export async function annualBalanceBeforeApproval(requestId: string, data: FirebaseFirestore.DocumentData) {
+    const leaveType = safeText(data.requestType);
+    const uid = safeText(data.uid || data.userId || data.technicianId);
+    const days = leaveDaysOf(data);
+    if (leaveType !== "annual_leave" || !uid) return { leaveType, days, balance: null as number | null, joinDateMissing: false };
+    const { joinDate, approved } = await staffLeaveState(uid, requestId);
+    if (!joinDate) return { leaveType, days, balance: null as number | null, joinDateMissing: true };
+    const before = leaveSummary(joinDate, new Date().toISOString().slice(0, 10), approved);
+    return { leaveType, days, balance: before.annual.balance as number | null, joinDateMissing: false };
+}
+
 /**
  * Re-reads the technician leave record and writes the balance deduction.
  * Idempotent: a record that already has leaveDeduction is left unchanged.
