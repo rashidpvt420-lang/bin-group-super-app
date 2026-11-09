@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { EMERGENCY_OWNER_NOTIFY_HOURS, EMERGENCY_SPEND_LIMIT_AED, FIXED_OWNER_APPROVAL_LIMIT_AED, spendApprovalGate } from "./ownerSpendingLimits";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -232,12 +233,15 @@ export const adminCreateVendorRfq = onCall(
     if (ticketOwnerId && ticketOwnerId !== ownerId) throw new HttpsError("failed-precondition", "Ticket and owner do not match.");
     if (propertyOwnerId && propertyOwnerId !== ownerId) throw new HttpsError("failed-precondition", "Property and owner do not match.");
 
-    const minimumQuotes = !emergency && estimateBandAed > 1500 ? 3 : 1;
-    const approvalGate = estimateBandAed > 1500 && !emergency
-      ? "three_quotes_required"
-      : estimateBandAed > 500
-        ? "owner_approval_required"
-        : "low_value_auto_eligible";
+    // D-02: fixed AED 1,000 owner approval limit; genuine emergency up to AED 2,500 without prior
+    // approval, owner told within 24h. An emergency allowance needs an emergency ticket.
+    const ticketEmergency = text(ticket.priority, 40).toLowerCase() === "emergency" || ticket.isEmergency === true;
+    if (emergency && !ticketEmergency) {
+      throw new HttpsError("failed-precondition", "The emergency allowance applies only to an emergency ticket.");
+    }
+    const spend = spendApprovalGate(estimateBandAed, emergency);
+    const minimumQuotes = spend.minimumQuotes;
+    const approvalGate = spend.gate;
     const ref = db.collection("vendor_rfqs").doc();
     const now = FieldValue.serverTimestamp();
     const batch = db.batch();
@@ -254,6 +258,8 @@ export const adminCreateVendorRfq = onCall(
       quotesReceived: 0,
       status: "collecting_quotes",
       approvalGate,
+      ownerApprovalRequired: spend.ownerApprovalRequired,
+      fixedOwnerApprovalLimitAed: FIXED_OWNER_APPROVAL_LIMIT_AED,
       createdBy: actor.uid,
       createdAt: now,
       updatedAt: now,
@@ -268,6 +274,22 @@ export const adminCreateVendorRfq = onCall(
       createdBy: actor.uid,
       createdAt: now,
     });
+    if (approvalGate === "emergency_within_allowance") {
+      // Owner told straight away (well inside the 24h limit); Admin reviews the spend afterwards.
+      const notifyBy = new Date(Date.now() + EMERGENCY_OWNER_NOTIFY_HOURS * 3_600_000).toISOString();
+      batch.create(db.collection("emergency_spend_reviews").doc(`rfq_${ref.id}`), {
+        ownerId, rfqId: ref.id, ticketId, propertyId, amountAed: estimateBandAed, limitAed: EMERGENCY_SPEND_LIMIT_AED,
+        source: "EMERGENCY_ALLOWANCE", ownerNotifyBy: notifyBy, ownerNotifiedAt: new Date().toISOString(),
+        status: "PENDING_REVIEW", createdBy: actor.uid, createdAt: now,
+      });
+      batch.create(db.collection("notifications").doc(), {
+        userId: ownerId, recipientId: ownerId, toRole: "owner", type: "EMERGENCY_SPEND_NOTICE", read: false,
+        rfqId: ref.id, ticketId, propertyId, amountAed: estimateBandAed,
+        title: "Emergency work started", titleAr: "بدء أعمال طارئة",
+        body: `Emergency work estimated at AED ${estimateBandAed} was started on your property under the AED ${EMERGENCY_SPEND_LIMIT_AED} emergency allowance. / بدأت أعمال طارئة بتكلفة تقديرية ${estimateBandAed} درهم في عقارك ضمن حد الطوارئ ${EMERGENCY_SPEND_LIMIT_AED} درهم.`,
+        createdAt: now,
+      });
+    }
     batch.create(db.collection("audit_logs").doc(), audit(actor, "ADMIN_CREATE_VENDOR_RFQ", "vendor_rfqs", ref.id, { ticketId, propertyId, ownerId, minimumQuotes, approvalGate }));
     await batch.commit();
     return { status: "SUCCESS", rfqId: ref.id, minimumQuotes, approvalGate };

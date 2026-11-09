@@ -2,7 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { evaluateApproval, lowestQuoteAed, MIN_EMERGENCY_REASON, readLimits } from "./ownerSpendingLimits";
+import { evaluateApproval, FIXED_OWNER_APPROVAL_LIMIT_AED, lowestQuoteAed, MIN_EMERGENCY_REASON, readLimits } from "./ownerSpendingLimits";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -43,7 +43,8 @@ export const submitOwnerApprovalDecision = onCall(
     const data = snap.data() || {};
     if (data.ownerId !== ownerId) throw new HttpsError("permission-denied", "This approval request does not belong to the signed-in owner.");
 
-    // Owner spending limits (server-enforced; owner-set, no fixed AED defaults).
+    // Fixed AED 1,000 per-job limit (server-enforced): above it the owner's written approval is
+    // recorded as an explicit over-limit confirmation.
     let approvedAmountAed: number | null = null;
     let overLimitConfirmed = false;
     if (decision === "EMERGENCY_APPROVED" && decisionNote.length < MIN_EMERGENCY_REASON) {
@@ -54,7 +55,7 @@ export const submitOwnerApprovalDecision = onCall(
       const check = evaluateApproval(await readLimits(db, ownerId), approvedAmountAed);
       if (check.state === "OVER_LIMIT" && decision === "APPROVED") {
         if (request.data?.confirmOverLimit !== true) {
-          throw new HttpsError("failed-precondition", "This exceeds your spending limit. Confirm again to approve. / يتجاوز هذا حد الإنفاق. أكد مرة أخرى للموافقة.");
+          throw new HttpsError("failed-precondition", "This job is above the fixed AED 1,000 limit and needs your written approval. Confirm again to approve. / هذا العمل يتجاوز الحد الثابت 1,000 درهم ويتطلب موافقتك الكتابية. أكد مرة أخرى للموافقة.");
         }
         overLimitConfirmed = true;
       }
@@ -70,6 +71,7 @@ export const submitOwnerApprovalDecision = onCall(
     await ref.set({
       approvedAmountAed,
       overLimitConfirmed,
+      ...(overLimitConfirmed ? { ownerWrittenApproval: { ownerId, amountAed: approvedAmountAed, limitAed: FIXED_OWNER_APPROVAL_LIMIT_AED, note: decisionNote, at: new Date().toISOString() } } : {}),
       status,
       decision,
       decisionNote,
