@@ -21,6 +21,12 @@ export const PAINTING_FINANCE_PATH = '/finance/painting-payments';
 // Payroll Admin: opens only the payroll preparation page (and their own HR page). The server decides
 // (adminGeneratePayrollBatch with MFA); settling payroll stays with MFA Finance Admin.
 export const PAYROLL_ADMIN_ROLES = new Set(['payroll_admin']);
+/** D-04: roles only a Super Admin / CEO may assign (server-enforced). */
+export const FINANCE_TIER_ROLES = new Set(['finance_manager', 'finance_controller', 'payroll_admin']);
+export const canAssignFinanceTierRoles = (user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined) => {
+  const role = String(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole || '').trim().toLowerCase();
+  return role === 'super_admin' || role === 'ceo' || user?.claims?.superAdmin === true || user?.claims?.super_admin === true || user?.claims?.ceo === true;
+};
 export const PAYROLL_PREP_PATH = '/hr/payroll-prep';
 
 export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
@@ -30,9 +36,9 @@ export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and duty command' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
     { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
-    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
-    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
-    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Prepares the monthly payroll batch only, with MFA. Cannot settle payroll or approve payments. — يجهّز دفعة الرواتب الشهرية فقط مع التحقق الثنائي، ولا يمكنه صرف الرواتب أو اعتماد الدفعات' },
+    { value: 'finance_manager', label: 'Finance Manager (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'finance_controller', label: 'Finance Controller (painting payments)', description: 'Approves painting stage payments only, with MFA. Never their own invoices. Super Admin / CEO assigns. — موافقات دفعات الدهان فقط مع التحقق الثنائي' },
+    { value: 'payroll_admin', label: 'Payroll Admin', description: 'Prepares the monthly payroll batch only, with MFA. Cannot settle payroll or approve payments. Super Admin / CEO assigns. — يجهّز دفعة الرواتب الشهرية فقط مع التحقق الثنائي، ولا يمكنه صرف الرواتب أو اعتماد الدفعات' },
     { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
     { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
     { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },

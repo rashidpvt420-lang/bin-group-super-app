@@ -1,7 +1,7 @@
 'use strict';
-// Payroll Admin (Rashid, 9 Nov 2026), following #1994's role pattern:
-//  - assignable through the existing staff provisioning callable by an Admin-tier account with MFA
-//    (no Super Admin / CEO-only restriction), with no admin modules, and audit-logged;
+// Payroll Admin (Rashid, 9 Nov 2026), following #1994's role pattern + D-04 from #2000:
+//  - assignable through the existing staff provisioning callable only by Super Admin / CEO with MFA
+//    (plain Admin refused), with no admin modules, and audit-logged with financeTierAssignment;
 //  - recognised by the payroll preparation gate (adminGeneratePayrollBatch, MFA session required);
 //  - never money authority: refused on payroll settlement and on payment approve / reject.
 const assert = require('node:assert/strict');
@@ -14,16 +14,21 @@ const inner = lib('paymentTransactionApproval.js');
 const MFA = { firebase: { sign_in_provider: 'password', sign_in_second_factor: 'phone' } };
 const MONTH = '2026-09';
 
-let payrollAdmin; let payrollAdminNoMfa; let adminActor;
+let payrollAdmin; let payrollAdminNoMfa; let adminActor; let superAdminActor;
 test.before(async () => {
   payrollAdmin = await createUser('pa_payroll_admin', { role: 'payroll_admin' }, { tokenExtra: MFA });
   payrollAdminNoMfa = await createUser('pa_payroll_admin_nomfa', { role: 'payroll_admin' });
   adminActor = await createUser('pa_admin', { role: 'admin', admin: true }, { tokenExtra: MFA });
+  superAdminActor = await createUser('pa_super_admin', { role: 'super_admin', super_admin: true }, { tokenExtra: MFA });
 });
 test.beforeEach(clearFirestore);
 
-test('an Admin with MFA can assign payroll_admin: no modules, no admin flag, audit logged', async () => {
-  const result = await call(runtime.adminCreateUser, adminActor, { role: 'payroll_admin', email: 'payroll.admin.ok@example.invalid', displayName: 'Payroll Admin' });
+test('a plain Admin with MFA cannot assign payroll_admin (D-04)', async () => {
+  await expectHttpsError(call(runtime.adminCreateUser, adminActor, { role: 'payroll_admin', email: 'payroll.admin.denied@example.invalid', displayName: 'Payroll Admin' }), 'permission-denied');
+});
+
+test('a Super Admin with MFA can assign payroll_admin: no modules, no admin flag, audit logged', async () => {
+  const result = await call(runtime.adminCreateUser, superAdminActor, { role: 'payroll_admin', email: 'payroll.admin.ok@example.invalid', displayName: 'Payroll Admin' });
   assert.equal(result.success, true);
   assert.equal(result.role, 'payroll_admin');
   const record = await admin.auth().getUser(result.uid);
@@ -33,7 +38,8 @@ test('an Admin with MFA can assign payroll_admin: no modules, no admin flag, aud
   const audit = await db.collection('audit_logs').where('targetId', '==', result.uid).get();
   const entry = audit.docs.map((d) => d.data()).find((d) => d.action === 'ADMIN_CREATE_STAFF_USER');
   assert.ok(entry, 'audit entry written');
-  assert.equal(entry.actorId, adminActor.uid);
+  assert.equal(entry.actorId, superAdminActor.uid);
+  assert.equal(entry.metadata.financeTierAssignment, true);
 });
 
 test('payroll_admin cannot provision staff', async () => {
