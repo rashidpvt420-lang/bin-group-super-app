@@ -123,10 +123,16 @@ export const ROLE_CAPABILITIES: Record<string, SovereignPermission[]> = {
     account_manager: ['canManageContracts', 'canManageProperties'],
     manager: ['canExportReports'],
 };
-export const claimsGrantFullAdmin = (claims: Record<string, unknown>): boolean => Boolean(
-    claims.admin === true || claims.isAdmin === true || claims.super_admin === true || claims.superAdmin === true || claims.ceo === true ||
-    FULL_ADMIN_ROLES.has(String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase())
-);
+export const claimsGrantFullAdmin = (claims: Record<string, unknown>): boolean => {
+    const role = String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+    return Boolean(
+        (role === '' && (claims.admin === true || claims.isAdmin === true)) ||
+        claims.super_admin === true ||
+        claims.superAdmin === true ||
+        claims.ceo === true ||
+        FULL_ADMIN_ROLES.has(role)
+    );
+};
 export const resolvePermission = (
     role: unknown,
     fullAdmin: boolean,
@@ -150,8 +156,9 @@ const claimRoleFrom = (claims: Record<string, unknown>): string => normalizeRole
 const claimsGrantAdmin = (claims: Record<string, unknown>): boolean => {
     const claimRole = claimRoleFrom(claims);
     return Boolean(
-        claims.admin === true ||
-        claims.isAdmin === true ||
+        (claimRole === '' && (claims.admin === true || claims.isAdmin === true)) ||
+        claims.super_admin === true ||
+        claims.superAdmin === true ||
         claims.ceo === true ||
         roleIsAdmin(claimRole)
     );
