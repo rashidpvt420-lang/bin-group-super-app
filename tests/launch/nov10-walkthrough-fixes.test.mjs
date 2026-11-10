@@ -207,7 +207,8 @@ test('language files keep EN/AR parity for new payroll and payment gate keys', (
   for (const file of ['src/context/LanguageContext.tsx', 'packages/shared/src/context/LanguageContext.tsx']) {
     const src = read(file);
     for (const key of ['fin.payroll_prep_gate', 'fin.payroll_settle_gate', 'fin.payroll_prep_denied', 'fin.payment_approval_gate', 'fin.gen_payroll_btn']) {
-      assert.equal((src.match(new RegExp(`'${key}'`, 'g')) || []).length, 2, `${file} ${key}`);
+      const needle = `'${key}'`;
+      assert.equal(src.split(needle).length - 1, 2, `${file} ${key}`);
     }
   }
 });
