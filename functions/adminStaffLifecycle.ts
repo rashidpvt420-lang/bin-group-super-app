@@ -75,8 +75,11 @@ function roleFromToken(token: any) {
 function isFullAdminToken(token: any) {
   const role = roleFromToken(token);
   return token?.suspended !== true && (
-    FULL_ADMIN_ROLES.has(role) || token?.admin === true || token?.isAdmin === true ||
-    token?.super_admin === true || token?.superAdmin === true || token?.ceo === true
+    FULL_ADMIN_ROLES.has(role) ||
+    token?.super_admin === true ||
+    token?.superAdmin === true ||
+    token?.ceo === true ||
+    (role === "" && (token?.admin === true || token?.isAdmin === true))
   );
 }
 
