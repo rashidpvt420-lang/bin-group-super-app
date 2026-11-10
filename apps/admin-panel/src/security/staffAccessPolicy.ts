@@ -137,8 +137,7 @@ export const moduleForAdminPath = (pathname: string): StaffModule | null => {
 export const isFullAdminUser = (user: any): boolean => {
     const role = normalizeRole(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole);
     return Boolean(
-        user?.claims?.admin === true ||
-        user?.claims?.isAdmin === true ||
+        (role === '' && (user?.claims?.admin === true || user?.claims?.isAdmin === true)) ||
         user?.claims?.super_admin === true ||
         user?.claims?.superAdmin === true ||
         user?.claims?.ceo === true ||
