@@ -62,3 +62,16 @@ test('server HR lifecycle full-admin fallback matches Firestore role precedence'
   assert.match(helper, /role === "" && \(token\?\.admin === true \|\| token\?\.isAdmin === true\)/);
   assert.doesNotMatch(helper, /FULL_ADMIN_ROLES\.has\(role\) \|\| token\?\.admin === true/);
 });
+
+const staffPolicySrc = fs.readFileSync('apps/admin-panel/src/security/staffAccessPolicy.ts', 'utf8');
+const staffPolicyOut = ts.transpileModule(staffPolicySrc, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
+const staffPolicy = await import('data:text/javascript,' + encodeURIComponent(staffPolicyOut));
+
+test('admin-panel route policy does not promote explicit non-admin roles from generic booleans', () => {
+  for (const role of ['technician', 'hr_admin', 'hr_manager', 'operations_admin', 'finance_staff']) {
+    assert.equal(staffPolicy.isFullAdminUser({ role, claims: { role, admin: true } }), false, role);
+    assert.equal(staffPolicy.isFullAdminUser({ role, claims: { role, isAdmin: true } }), false, role);
+  }
+  assert.equal(staffPolicy.isFullAdminUser({ claims: { admin: true } }), true, 'legacy role-less admin claim remains supported');
+  assert.equal(staffPolicy.isFullAdminUser({ role: 'hr_admin', claims: { role: 'hr_admin', superAdmin: true } }), true);
+});
