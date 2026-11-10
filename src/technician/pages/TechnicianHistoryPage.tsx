@@ -19,6 +19,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { computeTechnicianHistoryStats, formatPercentOrNoData, type TechnicianHistoryStats } from './technicianHistoryStats';
 import { STATUS_TONES } from '../../theme/statusColors';
 import Bi from '../../components/Bi';
+import { resolveTicketPropertyDisplayName } from '../../../functions/shared/propertyDisplayName';
 
 export default function TechnicianHistoryPage() {
     const { user } = useRole();
@@ -205,14 +206,14 @@ export default function TechnicianHistoryPage() {
                                     </Stack>
                                     <Typography variant="h6" fontWeight="950" color="#FFF">{job.category || 'Maintenance'}</Typography>
                                     <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                                        <MapPin size={14} /> {job.propertyName} <Bi en={"· Unit"} ar={"· الوحدة"} /> {job.unitNumber}
+                                        <MapPin size={14} /> {resolveTicketPropertyDisplayName(job, null, 'Property')}{job.unitNumber ? <> <Bi en={"· Unit"} ar={"· الوحدة"} /> {job.unitNumber}</> : null}
                                     </Typography>
                                 </Box>
 
                                 <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, borderColor: 'rgba(255,255,255,0.05)' }} />
 
                                 <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, mb: 1, display: 'block' }}>COMPLETION DATE</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.82)', fontWeight: 900, mb: 1, display: 'block' }}>COMPLETION DATE</Typography>
                                     <Typography variant="body1" fontWeight="950" color="#FFF">
                                         {job.completedAt?.toDate ? job.completedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                                     </Typography>

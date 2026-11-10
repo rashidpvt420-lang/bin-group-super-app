@@ -6,10 +6,12 @@ import { db, collection, query, where, getDocs, functions, httpsCallable } from 
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useToast } from '../../context/ToastContext';
+import { tenantEmergencySlaCopy } from '../utils/emergencySlaCopy';
+import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
 
 export default function TenantEmergencyPage() {
     const { user } = useRole();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
     const navigate = useNavigate();
     const [submitting, setSubmitting] = useState(false);
     const [unitData, setUnitData] = useState<any>(null);
@@ -74,13 +76,18 @@ export default function TenantEmergencyPage() {
             <Typography variant="h6" color="textSecondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto' }}>
                 {t('dash.tenant.emergencyDesc') || 'Trigger this only for immediate life-safety or severe property damage incidents (e.g., major flood, complete blackout, fire).'}
             </Typography>
-            {!unitData && (
-                <Alert severity="warning" sx={{ maxWidth: 560, mx: 'auto', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
-                    {isRTL
-                        ? 'لا توجد وحدة سكنية مرتبطة بحسابك. اتصل بإدارة العقار أو بخدمات الطوارئ مباشرة.'
-                        : 'No residence is linked to your account. Contact property management or emergency services directly.'}
-                </Alert>
-            )}
+            {(() => {
+                const sla = tenantEmergencySlaCopy({ hasResidence: Boolean(unitData), minutes: CANONICAL_SLA_POLICY.EMERGENCY.minutes, lang: lang === 'ar' ? 'ar' : 'en' });
+                return !unitData ? (
+                    <Alert severity="warning" sx={{ maxWidth: 560, mx: 'auto', mb: 3, textAlign: isRTL ? 'right' : 'left' }} data-testid="tenant-sos-unlinked">
+                        <Typography fontWeight={800}>{sla.title}</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>{sla.detail}</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.75 }}>{sla.nextStep}</Typography>
+                    </Alert>
+                ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 560, mx: 'auto', mb: 3 }}>{sla.detail}</Typography>
+                );
+            })()}
 
             <Button 
                 variant="contained" 

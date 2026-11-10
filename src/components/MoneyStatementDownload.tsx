@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { functions, httpsCallable } from '../lib/firebase';
+import { useLanguage } from '../context/LanguageContext';
 
 type StatementResponse = {
   documentId: string;
@@ -36,15 +37,17 @@ function downloadBase64(base64: string, contentType: string, fileName: string) {
  * English or Arabic). The server always uses the caller's own account, stamps the document and
  * registers its fingerprint so it can be checked at /verify/document.
  */
-export default function MoneyStatementDownload({ title = 'Official statement', compact = false }: { title?: string; compact?: boolean }) {
+export default function MoneyStatementDownload({ title, compact = false }: { title?: string; compact?: boolean }) {
+  const { phrase, lang, isRTL } = useLanguage();
   const today = dubaiToday();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const [format, setFormat] = useState<'pdf' | 'csv'>('pdf');
-  const [language, setLanguage] = useState<'en' | 'ar'>('en');
+  const [language, setLanguage] = useState<'en' | 'ar'>(lang === 'ar' ? 'ar' : 'en');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [issued, setIssued] = useState<StatementResponse | null>(null);
+  const heading = title && title !== 'Official statement' ? title : phrase('Official statement', 'البيان الرسمي');
 
   const download = async () => {
     setBusy(true);
@@ -55,39 +58,39 @@ export default function MoneyStatementDownload({ title = 'Official statement', c
       downloadBase64(data.base64, data.contentType, data.fileName);
       setIssued(data);
     } catch (err: any) {
-      setError(err?.message || 'Statement could not be generated.');
+      setError(err?.message || phrase('Statement could not be generated.', 'تعذر إنشاء البيان.'));
     } finally {
       setBusy(false);
     }
   };
 
   const body = (
-    <Stack spacing={1.5} data-testid="money-statement-download">
-      {!compact && <Typography variant="h6" fontWeight={800}>{title}</Typography>}
+    <Stack spacing={1.5} data-testid="money-statement-download" dir={isRTL ? 'rtl' : 'ltr'} lang={lang === 'ar' ? 'ar' : 'en'}>
+      {!compact && <Typography variant="h6" fontWeight={800}>{heading}</Typography>}
       {!compact && (
         <Typography variant="body2" color="text.secondary">
-          Stamped BIN GROUP statement of your own invoices, payments, receipts, cash/cheque records and payouts. Voided records are shown as void.
+          {phrase('Stamped BIN GROUP statement of your own invoices, payments, receipts, cash/cheque records and payouts. Voided records are shown as void.', 'بيان مجموعة بن الرسمي لفواتيرك ومدفوعاتك وإيصالاتك وسجلات النقد والشيكات والمبالغ المدفوعة. تظهر السجلات الملغاة كملغاة.')}
         </Typography>
       )}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        <TextField size="small" type="date" label="From" value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
-        <TextField size="small" type="date" label="To" value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} />
-        <TextField size="small" select label="Format" value={format} onChange={(e) => setFormat(e.target.value as 'pdf' | 'csv')}>
+        <TextField size="small" type="date" label={phrase('From', 'من')} value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <TextField size="small" type="date" label={phrase('To', 'إلى')} value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <TextField size="small" select label={phrase('Format', 'الصيغة')} value={format} onChange={(e) => setFormat(e.target.value as 'pdf' | 'csv')}>
           <MenuItem value="pdf">PDF</MenuItem>
           <MenuItem value="csv">CSV</MenuItem>
         </TextField>
-        <TextField size="small" select label="Language" value={language} onChange={(e) => setLanguage(e.target.value as 'en' | 'ar')}>
+        <TextField size="small" select label={phrase('Language', 'اللغة')} value={language} onChange={(e) => setLanguage(e.target.value as 'en' | 'ar')}>
           <MenuItem value="en">English</MenuItem>
           <MenuItem value="ar">العربية</MenuItem>
         </TextField>
         <Button variant="contained" disabled={busy || !from || !to} onClick={download} data-testid="money-statement-download-button">
-          {busy ? 'Preparing…' : 'Download statement'}
+          {busy ? phrase('Preparing…', 'جارٍ التحضير…') : phrase('Download statement', 'تنزيل البيان')}
         </Button>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       {issued && (
         <Alert severity="success">
-          Statement {issued.documentId} issued. Anyone you share it with can check it at <a href={issued.verifyUrl}>{issued.verifyUrl}</a>.
+          {phrase('Statement issued.', 'تم إصدار البيان.')} {issued.documentId}. {phrase('Anyone you share it with can check it at', 'يمكن لأي شخص تشاركه معه التحقق منه على')} <a href={issued.verifyUrl}>{issued.verifyUrl}</a>.
         </Alert>
       )}
     </Stack>

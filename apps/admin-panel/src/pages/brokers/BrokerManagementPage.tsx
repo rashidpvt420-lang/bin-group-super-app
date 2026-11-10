@@ -40,6 +40,9 @@ import {
 import { Clock, FileCheck2, WalletCards } from 'lucide-react';
 import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
+import { useAuth } from '../../context/AuthContext';
+import { maskIban } from '../../lib/maskIban';
+import { commissionTotalsExcludingVoid } from '../../lib/commissionVoid';
 
 type Broker = {
     id: string;
@@ -178,9 +181,21 @@ function missingKycItems(broker: Broker, summary?: BrokerKycReviewSummary) {
     ].filter((item) => item.missing).map((item) => item.label);
 }
 
+const MONEY_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
+function canSettleLike(user: any, mfaVerified: boolean): boolean {
+    const claims = user?.claims || {};
+    const role = String(user?.role || claims.role || '').trim().toLowerCase();
+    if (claims.suspended === true || mfaVerified !== true) return false;
+    return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || MONEY_ROLES.has(role));
+}
+
 export default function BrokerManagementPage() {
+
     const { isRTL } = useLanguage();
+    const { user, mfaVerified } = useAuth();
+    const canApprovePayout = canSettleLike(user, mfaVerified);
     const [brokers, setBrokers] = useState<Broker[]>([]);
+    const [commissions, setCommissions] = useState<Array<Record<string, unknown>>>([]);
     const [documents, setDocuments] = useState<Record<string, BrokerDocument[]>>({});
     const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
     const [kycReviewSummaries, setKycReviewSummaries] = useState<Record<string, BrokerKycReviewSummary>>({});
@@ -227,12 +242,21 @@ export default function BrokerManagementPage() {
         return () => unsubscribe();
     }, []);
 
+    useEffect(() => {
+        const commissionsQuery = query(collection(db, 'broker_commissions'), limit(500));
+        const unsubscribe = onSnapshot(commissionsQuery, (snapshot) => {
+            setCommissions(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+        }, (error) => console.warn('[BROKER_ADMIN] commissions listener failed', error));
+        return () => unsubscribe();
+    }, []);
+
     const stats = useMemo(() => ({
         total: brokers.length,
         pending: brokers.filter(brokerNeedsReview).length,
         approved: brokers.filter((broker) => statusText(broker.status || broker.approvalStatus) === 'APPROVED').length,
         payoutPending: payoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
     }), [brokers, payoutRequests]);
+    const commissionTotals = useMemo(() => commissionTotalsExcludingVoid(commissions), [commissions]);
 
     const selectedDocuments = selectedBroker ? documents[selectedBroker.id] || [] : [];
     const selectedSummary = selectedBroker ? kycReviewSummaries[selectedBroker.id] : undefined;
@@ -298,6 +322,10 @@ export default function BrokerManagementPage() {
     };
 
     const reviewPayout = async (request: PayoutRequest, action: 'APPROVE' | 'REJECT' | 'MARK_PAID') => {
+        if (!canApprovePayout) {
+            setNotice('Payout approval is limited to Admin, CEO and Finance Admin with a verified MFA session.');
+            return;
+        }
         const reason = action === 'REJECT'
             ? window.prompt('Reason for rejecting this payout request?') || ''
             : action === 'MARK_PAID'
@@ -422,6 +450,13 @@ export default function BrokerManagementPage() {
                             <WalletCards size={20} color="#C9A646" />
                             <Typography variant="h6" sx={{ fontWeight: 950 }}>Broker Payout Requests</Typography>
                         </Stack>
+                        <Alert severity="info" sx={{ mb: 2 }} data-testid="payout-approval-gate">
+                            Payout approval is limited to Admin, CEO and Finance Admin with a verified MFA session. IBANs are masked; only the last 4 digits are shown.
+                        </Alert>
+                        <Typography variant="body2" sx={{ mb: 2 }} data-testid="commission-totals-ex-void">
+                            Commission totals (VOID excluded): pending AED {commissionTotals.pending.toLocaleString()} · approved AED {commissionTotals.approved.toLocaleString()} · paid AED {commissionTotals.paid.toLocaleString()}{commissionTotals.voidCount ? ` · ${commissionTotals.voidCount} VOID row(s) left out` : ''}
+                        </Typography>
+                        {!canApprovePayout && <Alert severity="warning" sx={{ mb: 2 }}>Approve and Mark paid stay off until this session is Admin, CEO or Finance Admin with MFA.</Alert>}
                         <Stack spacing={2}>
                             {payoutRequests.map((request) => {
                                 const status = statusText(request.status);
@@ -435,18 +470,18 @@ export default function BrokerManagementPage() {
                                             </Box>
                                             <Chip size="small" label={status} color={chipColor(status) as any} sx={{ fontWeight: 900 }} />
                                         </Stack>
-                                        <Typography variant="caption" color="#475467" display="block" sx={{ mt: 1 }}>Bank: {request.bankName || 'Missing'} · IBAN: {request.bankIban || 'Missing'}</Typography>
+                                        <Typography variant="caption" color="#475467" display="block" sx={{ mt: 1 }}>Bank: {request.bankName || 'Missing'} · IBAN: {request.bankIban ? maskIban(request.bankIban) : 'Missing'}</Typography>
                                         {request.notes && <Typography variant="body2" sx={{ mt: 1 }}>{request.notes}</Typography>}
                                         {request.reviewReason && <Alert severity="info" sx={{ mt: 1 }}>{request.reviewReason}</Alert>}
                                         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
                                             {status.includes('PENDING') && (
                                                 <>
-                                                    <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'APPROVE')} variant="contained" color="success">Approve</Button>
-                                                    <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'REJECT')} color="error">Reject</Button>
+                                                    <Button size="small" disabled={!canApprovePayout || busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'APPROVE')} variant="contained" color="success">Approve</Button>
+                                                    <Button size="small" disabled={!canApprovePayout || busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'REJECT')} color="error">Reject</Button>
                                                 </>
                                             )}
                                             {['APPROVED'].includes(status) && (
-                                                <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'MARK_PAID')} variant="contained">Mark paid</Button>
+                                                <Button size="small" disabled={!canApprovePayout || busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'MARK_PAID')} variant="contained">Mark paid</Button>
                                             )}
                                         </Stack>
                                     </Box>

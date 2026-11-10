@@ -43,8 +43,23 @@ import TenantMessagesPage from './pages/TenantMessagesPage';
 import TenantCommunityPage from './pages/TenantCommunityPage';
 import TenantRenewalsPage from './pages/TenantRenewalsPage';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
+import { useTenantHomeData } from './hooks/useTenantHomeData';
+import { alignAlertResidenceText, formatResidenceLabel } from './utils/residenceLabel';
 
 const TenantProfileWithReadiness = () => <><TenantProfileReadinessCard /><TenantProfilePage /></>;
+
+
+const TenantNotificationBell = () => {
+    const { lang } = useLanguage();
+    const { unit } = useTenantHomeData();
+    const formatText = (value: string) => {
+        const live = formatResidenceLabel(unit, lang === 'ar' ? 'ar' : 'en');
+        const aligned = alignAlertResidenceText(value, unit, lang === 'ar' ? 'ar' : 'en');
+        if (live && /\bvillas?\b/i.test(value) && !/\bvillas?\b/i.test(live)) return aligned;
+        return aligned;
+    };
+    return <NotificationBell formatText={formatText} />;
+};
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -81,7 +96,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     </Stack>
                     {isPhoneHeader ? (
                     <Stack direction={'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
-                        <NotificationBell />
+                        <TenantNotificationBell />
                         <PortalHeaderMenu role="tenant" items={[
                             { key: 'homes', label: tx('tenant.quick.findHome', copy('Find a Home', 'ابحث عن منزل')), onClick: () => navigate('/tenant/homes') },
                             { key: 'report', label: tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة')), onClick: () => navigate('/tenant/request') },
@@ -96,7 +111,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة'))}</Button>
                         <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: binThemeTokens.danger, borderColor: alpha(binThemeTokens.danger, 0.35), bgcolor: alpha(binThemeTokens.danger, 0.04), '&:hover': { bgcolor: alpha(binThemeTokens.danger, 0.08), borderColor: binThemeTokens.danger } }}>{tx('tenant.quick.emergency', copy('Emergency', 'طوارئ'))}</Button>
                         <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{tx('tenant.quick.payments', copy('Payments', 'المدفوعات'))}</Button>
-                        <NotificationBell />
+                        <TenantNotificationBell />
                         <IconButton aria-label={copy('Tenant profile', 'ملف المستأجر')} onClick={() => navigate('/tenant/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: binThemeTokens.card, border: `1px solid ${binThemeTokens.border}`, borderRadius: 3, '&:hover': { bgcolor: binThemeTokens.softCanvas } }}><SafeIcon icon={User} size={18} /></IconButton>
                         <PortalSessionControls role="tenant" accent={binThemeTokens.goldHover} />
                     </Stack>

@@ -119,20 +119,23 @@ export default function HRManagementPage() {
         setNotice(null);
         try {
             const getLifecycle = httpsCallable(functions, 'adminGetStaffLifecycle');
-            const lifecycleResponse: any = await getLifecycle({});
+            const getOps = httpsCallable(functions, 'adminGetHrOperations');
+            const lifecyclePromise = getLifecycle({});
+            const opsPromise = isHRManager ? getOps({}) : Promise.resolve(null);
+            const lifecycleResponse: any = await lifecyclePromise;
             const rows = Array.isArray(lifecycleResponse.data?.staff) ? lifecycleResponse.data.staff : [];
             setStaff(rows);
             setCanManageLifecycle(lifecycleResponse.data?.canManageLifecycle === true);
+            setLoading(false);
             if (isHRManager) {
-                const getOps = httpsCallable(functions, 'adminGetHrOperations');
-                const opsResponse: any = await getOps({});
+                const opsResponse: any = await opsPromise;
                 setHrOps({
-                    attendance: Array.isArray(opsResponse.data?.attendance) ? opsResponse.data.attendance : [],
-                    leaveRequests: Array.isArray(opsResponse.data?.leaveRequests) ? opsResponse.data.leaveRequests : [],
-                    documents: Array.isArray(opsResponse.data?.documents) ? opsResponse.data.documents : [],
-                    staffUploads: Array.isArray(opsResponse.data?.staffUploads) ? opsResponse.data.staffUploads : [],
+                    attendance: Array.isArray(opsResponse?.data?.attendance) ? opsResponse.data.attendance : [],
+                    leaveRequests: Array.isArray(opsResponse?.data?.leaveRequests) ? opsResponse.data.leaveRequests : [],
+                    documents: Array.isArray(opsResponse?.data?.documents) ? opsResponse.data.documents : [],
+                    staffUploads: Array.isArray(opsResponse?.data?.staffUploads) ? opsResponse.data.staffUploads : [],
                 });
-                const incomplete = describeIncompleteHrRead(lifecycleResponse.data, opsResponse.data);
+                const incomplete = describeIncompleteHrRead(lifecycleResponse.data, opsResponse?.data);
                 if (incomplete) setNotice({ type: 'error', message: incomplete });
             } else {
                 setHrOps({ attendance: [], leaveRequests: [], documents: [], staffUploads: [] });

@@ -15,7 +15,7 @@ const RECENT_LIMIT = 5;
 
 export default function OwnerRecentComplaintsCard() {
   const { user } = useRole();
-  const { tx, isRTL } = useLanguage();
+  const { tx, phrase, isRTL, lang } = useLanguage();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,13 +38,13 @@ export default function OwnerRecentComplaintsCard() {
   return (
     <Paper data-testid="owner-recent-complaints" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 5, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
       <Stack direction={'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{tx('owner.recentComplaints.title', 'Latest complaints')}</Typography>
-        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
+        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{phrase('Latest complaints', 'أحدث الشكاوى')}</Typography>
+        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{phrase('View all', 'عرض الكل')}</Button>
       </Stack>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {loading && !error && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.recentComplaints.loading', 'Loading complaints…')}</Typography>}
+      {loading && !error && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{phrase('Loading complaints…', 'جارٍ تحميل الشكاوى…')}</Typography>}
       {!loading && !error && tickets.length === 0 && (
-        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.recentComplaints.empty', 'No complaints at your properties.')}</Typography>
+        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{phrase('No complaints at your properties.', 'لا توجد شكاوى في عقاراتك.')}</Typography>
       )}
       <Stack spacing={1.5}>
         {tickets.map((ticket) => (
@@ -57,10 +57,10 @@ export default function OwnerRecentComplaintsCard() {
             <Stack direction={'row'} justifyContent="space-between" alignItems="flex-start" spacing={1}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800, wordBreak: 'break-word' }}>
-                  {ticket.category || tx('owner.recentComplaints.maintenance', 'Maintenance')}{ticket.description ? ` — ${ticket.description}` : ''}
+                  {ticket.category || phrase('Maintenance', 'صيانة')}{ticket.description ? ` — ${ticket.description}` : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>
-                  #{ticket.id.substring(0, 8).toUpperCase()}{ticket.propertyName ? ` · ${ticket.propertyName}` : ''}{ticket.unitNumber ? ` · ${tx('owner.tickets.unitLabel', 'Unit')} ${ticket.unitNumber}` : ''}
+                  #{ticket.id.substring(0, 8).toUpperCase()}{ticket.propertyName ? ` · ${ticket.propertyName}` : ''}{ticket.unitNumber ? ` · ${phrase('Unit', 'وحدة')} ${ticket.unitNumber}` : ''}
                 </Typography>
                 <OwnerTicketAssignmentLine ticket={ticket} tx={tx} />
               </Box>

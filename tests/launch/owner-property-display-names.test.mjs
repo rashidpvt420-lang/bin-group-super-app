@@ -129,8 +129,10 @@ test('owner ticket list, detail, approvals and bell use the resolved property la
   assert.doesNotMatch(approvals, /ticket\.propertyId \|\| 'Property'/);
   assert.match(hook, /where\('ownerId', '==', ownerUid\)/);
   assert.match(hook, /functions\/shared\/propertyDisplayName/);
-  assert.match(app, /<NotificationBell formatText=\{formatPropertyText\} label=\{label\} \/>/);
-  assert.match(app, /<OwnerNotificationBell label="Alerts" \/>/);
+  assert.match(app, /formatPropertyText/);
+  assert.match(app, /formatOwnerCompletionAlert/);
+  assert.match(app, /<NotificationBell formatText=\{formatText\} label=\{label\} \/>/);
+  assert.match(app, /<OwnerNotificationBell label="Alerts" pendingSignOffs=\{approvalSignOffs\} \/>/);
   assert.match(bell, /formatText \? formatText\(String\(notif\.title/);
   assert.match(bell, /formatText \? formatText\(String\(notif\.body/);
 });

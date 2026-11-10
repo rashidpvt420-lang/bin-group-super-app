@@ -12,7 +12,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import Bi from '../../components/Bi';
-import { isVoidOrClosedCommission, pendingSettlementAmount } from '../commissionTotals';
+import { isVoidOrClosedCommission, pendingSettlementAmount, settlementLabelLocalized } from '../commissionTotals';
 
 type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 
@@ -30,7 +30,7 @@ const emptyOtp: OtpState = { open: false, challengeId: '', correlationId: '', co
 
 export default function BrokerCommissionsPage() {
   const { user } = useRole();
-  const { isRTL } = useLanguage();
+  const { isRTL, lang } = useLanguage();
   const [commissions, setCommissions] = useState<any[]>([]);
   const [payoutRequests, setPayoutRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,7 +192,7 @@ export default function BrokerCommissionsPage() {
               <TableCell>{commission.linkedLeadName || commission.linkedReferralName || commission.brokerName || 'Direct Mission'}<Typography variant="caption" display="block">{commission.linkedProperty || commission.propertyName || 'Portfolio Wide'}</Typography></TableCell>
               <TableCell>AED {Number(commission.amount || 0).toLocaleString()}</TableCell>
               <TableCell><Chip size="small" label={String(commission.status || '').toUpperCase()} sx={{ color: statusColor(commission.status), bgcolor: alpha(statusColor(commission.status), 0.1) }} /></TableCell>
-              <TableCell>{commission.payoutStatus ? String(commission.payoutStatus).replaceAll('_', ' ').toUpperCase() : 'NOT REQUESTED'}</TableCell>
+              <TableCell>{settlementLabelLocalized(commission, lang === 'ar' ? 'ar' : 'en')}</TableCell>
               <TableCell align="right"><Tooltip title="Commission record (detail view not available yet)"><span><IconButton disabled aria-label="Commission record"><ExternalLink size={18} /></IconButton></span></Tooltip></TableCell>
             </TableRow>)}
           </TableBody>

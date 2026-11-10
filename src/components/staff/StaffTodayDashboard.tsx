@@ -385,10 +385,10 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
               </Avatar>
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{displayName}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#FFFFFF' }}>{displayName}</Typography>
                   <Chip label={clockedIn ? "ON DUTY" : "OFF DUTY"} color={clockedIn ? "success" : "default"} size="small" />
                 </Stack>
-                <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+                <Typography variant="body2" sx={{ color: "#E2E8F0" }}>
                   {displayRole} <Bi en={"• Shift:"} ar={"• الوردية:"} /> {shiftLabel}
                 </Typography>
               </Box>
@@ -426,7 +426,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                           <Chip label={activeJob.status} variant="outlined" size="small" />
                         </Stack>
                         <Typography variant="h5" sx={{ fontWeight: 800 }}>{activeJob.title}</Typography>
-                        <Typography variant="body2" sx={{ color: "#94a3b8", display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                        <Typography variant="body2" sx={{ color: "#E2E8F0", display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
                           <LocationIcon fontSize="small" /> {activeJob.location || "Location not recorded"}
                         </Typography>
                       </Box>
@@ -444,7 +444,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                       </Tooltip>
                     </Stack>
                     <Box sx={{ mt: 2, p: 2, bgcolor: "#0f172a", borderRadius: 2 }}>
-                      <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+                      <Typography variant="body2" sx={{ color: "#E2E8F0" }}>
                         <Bi en={"SLA deadline:"} ar={"موعد مستوى الخدمة:"} /> <strong>{readableDateTime(activeJob.slaDeadline)}</strong>
                       </Typography>
                     </Box>
@@ -463,7 +463,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                 ) : (
                   <Box sx={{ py: 2, textAlign: "center" }}>
                     <Typography variant="h6" sx={{ fontWeight: 800 }}><Bi en={"No Active Job Dispatched"} ar={"لا توجد مهمة نشطة"} /></Typography>
-                    <Typography variant="body2" sx={{ color: "#94a3b8", mt: 1 }}><Bi en={"Assigned work appears here automatically."} ar={"يظهر العمل المسند هنا تلقائياً."} /></Typography>
+                    <Typography variant="body2" sx={{ color: "#E2E8F0", mt: 1 }}><Bi en={"Assigned work appears here automatically."} ar={"يظهر العمل المسند هنا تلقائياً."} /></Typography>
                   </Box>
                 )}
               </CardContent>
@@ -480,7 +480,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                         {activeVehicle ? `${activeVehicle.id}${activeVehicle.plate ? ` (${activeVehicle.plate})` : ""}` : "No Vehicle Assigned"}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                      <Typography variant="caption" sx={{ color: "#E2E8F0" }}>
                         {activeVehicle
                           ? `Status ${activeVehicle.status || "not recorded"} • Fuel ${activeVehicle.fuelLevel === null ? "not recorded" : `${activeVehicle.fuelLevel}%`}`
                           : "Fleet assignment will appear here when issued."}
@@ -499,7 +499,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }}><Bi en={"Overtime"} ar={"العمل الإضافي"} /></Typography>
-                    <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                    <Typography variant="caption" sx={{ color: "#E2E8F0" }}>
                       {overtimeTracker ? `${overtimeTracker.estimatedMinutes || "—"} min requested` : "No active overtime request"}
                     </Typography>
                   </Box>

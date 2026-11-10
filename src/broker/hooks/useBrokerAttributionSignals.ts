@@ -11,6 +11,7 @@ type BrokerAttributionSignals = {
   activeLeads: number;
   attributedContracts: number;
   pendingCommissionAmount: number;
+  referralCount: number;
   referralCode: string;
   referralUrl: string;
   createAttributionLead: (input: { ownerName: string; ownerEmail?: string; ownerPhone?: string; propertyName?: string; notes?: string }) => Promise<string>;
@@ -28,6 +29,7 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
   const [activeLeads, setActiveLeads] = React.useState(0);
   const [attributedContracts, setAttributedContracts] = React.useState(0);
   const [pendingCommissionAmount, setPendingCommissionAmount] = React.useState(0);
+  const [referralCount, setReferralCount] = React.useState(0);
 
   const referralCode = React.useMemo(() => brokerKey(user?.uid, user?.email), [user?.uid, user?.email]);
   const referralUrl = React.useMemo(() => {
@@ -75,6 +77,16 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
       publishError('Live broker commission attribution could not be loaded.');
     }));
 
+    unsubs.push(onSnapshot(query(collection(db, 'referrals'), where('brokerId', '==', user.uid), limit(200)), (snap) => {
+      setReferralCount(snap.size);
+      setError('');
+      publishLoaded();
+    }, (err) => {
+      console.warn('[BrokerAttributionSignals] referrals listener failed:', err);
+      setReferralCount(0);
+      publishError('Live broker referrals could not be loaded.');
+    }));
+
     return () => unsubs.forEach((unsub) => unsub());
   }, [user?.uid]);
 
@@ -115,6 +127,7 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
     activeLeads,
     attributedContracts,
     pendingCommissionAmount,
+    referralCount,
     referralCode,
     referralUrl,
     createAttributionLead,

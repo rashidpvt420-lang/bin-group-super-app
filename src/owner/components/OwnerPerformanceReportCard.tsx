@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Button, Card, CardContent, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { functions, httpsCallable } from '../../lib/firebase';
+import { useLanguage } from '../../context/LanguageContext';
 
 type ReportResponse = {
   documentId: string; fileName: string; contentType: string; base64: string; sha256: string; verifyUrl: string;
@@ -40,8 +41,9 @@ function downloadBase64(base64: string, contentType: string, fileName: string) {
 
 /** Owner dashboard card: downloads the server-generated, QR-verifiable monthly report for the signed-in owner only. */
 export default function OwnerPerformanceReportCard() {
+  const { lang } = useLanguage();
   const [month, setMonth] = useState(previousMonth());
-  const [language, setLanguage] = useState<'en' | 'ar'>('en');
+  const [language, setLanguage] = useState<'en' | 'ar'>(lang === 'ar' ? 'ar' : 'en');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [issued, setIssued] = useState<ReportResponse | null>(null);
