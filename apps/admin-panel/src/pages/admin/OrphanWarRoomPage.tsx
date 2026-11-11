@@ -11,7 +11,7 @@ import {
     Search, Wrench, CheckCircle2
 } from 'lucide-react';
 import { db, auth, functions, httpsCallable, where } from '../../lib/firebase';
-import { usePagedCollection } from '../../lib/usePagedCollection';
+import { usePagedCollection, type PagedRow } from '../../lib/usePagedCollection';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
@@ -46,9 +46,26 @@ export default function OrphanWarRoomPage() {
     const properties = propertiesPage.rows;
     const units = unitsPage.rows;
     const geoRepairItems = properties.filter((property) => !property.geo?.lat || !property.geo?.lng || !property.geo?.geohash);
-    const orphans = [
-        ...ticketOrphansPage.rows.map((row) => ({ ...row, type: 'TICKET' })),
-        ...tenantOrphansPage.rows.map((row) => ({ ...row, type: 'TENANT', description: `Tenant: ${row.displayName || row.email}` })),
+    type OrphanRecord = PagedRow & {
+        type: 'TICKET' | 'TENANT';
+        description?: string;
+        tenantName?: string;
+        tenantEmail?: string;
+        displayName?: string;
+        email?: string;
+        createdAt?: { toDate?: () => Date };
+    };
+    const orphans: OrphanRecord[] = [
+        ...ticketOrphansPage.rows.map((row) => ({
+            ...row,
+            type: 'TICKET' as const,
+            description: String(row.description || row.title || row.issue || row.id),
+        })),
+        ...tenantOrphansPage.rows.map((row) => ({
+            ...row,
+            type: 'TENANT' as const,
+            description: `Tenant: ${row.displayName || row.email}`,
+        })),
     ];
     const loading = ticketOrphansPage.loading || tenantOrphansPage.loading || propertiesPage.loading;
     const [fixing, setFixing] = useState<string | null>(null);
