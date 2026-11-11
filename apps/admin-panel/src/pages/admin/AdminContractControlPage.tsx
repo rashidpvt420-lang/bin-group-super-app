@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { collection, db, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { useLanguage } from '@bin/shared';
 
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
@@ -12,32 +13,16 @@ type Notice = { severity: 'success' | 'error' | 'info' | 'warning'; text: string
 export default function AdminContractControlPage() {
   const { isRTL } = useLanguage();
   const label = React.useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
-  const [contracts, setContracts] = React.useState<any[]>([]);
-  const [renewals, setRenewals] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
   const [reason, setReason] = React.useState('OWNER_REQUEST');
   const [note, setNote] = React.useState('');
   const [busyId, setBusyId] = React.useState('');
   const [rebuilding, setRebuilding] = React.useState(false);
   const [notice, setNotice] = React.useState<Notice | null>(null);
-
-  React.useEffect(() => {
-    const stopContracts = onSnapshot(collection(db, 'contracts'), (snapshot) => {
-      const rows: any[] = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
-      rows.sort((a, b) => String(a.contractNumber || a.id).localeCompare(String(b.contractNumber || b.id)));
-      setContracts(rows);
-      setLoading(false);
-    }, () => {
-      setLoading(false);
-      setNotice({ severity: 'error', text: label('Could not load contracts.', 'تعذر تحميل العقود.') });
-    });
-    const stopRenewals = onSnapshot(collection(db, 'contract_renewal_watch'), (snapshot) => {
-      const rows: any[] = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
-      rows.sort((a, b) => Number(a.daysRemaining || 0) - Number(b.daysRemaining || 0));
-      setRenewals(rows);
-    });
-    return () => { stopContracts(); stopRenewals(); };
-  }, [isRTL, label]);
+  const contractsPage = usePagedCollection({ db, collectionName: 'contracts' });
+  const renewalsPage = usePagedCollection({ db, collectionName: 'contract_renewal_watch' });
+  const contracts = contractsPage.rows;
+  const renewals = renewalsPage.rows;
+  const loading = contractsPage.loading;
 
   const openContracts = contracts.filter(isOpen);
 
@@ -129,6 +114,11 @@ export default function AdminContractControlPage() {
           <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, mb: 2, display: 'block' }}>{label(`Renewal Watch Queue (${renewals.length})`, `قائمة مراقبة التجديد (${renewals.length})`)}</Typography>
           <Box sx={{ overflowX: 'auto' }}><Table size="small"><TableHead><TableRow><TableCell>{label('Entity ID', 'معرف السجل')}</TableCell><TableCell>{label('Property', 'العقار')}</TableCell><TableCell>{label('Days', 'الأيام')}</TableCell><TableCell>{label('Milestone', 'المرحلة')}</TableCell><TableCell>{label('Status', 'الحالة')}</TableCell></TableRow></TableHead><TableBody>{renewals.map((row) => <TableRow key={row.id} hover><TableCell>{row.sourceCollection}: {row.sourceId}</TableCell><TableCell>{row.propertyName}</TableCell><TableCell>{row.daysRemaining} {label('days', 'يوم')}</TableCell><TableCell>{row.milestoneDays} {label('days', 'يوم')}</TableCell><TableCell><Chip size="small" label={normalize(row.renewalStatus || 'ACTIVE')} /></TableCell></TableRow>)}{renewals.length === 0 && <TableRow><TableCell colSpan={5} align="center">{label('No active renewals watched.', 'لا توجد تجديدات نشطة قيد المراقبة.')}</TableCell></TableRow>}</TableBody></Table></Box>
         </Paper>
+        {(contractsPage.error || renewalsPage.error) && <Alert severity="error">{contractsPage.error || renewalsPage.error}</Alert>}
+        <Stack direction="row" spacing={2}>
+          {contractsPage.hasMore && <Button onClick={() => void contractsPage.loadMore()} disabled={contractsPage.loadingMore}>{label('Load more contracts', 'تحميل المزيد من العقود')}{contractsPage.total != null ? ` (${contracts.length}/${contractsPage.total})` : ''}</Button>}
+          {renewalsPage.hasMore && <Button onClick={() => void renewalsPage.loadMore()} disabled={renewalsPage.loadingMore}>{label('Load more renewals', 'تحميل المزيد من التجديدات')}{renewalsPage.total != null ? ` (${renewals.length}/${renewalsPage.total})` : ''}</Button>}
+        </Stack>
       </Stack>
     </Box>
   );

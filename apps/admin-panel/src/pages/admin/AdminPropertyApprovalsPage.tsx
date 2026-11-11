@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { collection, db, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 
 const pendingStates = ['PENDING', 'PENDING REVIEW', 'ADMIN REVIEW', 'SUBMITTED'];
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
@@ -21,24 +22,10 @@ const toMillis = (value: any) => {
 };
 
 export default function AdminPropertyApprovalsPage() {
-  const [rows, setRows] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
   const [note, setNote] = React.useState('');
   const [message, setMessage] = React.useState('');
   const [busyId, setBusyId] = React.useState('');
-
-  React.useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'properties'), (snapshot) => {
-      const nextRows = snapshot.docs.map((item: any) => ({ id: item.id, ...(item.data() || {}) }));
-      nextRows.sort((a, b) => toMillis(b.createdAt || b.updatedAt) - toMillis(a.createdAt || a.updatedAt));
-      setRows(nextRows);
-      setLoading(false);
-    }, () => {
-      setMessage('Could not load properties. Check admin Firestore access.');
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+  const { rows, total, hasMore, loading, loadingMore, error: listError, loadMore, refresh } = usePagedCollection({ db, collectionName: 'properties', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'properties' });
 
   const inspectionFirstRows = rows.filter(inspectionFirst);
   const pending = rows.filter((row) =>
@@ -73,7 +60,7 @@ export default function AdminPropertyApprovalsPage() {
     } catch (error: any) {
       setMessage(error?.message || 'Property review failed. No approval state was claimed.');
     } finally {
-      setBusyId('');
+      setBusyId(''); void refresh();
     }
   };
 
@@ -118,6 +105,8 @@ export default function AdminPropertyApprovalsPage() {
             </TableBody>
           </Table>
         </Paper>
+        {(listError) && <Typography color="error">{listError}</Typography>}
+        {hasMore && <Button onClick={() => void loadMore()} disabled={loadingMore}>Load more{total != null ? ` (showing ${rows.length} of ${total})` : ''}</Button>}
       </Stack>
     </Box>
   );

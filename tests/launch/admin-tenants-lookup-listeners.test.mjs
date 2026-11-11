@@ -66,9 +66,12 @@ test('snapshots map rows; errors are reported with their source; late events aft
   assert.equal(seen.errors.length, 1);
 });
 
-test('TenantsManagementPage returns the lookup cleanup from its effect and has no bare listeners', () => {
-  assert.match(page, /useEffect\(\(\) => subscribeTenantLookups\(/);
-  const bareListeners = page.match(/onSnapshot\([^\n]*\n?/g) || [];
-  for (const call of bareListeners) assert.match(call, /, next, fail\)/, `onSnapshot without error handler/cleanup: ${call.trim()}`);
+test('TenantsManagementPage uses paged owner and property lookups and still surfaces errors', () => {
+  assert.match(page, /usePagedCollection/);
+  assert.match(page, /collectionName: 'properties'/);
+  assert.doesNotMatch(page, /onSnapshot\(query\(collection\(db, 'properties'\)\)/);
+  assert.doesNotMatch(page, /limit\(500\)/);
+  assert.match(page, /ownersPage\.error|propertiesPage\.error/);
   assert.match(page, /fetchInitialData\(\)\.catch\(/);
+  assert.match(page, /Load more properties/);
 });

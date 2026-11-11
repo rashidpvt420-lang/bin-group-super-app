@@ -1,17 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel, Switch, FormControlLabel, IconButton } from '@mui/material';
 import { Check, X, Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, onSnapshot } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 export default function AmenityControlPage() {
     const { isRTL } = useLanguage();
-    const [loading, setLoading] = useState(true);
-    const [amenities, setAmenities] = useState<any[]>([]);
-    const [bookings, setBookings] = useState<any[]>([]);
+    const amenitiesPage = usePagedCollection({ db, collectionName: 'amenities' });
+    const bookingsPage = usePagedCollection({ db, collectionName: 'amenityBookings', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'bookings' });
+    const amenities = amenitiesPage.rows;
+    const bookings = bookingsPage.rows;
+    const loading = amenitiesPage.loading;
     const [openAdd, setOpenAdd] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
@@ -23,25 +26,6 @@ export default function AmenityControlPage() {
     const [capacity, setCapacity] = useState('10');
     const [requiresApproval, setRequiresApproval] = useState(false);
 
-    useEffect(() => {
-        // Listen to amenities
-        const unsubAmen = onSnapshot(collection(db, 'amenities'), (snap) => {
-            setAmenities(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoading(false);
-        });
-
-        // Listen to bookings
-        const unsubBook = onSnapshot(collection(db, 'amenityBookings'), (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setBookings(list);
-        });
-
-        return () => {
-            unsubAmen();
-            unsubBook();
-        };
-    }, []);
 
     const handleCreateAmenity = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -219,6 +203,10 @@ export default function AmenityControlPage() {
                     </DialogActions>
                 </form>
             </Dialog>
-        </Container>
+                    <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                {amenitiesPage.hasMore && <Button onClick={() => void amenitiesPage.loadMore()} disabled={amenitiesPage.loadingMore}>Load more amenities{amenitiesPage.total != null ? ` (${amenities.length}/${amenitiesPage.total})` : ''}</Button>}
+                {bookingsPage.hasMore && <Button onClick={() => void bookingsPage.loadMore()} disabled={bookingsPage.loadingMore}>Load more bookings{bookingsPage.total != null ? ` (${bookings.length}/${bookingsPage.total})` : ''}</Button>}
+            </Stack>
+</Container>
     );
 }

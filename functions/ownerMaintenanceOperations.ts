@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { withCriticalScale } from "./functionScaleOptions";
 import * as admin from "firebase-admin";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 import { isSingleUnitProperty, UNIT_SCOPE, unitRecordsQuery } from "./ticketUnitScope";
@@ -26,7 +27,7 @@ async function assertOwnerRole(auth: any) {
 }
 
 export const ownerCreateMaintenanceTicket = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  withCriticalScale({ cors: true, region: "europe-west3", enforceAppCheck: true }),
   async (request) => {
     await assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;

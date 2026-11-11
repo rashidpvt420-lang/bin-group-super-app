@@ -4,7 +4,7 @@ import {
     CircularProgress, Stack, Snackbar, Alert
 } from '@mui/material';
 import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
-import { db, functions, collection, getDocs, httpsCallable, limit, query } from '../../lib/firebase';
+import { db, functions, collection, documentId, getCountFromServer, getDocs, httpsCallable, limit, orderBy, query, startAfter } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 import { resolveVerifiedPropertyPin } from '../../lib/verifiedPropertyPin';
@@ -16,32 +16,54 @@ export default function GeoRepairCommandCenter() {
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [repairing, setRepairing] = useState<string | null>(null);
     const [notice, setNotice] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+    const [scanMeta, setScanMeta] = useState({ properties: { scanned: 0, total: 0, hasMore: false }, tickets: { scanned: 0, total: 0, hasMore: false }, technicians: { scanned: 0, total: 0, hasMore: false } });
+    const [scanCursors, setScanCursors] = useState<Record<string, any>>({});
 
     useEffect(() => {
         fetchAnomalies();
     }, []);
 
-    const fetchAnomalies = async () => {
+    const PAGE = 40;
+    const scanCollection = async (collectionName: string, constraints: any[], appendFrom: any, cap: number) => {
+        const base = query(collection(db, collectionName), ...constraints, orderBy(documentId()));
+        const total = (await getCountFromServer(query(collection(db, collectionName), ...constraints))).data().count;
+        const rows: any[] = [];
+        let cursor = appendFrom;
+        let scanned = 0;
+        while (scanned < cap) {
+            const page = cursor
+                ? query(base, startAfter(cursor), limit(PAGE))
+                : query(base, limit(PAGE));
+            const snap = await getDocs(page);
+            if (!snap.docs.length) break;
+            rows.push(...snap.docs.map((item) => ({ id: item.id, _doc: item, ...item.data() })));
+            cursor = snap.docs[snap.docs.length - 1];
+            scanned += snap.docs.length;
+            if (snap.docs.length < PAGE) break;
+        }
+        return { rows, cursor, scanned, total, hasMore: scanned < total };
+    };
+
+    const fetchAnomalies = async (append = false) => {
         setLoading(true);
         try {
-            // Fetch Properties
-            const propSnap = await getDocs(collection(db, 'properties'));
-            const propAnomalies = propSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .filter((p: any) => !resolveVerifiedPropertyPin(p));
-            
-            // Fetch Tickets
-            const ticketSnap = await getDocs(collection(db, 'maintenanceTickets'));
-            const ticketAnomalies = ticketSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .filter((t: any) => !t.geo || !t.geo.lat || !t.geo.lng);
-
-            // Fetch Technicians
-            const techSnap = await getDocs(query(collection(db, 'users'), limit(500)));
-            const techAnomalies = techSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .filter((u: any) => u.role === 'technician' && (!u.emirate || !u.citiesCovered));
-
-            setProperties(propAnomalies);
-            setTickets(ticketAnomalies);
-            setTechnicians(techAnomalies);
+            const [propScan, ticketScan, techScan] = await Promise.all([
+                scanCollection('properties', [], append ? scanCursors.properties : null, append ? PAGE : 200),
+                scanCollection('maintenanceTickets', [], append ? scanCursors.tickets : null, append ? PAGE : 200),
+                scanCollection('users', [], append ? scanCursors.technicians : null, append ? PAGE : 200),
+            ]);
+            const propAnomalies = propScan.rows.filter((p: any) => !resolveVerifiedPropertyPin(p));
+            const ticketAnomalies = ticketScan.rows.filter((t: any) => !t.geo || !t.geo.lat || !t.geo.lng);
+            const techAnomalies = techScan.rows.filter((u: any) => u.role === 'technician' && (!u.emirate || !u.citiesCovered));
+            setProperties((current) => append ? [...current, ...propAnomalies] : propAnomalies);
+            setTickets((current) => append ? [...current, ...ticketAnomalies] : ticketAnomalies);
+            setTechnicians((current) => append ? [...current, ...techAnomalies] : techAnomalies);
+            setScanCursors({ properties: propScan.cursor, tickets: ticketScan.cursor, technicians: techScan.cursor });
+            setScanMeta({
+                properties: { scanned: (append ? scanMeta.properties.scanned : 0) + propScan.scanned, total: propScan.total, hasMore: propScan.hasMore },
+                tickets: { scanned: (append ? scanMeta.tickets.scanned : 0) + ticketScan.scanned, total: ticketScan.total, hasMore: ticketScan.hasMore },
+                technicians: { scanned: (append ? scanMeta.technicians.scanned : 0) + techScan.scanned, total: techScan.total, hasMore: techScan.hasMore },
+            });
         } catch (error) {
             console.error("Error fetching anomalies:", error);
         } finally {
@@ -156,6 +178,11 @@ export default function GeoRepairCommandCenter() {
                     {notice.message}
                 </Alert>
             </Snackbar>
-        </Container>
+                    {(scanMeta.properties.hasMore || scanMeta.tickets.hasMore || scanMeta.technicians.hasMore) && (
+                <Alert severity="info" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => void fetchAnomalies(true)} disabled={loading}>Scan more records</Button>}>
+                    Scanned {scanMeta.properties.scanned} of {scanMeta.properties.total} properties, {scanMeta.tickets.scanned} of {scanMeta.tickets.total} tickets, and {scanMeta.technicians.scanned} of {scanMeta.technicians.total} users. Load more to continue the geo-anomaly scan.
+                </Alert>
+            )}
+</Container>
     );
 }

@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { withCriticalScale } from "./functionScaleOptions";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -68,7 +69,7 @@ function assertStorageUrl(downloadUrl: string, bucketName: string, storagePath: 
 }
 
 export const submitTechnicianAfterWorkEvidence = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  withCriticalScale({ cors: true, region: "europe-west3", enforceAppCheck: true }),
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Technician login required.");
     if (request.auth.token?.suspended === true) throw new HttpsError("permission-denied", "Technician account is suspended.");

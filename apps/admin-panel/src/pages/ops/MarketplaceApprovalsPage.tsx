@@ -26,7 +26,8 @@ import {
 } from '@mui/material';
 import { Building2, CheckCircle2, ClipboardSignature, Home, Image, MapPin, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { collection, db, onSnapshot } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -177,9 +178,11 @@ function finiteNumber(value: string) {
 
 export default function MarketplaceApprovalsPage() {
   const { isRTL } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [jobRows, setJobRows] = useState<HomeOpsRecord[]>([]);
-  const [listings, setListings] = useState<HomeOpsRecord[]>([]);
+  const jobsPage = usePagedCollection({ db, collectionName: 'jobPostings' });
+  const listingsPage = usePagedCollection({ db, collectionName: 'contractorProfiles' });
+  const jobRows = jobsPage.rows as HomeOpsRecord[];
+  const listings = listingsPage.rows as HomeOpsRecord[];
+  const loading = jobsPage.loading;
   const [openPublish, setOpenPublish] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<HomeOpsRecord | null>(null);
@@ -187,28 +190,7 @@ export default function MarketplaceApprovalsPage() {
 
   const setField = (key: keyof PublishForm, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
 
-  useEffect(() => {
-    const unsubJobs = onSnapshot(collection(db, 'jobPostings'), (snap) => {
-      setJobRows(snap.docs.map((item) => ({ id: item.id, ...item.data() } as HomeOpsRecord)).filter((row) => isHomeRequest(row) || isHomeApplication(row)));
-      setLoading(false);
-    }, (err) => {
-      console.warn('[HomeDiscoveryOps] job listener failed:', err);
-      setJobRows([]);
-      setLoading(false);
-    });
 
-    const unsubListings = onSnapshot(collection(db, 'contractorProfiles'), (snap) => {
-      setListings(snap.docs.map((item) => ({ id: item.id, ...item.data() } as HomeOpsRecord)).filter(isHomeListing));
-    }, (err) => {
-      console.warn('[HomeDiscoveryOps] listing listener failed:', err);
-      setListings([]);
-    });
-
-    return () => {
-      unsubJobs();
-      unsubListings();
-    };
-  }, []);
 
   const requests = useMemo(() => jobRows.filter(isHomeRequest), [jobRows]);
   const applications = useMemo(() => jobRows.filter(isHomeApplication), [jobRows]);
@@ -497,6 +479,10 @@ export default function MarketplaceApprovalsPage() {
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+          <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+        {jobsPage.hasMore && <Button onClick={() => void jobsPage.loadMore()} disabled={jobsPage.loadingMore}>Load more requests{jobsPage.total != null ? ` (${jobRows.length}/${jobsPage.total})` : ''}</Button>}
+        {listingsPage.hasMore && <Button onClick={() => void listingsPage.loadMore()} disabled={listingsPage.loadingMore}>Load more listings{listingsPage.total != null ? ` (${listings.length}/${listingsPage.total})` : ''}</Button>}
+      </Stack>
+</Container>
   );
 }

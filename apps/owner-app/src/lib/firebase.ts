@@ -2,7 +2,8 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion,
+    getCountFromServer, startAfter, documentId
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -81,7 +82,8 @@ export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
     onAuthStateChanged, getRedirectResult, signInWithPopup, signInWithEmailAndPassword, type User,
     ref, uploadBytes, uploadBytesResumable, getDownloadURL,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
+    getCountFromServer, startAfter, documentId
 };
 
 export default app;

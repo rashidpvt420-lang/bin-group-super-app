@@ -1,16 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, onSnapshot } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function KeyRegisterPage() {
     const { isRTL } = useLanguage();
-    const [loading, setLoading] = useState(true);
-    const [keys, setKeys] = useState<any[]>([]);
-    const [movements, setMovements] = useState<any[]>([]);
+    const keysPage = usePagedCollection({ db, collectionName: 'keyRegister' });
+    const movementsPage = usePagedCollection({ db, collectionName: 'keyMovements', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'movements' });
+    const keys = keysPage.rows;
+    const movements = movementsPage.rows;
+    const loading = keysPage.loading;
     const [openAdd, setOpenAdd] = useState(false);
     const [openIssue, setOpenIssue] = useState(false);
     const [selectedKey, setSelectedKey] = useState<any>(null);
@@ -27,23 +30,6 @@ export default function KeyRegisterPage() {
     const [custodianType, setCustodianType] = useState('staff');
     const [notes, setNotes] = useState('');
 
-    useEffect(() => {
-        const unsubKeys = onSnapshot(collection(db, 'keyRegister'), (snap) => {
-            setKeys(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoading(false);
-        });
-
-        const unsubMove = onSnapshot(collection(db, 'keyMovements'), (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setMovements(list);
-        });
-
-        return () => {
-            unsubKeys();
-            unsubMove();
-        };
-    }, []);
 
     const handleCreateKey = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -246,6 +232,10 @@ export default function KeyRegisterPage() {
                     </DialogActions>
                 </form>
             </Dialog>
-        </Container>
+                    <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                {keysPage.hasMore && <Button onClick={() => void keysPage.loadMore()} disabled={keysPage.loadingMore}>Load more keys{keysPage.total != null ? ` (${keys.length}/${keysPage.total})` : ''}</Button>}
+                {movementsPage.hasMore && <Button onClick={() => void movementsPage.loadMore()} disabled={movementsPage.loadingMore}>Load more movements{movementsPage.total != null ? ` (${movements.length}/${movementsPage.total})` : ''}</Button>}
+            </Stack>
+</Container>
     );
 }

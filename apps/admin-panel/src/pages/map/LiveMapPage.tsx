@@ -25,6 +25,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import RoomIcon from '@mui/icons-material/Room';
 import { collection, documentId, onSnapshot, query, where } from 'firebase/firestore';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { httpsCallable } from 'firebase/functions';
 import { isTestLocation, isTestRecord, testTechnicianIds } from '../../lib/testRecords.mjs';
 import {
@@ -101,7 +102,12 @@ export default function LiveMapPage() {
 
   const [allTickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
-  const [allTechnicians, setTechnicians] = useState<any[]>([]);
+  const techniciansPage = usePagedCollection({ db, collectionName: 'technicians', pageSize: 50 });
+  const allTechnicians = techniciansPage.rows.filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase()));
+  useEffect(() => {
+    if (techniciansPage.loading || techniciansPage.loadingMore) return;
+    if (techniciansPage.rows.length < 200 && techniciansPage.hasMore) void techniciansPage.loadMore();
+  }, [techniciansPage.loading, techniciansPage.loadingMore, techniciansPage.rows.length, techniciansPage.hasMore, techniciansPage.loadMore]);
   const [properties, setProperties] = useState<any[]>([]);
   const [allLiveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
   // e2e / smoke / QA fixtures stay in Firestore for evidence runs but are hidden from the
@@ -113,8 +119,14 @@ export default function LiveMapPage() {
   const liveLocations = useMemo(() => (showTestRecords ? allLiveLocations : allLiveLocations.filter((location) => !isTestLocation(location, testTechIds))), [allLiveLocations, showTestRecords, testTechIds]);
   const hiddenTestCount = (allTickets.length - tickets.length) + (allTechnicians.length - technicians.length) + (allLiveLocations.length - liveLocations.length);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
   const [ticketsError, setTicketsError] = useState('');
   const [techniciansError, setTechniciansError] = useState('');
+  useEffect(() => {
+    setTechniciansError(techniciansPage.error
+      ? 'Technician readiness data could not be loaded. Dispatch is disabled until the complete source recovers.'
+      : '');
+  }, [techniciansPage.error]);
   const [propertiesError, setPropertiesError] = useState('');
   const [locationsError, setLocationsError] = useState('');
   const [mapError, setMapError] = useState('');
@@ -162,21 +174,6 @@ export default function LiveMapPage() {
       },
     ));
 
-    // These operational listeners deliberately have no silent client-side caps.
-    // When the portfolio grows beyond practical real-time listener size, the
-    // replacement must be a server snapshot with an authoritative total count —
-    // never a hidden limit that makes active people or GPS sessions disappear.
-    const unsubscribeTechnicians = onSnapshot(collection(db, 'technicians'), (snapshot) => {
-      setTechnicians(snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() } as any))
-        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase())));
-      setTechniciansError('');
-    }, (error) => {
-      console.error('[AdminMap] Technician listener failed:', error);
-      setTechnicians([]);
-      setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the complete source recovers.');
-    });
-
     const unsubscribeLocations = onSnapshot(
       query(collection(db, 'technician_live_locations'), where('isTracking', '==', true)),
       (snapshot) => {
@@ -192,7 +189,6 @@ export default function LiveMapPage() {
 
     return () => {
       unsubscribeTickets.forEach((unsubscribe) => unsubscribe());
-      unsubscribeTechnicians();
       unsubscribeLocations();
     };
   }, []);
@@ -346,6 +342,11 @@ export default function LiveMapPage() {
       </Stack>
 
       {[ticketsError, techniciansError, propertiesError, locationsError, mapError].filter(Boolean).map((message) => <Alert key={message} severity="error" sx={{ mb: 1 }}>{message}</Alert>)}
+      {techniciansPage.hasMore && (
+        <Alert severity="info" sx={{ mb: 1 }} action={<Button color="inherit" size="small" onClick={() => void techniciansPage.loadMore()} disabled={techniciansPage.loadingMore}>Load more</Button>}>
+          Showing {allTechnicians.length} of {techniciansPage.total ?? 'many'} technicians. Load more to place the rest on the map.
+        </Alert>
+      )}
 
       <Grid container spacing={2}>
         <Grid item xs={12} lg={4}>

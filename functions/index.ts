@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
@@ -34,6 +34,9 @@ import { flagSlaBreaches } from "./slaCron";
 import { escalateManualDispatch } from "./ticketDispatchAlerts";
 import { evaluateTechnicianForTicket, requiredTicketTrade, technicianHasCapacity } from "./technicianDispatchMatching";
 import { countOpenAssignedTickets, countOpenAssignedTicketsInTransaction, reconcileTechnicianJobCount, releaseCapacityForDeletedTicket, ticketOccupiesTechnician } from "./technicianCapacityReconcile";
+import { applyAdminOpenTicketDelta, applyOwnerPropertyDelta, applyOwnerTicketDelta, rollUpAdminOpenTicketCount } from "./summaryCounters";
+import { DEFAULT_MAX_INSTANCES, withCriticalScale } from "./functionScaleOptions";
+import { runTransactionWithRetry } from "./runTransactionWithRetry";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
@@ -43,7 +46,7 @@ import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
-setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
+setGlobalOptions({ region: "europe-west3", enforceAppCheck: true, maxInstances: DEFAULT_MAX_INSTANCES });
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -303,7 +306,7 @@ export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }
     return { status: "SUCCESS", redispatch, ...payable };
 });
 
-export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+export const acceptTechnicianTicket = onCall(withCriticalScale({ cors: true, enforceAppCheck: true }), async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin", "super_admin", "operations_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
@@ -314,7 +317,7 @@ export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true
     const isAdminActor = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "operations_admin"]));
     const now = FieldValue.serverTimestamp();
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
         const ticketDoc = await transaction.get(ticketRef);
         if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
         const ticketData = ticketDoc.data()!;
@@ -381,7 +384,7 @@ export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+export const updateTicketLifecycle = onCall(withCriticalScale({ cors: true, enforceAppCheck: true }), async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl, arrivalLocation } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -410,7 +413,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
     const now = FieldValue.serverTimestamp();
     let completedOwnerId = "";
     let completedTicketData: any = null;
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
         const ticketDoc = await transaction.get(ticketRef);
         if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
         const ticketData = ticketDoc.data()!;
@@ -576,7 +579,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
                 const technicianSnap = await transaction.get(technicianRef);
                 if (technicianSnap.exists) {
                     transaction.update(technicianRef, {
-                        currentJobCount: Math.max(0, Number(technicianSnap.data()?.currentJobCount || 0) - 1),
+                        currentJobCount: Number(technicianSnap.data()?.currentJobCount || 0) > 0 ? FieldValue.increment(-1) : 0,
                         updatedAt: now,
                     });
                 }
@@ -956,7 +959,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         !after.capacityReleasedAt
     ) {
         const ticketRef = event.data!.after.ref;
-        await db.runTransaction(async (transaction) => {
+        await runTransactionWithRetry(db, async (transaction) => {
             const freshTicketSnap = await transaction.get(ticketRef);
             const freshTicket = freshTicketSnap.data() || {};
             if (
@@ -974,7 +977,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
             transaction.set(ticketRef, { capacityReleasedAt: FieldValue.serverTimestamp() }, { merge: true });
             if (technicianSnap.exists) {
                 transaction.set(technicianRef, {
-                    currentJobCount: Math.max(0, Number(technicianSnap.data()?.currentJobCount || 0) - 1),
+                    currentJobCount: Number(technicianSnap.data()?.currentJobCount || 0) > 0 ? FieldValue.increment(-1) : 0,
                     updatedAt: FieldValue.serverTimestamp(),
                 }, { merge: true });
             }
@@ -1208,7 +1211,7 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 bestTech = candidate;
                 const technicianRef = db.collection("users").doc(candidate.id);
                 const technicianProfileRef = db.collection("technicians").doc(candidate.id);
-                assigned = await db.runTransaction(async (transaction) => {
+                assigned = await runTransactionWithRetry(db, async (transaction) => {
                     const [freshTicketSnap, freshTechnicianSnap, freshProfileSnap] = await Promise.all([
                         transaction.get(ticketRef),
                         transaction.get(technicianRef),
@@ -2027,27 +2030,27 @@ export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
 
 // ─── SUMMARY SYNC ──────────────────────────────────────────────────────────
 
-export const syncOwnerSummary = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
-    const data = event.data?.after.data();
-    if (!data?.ownerId) return;
-    const ownerId = data.ownerId;
-    const ticketsSnap = await db.collection("maintenanceTickets").where("ownerId", "==", ownerId).get();
-    const propsSnap = await db.collection("properties").where("ownerId", "==", ownerId).get();
-    let openCount = 0;
-    ticketsSnap.forEach(docSnap => { if (!['COMPLETED', 'CLOSED', 'RESOLVED'].includes(docSnap.data().status)) openCount++; });
-    await db.collection("owner_summaries").doc(ownerId).set({
-        openTickets: openCount,
-        propertyCount: propsSnap.size,
-        updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+export const syncOwnerSummary = onDocumentWritten({ document: "maintenanceTickets/{id}" }, async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    await applyOwnerTicketDelta(db, before, after);
 });
 
-export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", async () => {
-    const summaryRef = db.collection("admin_summaries").doc("global");
-    await summaryRef.update({
-        openTickets: FieldValue.increment(1),
-        lastUpdated: FieldValue.serverTimestamp()
-    }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: FieldValue.serverTimestamp() }));
+export const syncAdminSummary = onDocumentWritten({ document: "maintenanceTickets/{id}" }, async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    await applyAdminOpenTicketDelta(db, event.params.id, before, after);
+});
+
+export const syncOwnerPropertyCount = onDocumentWritten({ document: "properties/{id}" }, async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    await applyOwnerPropertyDelta(db, before, after);
+});
+
+export const rollUpAdminSummary = onSchedule({ schedule: "every 2 minutes", timeZone: "Asia/Dubai", timeoutSeconds: 60 }, async () => {
+    const openTickets = await rollUpAdminOpenTicketCount(db);
+    console.log(`[admin-summary] rolled up openTickets=${openTickets}`);
 });
 
 // ─── TENANT INVITATION SYSTEM ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -20,7 +20,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { db, functions, httpsCallable, collection, getDocs, onSnapshot, query } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { useLanguage } from '@bin/shared';
 
 interface Owner {
@@ -62,71 +63,39 @@ function propertyName(property: PropertyRecord | null) {
 
 export default function OwnerManagementPage() {
   const { t, isRTL } = useLanguage();
-  const [owners, setOwners] = useState<Owner[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState('');
 
-  const [properties, setProperties] = useState<PropertyRecord[]>([]);
-  const [loadingProperties, setLoadingProperties] = useState(true);
+  const propertiesPage = usePagedCollection({ db, collectionName: 'properties' });
+  const ownersPage = usePagedCollection({ db, collectionName: 'owners' });
+  const properties = propertiesPage.rows as PropertyRecord[];
+  const loadingProperties = propertiesPage.loading;
+  const owners: Owner[] = ownersPage.rows.map((row) => ({
+    ownerId: row.id,
+    name: row.name || row.displayName || row.fullName || 'Owner',
+    email: row.email || '',
+    totalBuildings: Number(row.totalBuildings || 0),
+    totalUnits: Number(row.totalUnits || 0),
+    monthlyRentCollected: Number(row.monthlyRentCollected || 0),
+    unpaidInvoiceCount: Number(row.unpaidInvoiceCount || 0),
+    // Services-only suspension (D-03) shows as SUSPENDED too; the owner keeps sign-in and payments.
+    suspensionStatus: row.serviceSuspended === true || String(row.status || row.suspensionStatus || '').toLowerCase() === 'suspended'
+      ? 'SUSPENDED'
+      : 'ACTIVE',
+    joinedDate: row.createdAt?.toDate
+      ? row.createdAt.toDate().toISOString()
+      : String(row.createdAt || ''),
+  }));
+  const loading = ownersPage.loading;
   const [rejectProperty, setRejectProperty] = useState<PropertyRecord | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [reviewingPropertyId, setReviewingPropertyId] = useState('');
 
   const fetchOwners = async () => {
-    try {
-      setLoading(true);
-      const snap = await getDocs(collection(db, 'owners'));
-      const ownerRows = snap.docs.map((ownerDoc) => {
-        const data = ownerDoc.data();
-        return {
-          ownerId: ownerDoc.id,
-          name: data.name || data.displayName || data.fullName || 'Owner',
-          email: data.email || '',
-          totalBuildings: Number(data.totalBuildings || 0),
-          totalUnits: Number(data.totalUnits || 0),
-          monthlyRentCollected: Number(data.monthlyRentCollected || 0),
-          unpaidInvoiceCount: Number(data.unpaidInvoiceCount || 0),
-          // Services-only suspension (D-03) shows as SUSPENDED too; the owner keeps sign-in and payments.
-          suspensionStatus: data.serviceSuspended === true || String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
-            ? 'SUSPENDED'
-            : 'ACTIVE',
-          joinedDate: data.createdAt?.toDate
-            ? data.createdAt.toDate().toISOString()
-            : String(data.createdAt || ''),
-        } as Owner;
-      });
-      setOwners(ownerRows);
-    } catch (error) {
-      console.error('Failed to fetch owners:', error);
-      window.alert(t('admin.load_owners_failed'));
-    } finally {
-      setLoading(false);
-    }
+    await ownersPage.refresh();
   };
-
-  useEffect(() => {
-    void fetchOwners();
-    const propertiesQuery = query(collection(db, 'properties'));
-    const unsubscribe = onSnapshot(
-      propertiesQuery,
-      (snapshot) => {
-        setProperties(snapshot.docs.map((propertyDocument) => ({
-          id: propertyDocument.id,
-          ...propertyDocument.data(),
-        })) as PropertyRecord[]);
-        setLoadingProperties(false);
-      },
-      (error) => {
-        console.error('Failed to fetch properties:', error);
-        setLoadingProperties(false);
-      },
-    );
-    return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSuspend = async () => {
     if (!selectedOwner) return;
@@ -262,6 +231,11 @@ export default function OwnerManagementPage() {
           </TableBody>
         </Table>
       </TableContainer>
+      <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+        {ownersPage.hasMore && <Button onClick={() => void ownersPage.loadMore()} disabled={ownersPage.loadingMore}>Load more owners{ownersPage.total != null ? ` (${owners.length}/${ownersPage.total})` : ''}</Button>}
+        {propertiesPage.hasMore && <Button onClick={() => void propertiesPage.loadMore()} disabled={propertiesPage.loadingMore}>Load more properties{propertiesPage.total != null ? ` (${properties.length}/${propertiesPage.total})` : ''}</Button>}
+      </Stack>
+
 
       <Box sx={{ mb: 6 }}>
         <Typography variant="h5" sx={{ color: 'text.primary', mb: 3, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
