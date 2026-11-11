@@ -4,8 +4,10 @@ import {
   Snackbar, Stack, TextField, Typography, alpha,
 } from '@mui/material';
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Briefcase, Building, Building2, CopyPlus,
-  Dumbbell, Gem, Home, Hotel, Landmark, RefreshCcw, Scan, ShieldCheck, Trash2, Warehouse,
+  AlertTriangle, ArrowLeft, ArrowRight, Briefcase, Building, Building2, Castle, Church,
+  Component, CopyPlus, Dumbbell, Factory, Flag, GraduationCap, HardHat, Home, Hospital,
+  Hotel, Landmark, Layers, Palmtree, RefreshCcw, Scan, ShoppingBag, Star, Stethoscope,
+  Store, Tent, Ticket, Trees, Trophy, Trash2, Users, Warehouse,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -14,9 +16,11 @@ import { ASSET_PROFILE_PROPERTY_TYPES } from '../../utils/calculateUaeQuote2026'
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { hasValidBuildingAge, MAX_BUILDING_AGE_YEARS, parseBuildingAgeInput } from './buildingAge';
+import AssetTypeDetailsPanel from './AssetTypeDetailsPanel';
+import { HIGH_RISE_PROPERTY_TYPES, MULTI_STOREY_PROPERTY_TYPES } from '../../utils/assetTypeDetails';
 import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
 
-const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
+const UAE_EMIRATES = ['Abu Dhabi', 'Al Ain', 'Al Dhafra', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 const ASSET_TYPE_IDS = new Set<string>(ASSET_PROFILE_PROPERTY_TYPES);
 const SQFT_PRICED_TYPES = new Set([
   'Residential Building', 'Commercial Building', 'Office', 'Gym / Fitness Centre', 'Retail Center', 'Mall', 'Hotel', 'Resort',
@@ -74,7 +78,8 @@ const suggestedGymComplexity = (profile: Record<string, any>) => {
 };
 
 const blankAssetCard = (): Partial<PropertyData> => ({
-  emirate: '', area: '', address: '', propertyType: '', subType: '', floors: 0, units: 0, sqft: 0, age: undefined,
+  emirate: '', area: '', address: '', propertyType: '', subType: '', floors: undefined, lifts: undefined, bedrooms: undefined,
+  units: 0, sqft: 0, age: undefined, assetDetails: {},
   annualRent: undefined, annualRevenue: undefined, assetGrade: 'Standard', majlis: false, majlisType: 'none',
   ownerType: 'Private', useType: 'Rental', missions: [],
 });
@@ -102,7 +107,7 @@ const metadataForType = (id: string, current?: PropertyData): Partial<PropertyDa
     subType: mosqueSelected ? 'Mosque Facilities Management' : gymSelected ? 'Sports / Wellness' : (current?.subType || ''),
     majlis,
     majlisType: id === 'Government Majlis' ? 'government' : id === 'Private Majlis' ? 'private' : 'none',
-    ownerType: ['Government Property', 'Government Majlis', 'Mosque / Masjid'].includes(id) ? 'Government' : 'Private',
+    ownerType: ['Government Property', 'Government Majlis'].includes(id) ? 'Government' : (id === 'Mosque / Masjid' ? (current?.ownerType && current.ownerType !== 'Government' ? current.ownerType : 'Private') : 'Private'),
     useType: ['Hotel', 'Resort'].includes(id) ? 'hospitality'
       : ['Hospital', 'Clinic'].includes(id) ? 'healthcare'
         : id === 'School' ? 'education'
@@ -116,6 +121,7 @@ const metadataForType = (id: string, current?: PropertyData): Partial<PropertyDa
     serviceModel: mosqueSelected ? 'MOSQUE_FM' : gymSelected ? 'GYM_FM_PM' : undefined,
     gym: gymSelected,
     missions: [],
+    assetDetails: {},
   };
 };
 
@@ -153,6 +159,11 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
   const isMosque = active?.propertyType === 'Mosque / Masjid';
   const isGym = active?.propertyType === 'Gym / Fitness Centre';
   const isEventOperations = EVENT_OPERATION_TYPES.has(active?.propertyType || '');
+  const isApartment = active?.propertyType === 'Apartment';
+  const isMultiStorey = MULTI_STOREY_PROPERTY_TYPES.includes(active?.propertyType as typeof MULTI_STOREY_PROPERTY_TYPES[number]);
+  const isHighRise = HIGH_RISE_PROPERTY_TYPES.includes(active?.propertyType as typeof HIGH_RISE_PROPERTY_TYPES[number]);
+  const showLiftsField = isMultiStorey || isHighRise;
+  const parseOptionalCount = (raw: string) => raw === '' ? undefined : Math.max(0, Number(raw));
   const mosque = (active?.mosqueProfile || emptyMosque(active?.emirate || '')) as Record<string, any>;
   const gym = (active?.gymProfile || emptyGym(active)) as Record<string, any>;
   const categories: Record<string, [string, string]> = {
@@ -163,19 +174,19 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
   };
   const types = [
     ['Villa', 'Villa', 'فيلا', Home, 'Residential'], ['Apartment', 'Apartment', 'شقة', Building, 'Residential'],
-    ['Residential Building', 'Residential Building', 'مبنى سكني', Building2, 'Residential'], ['Commercial Building', 'Commercial Building', 'مبنى تجاري', Warehouse, 'Commercial'],
+    ['Residential Building', 'Residential Building', 'مبنى سكني', Building2, 'Residential'], ['Commercial Building', 'Commercial Building', 'مبنى تجاري', Layers, 'Commercial'],
     ['Office', 'Office', 'مكتب', Briefcase, 'Commercial'], ['Gym / Fitness Centre', 'Gym / Fitness Centre', 'نادي رياضي / مركز لياقة', Dumbbell, 'Commercial'],
-    ['Retail Center', 'Retail Center', 'مركز تجزئة', Building, 'Retail'], ['Mall', 'Mall', 'مركز تسوق', Building2, 'Retail'],
-    ['Hotel', 'Hotel', 'فندق', Hotel, 'Hospitality'], ['Resort', 'Resort', 'منتجع', Hotel, 'Hospitality'],
-    ['Hospital', 'Hospital', 'مستشفى', ShieldCheck, 'Healthcare'], ['Clinic', 'Clinic', 'عيادة', ShieldCheck, 'Healthcare'],
-    ['School', 'School', 'مدرسة', Landmark, 'Education'], ['Warehouse', 'Warehouse', 'مستودع', Warehouse, 'Industrial'],
-    ['Industrial Property', 'Industrial Property', 'عقار صناعي', Warehouse, 'Industrial'], ['Labour Camp', 'Labour Camp', 'سكن عمال', Building2, 'Accommodation'],
-    ['Staff Accommodation', 'Staff Accommodation', 'سكن موظفين', Building2, 'Accommodation'], ['Government Property', 'Government Property', 'عقار حكومي', ShieldCheck, 'Government'],
-    ['Government Majlis', 'Government Majlis', 'مجلس حكومي', Landmark, 'Majlis'], ['Private Majlis', 'Private Majlis', 'مجلس خاص', Landmark, 'Majlis'],
-    ['Mosque / Masjid', 'Mosque / Masjid', 'مسجد', Landmark, 'Religious'], ['Mixed-Use Tower', 'Mixed-Use Tower', 'برج متعدد الاستخدامات', Gem, 'Tower'],
-    ['Skyscraper', 'Skyscraper', 'ناطحة سحاب', Building2, 'Tower'], ['Stadium', 'Stadium', 'استاد', Gem, 'Event'],
-    ['Sports Complex', 'Sports Complex', 'مجمع رياضي', Gem, 'Event'], ['Event Venue', 'Event Venue', 'موقع فعاليات', Gem, 'Event'],
-    ['Farm / Estate', 'Farm / Estate', 'مزرعة / عزبة', Home, 'Estate'],
+    ['Retail Center', 'Retail Center', 'مركز تجزئة', Store, 'Retail'], ['Mall', 'Mall', 'مركز تسوق', ShoppingBag, 'Retail'],
+    ['Hotel', 'Hotel', 'فندق', Hotel, 'Hospitality'], ['Resort', 'Resort', 'منتجع', Palmtree, 'Hospitality'],
+    ['Hospital', 'Hospital', 'مستشفى', Hospital, 'Healthcare'], ['Clinic', 'Clinic', 'عيادة', Stethoscope, 'Healthcare'],
+    ['School', 'School', 'مدرسة', GraduationCap, 'Education'], ['Warehouse', 'Warehouse', 'مستودع', Warehouse, 'Industrial'],
+    ['Industrial Property', 'Industrial Property', 'عقار صناعي', Factory, 'Industrial'], ['Labour Camp', 'Labour Camp', 'سكن عمال', HardHat, 'Accommodation'],
+    ['Staff Accommodation', 'Staff Accommodation', 'سكن موظفين', Users, 'Accommodation'], ['Government Property', 'Government Property', 'عقار حكومي', Landmark, 'Government'],
+    ['Government Majlis', 'Government Majlis', 'مجلس حكومي', Flag, 'Majlis'], ['Private Majlis', 'Private Majlis', 'مجلس خاص', Tent, 'Majlis'],
+    ['Mosque / Masjid', 'Mosque / Masjid', 'مسجد', Church, 'Religious'], ['Mixed-Use Tower', 'Mixed-Use Tower', 'برج متعدد الاستخدامات', Component, 'Tower'],
+    ['Skyscraper', 'Skyscraper', 'ناطحة سحاب', Star, 'Tower'], ['Stadium', 'Stadium', 'استاد', Castle, 'Event'],
+    ['Sports Complex', 'Sports Complex', 'مجمع رياضي', Trophy, 'Event'], ['Event Venue', 'Event Venue', 'موقع فعاليات', Ticket, 'Event'],
+    ['Farm / Estate', 'Farm / Estate', 'مزرعة / عزبة', Trees, 'Estate'],
   ] as const;
 
   const ageDraft = ageDrafts[activeIndex] ?? (hasValidBuildingAge(active?.age) ? String(active.age) : '');
@@ -197,6 +208,9 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
     if (!hasValidBuildingAge(property.age) && !hasValidBuildingAge((property as any).mosqueProfile?.propertyAgeYears)) warnings.push(label('building age (years or year built)', 'عمر المبنى (بالسنوات أو سنة البناء)'));
     if (SQFT_PRICED_TYPES.has(property.propertyType) && !(Number(property.sqft) > 0)) warnings.push(label('measured service area', 'مساحة الخدمة المقاسة'));
     if (UNIT_PRICED_TYPES.has(property.propertyType) && !(Number(property.units) > 0)) warnings.push(unitsLabel(property.propertyType, ar));
+    if (property.propertyType === 'Apartment' && (property.bedrooms === undefined || property.bedrooms === null || String(property.bedrooms).trim() === '')) {
+      warnings.push(label('bedrooms (studio / 1 / 2 / 3 / 4+)', 'غرف النوم (استوديو / 1 / 2 / 3 / 4+)'));
+    }
     if (property.propertyType === 'Gym / Fitness Centre') {
       const value = property.gymProfile || {};
       if (!String(value.format || '').trim()) warnings.push(label('gym format', 'نوع النادي الرياضي'));
@@ -261,12 +275,12 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
       } else {
         const metadata = patch.propertyType ? metadataForType(patch.propertyType, active) : {};
         setProperty({ ...metadata, ...patch, titleDeedStatus: 'extracted' });
-        setSnackbar({ open: true, message: label('Only verified title-deed values were applied to this property.', 'تم تطبيق قيم سند الملكية الموثقة فقط على هذا العقار.'), severity: 'success' });
+        setSnackbar({ open: true, message: label('Suggested title-deed values were applied. Please check them. They are not verified until Admin reviews the document.', 'تم تطبيق قيم مقترحة من سند الملكية. يرجى مراجعتها. لن تُعدّ موثّقة حتى يراجعها المسؤول.'), severity: 'success' });
       }
     } catch (error) {
       console.error('OCR Failure:', error);
       setProperty({ titleDeedStatus: 'manual_review_required' });
-      setOcrError(label('The document could not be verified. No placeholder values were added.', 'تعذر التحقق من المستند. لم تتم إضافة قيم افتراضية.'));
+      setOcrError(label('The document could not be read. No placeholder values were added. Enter the details manually or upload a clearer document.', 'تعذر قراءة المستند. لم تتم إضافة قيم افتراضية. أدخل البيانات يدوياً أو ارفع مستنداً أوضح.'));
     } finally { setScanning(false); event.target.value = ''; }
   };
 
@@ -320,7 +334,8 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Asset type', 'نوع العقار')}</Typography>
                 <Button component="label" startIcon={scanning ? <CircularProgress size={16} /> : <Scan size={17} />} disabled={scanning} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{label('Scan title deed', 'مسح سند الملكية')}<input hidden type="file" accept="image/*,.pdf" onChange={scanTitleDeed} /></Button>
               </Stack>
-              <Grid container spacing={1.5}>{types.map((type) => { const [id, en, arText, Icon, category] = type; const selected = active.propertyType === id; return <Grid item xs={6} sm={4} key={id}><Paper onClick={() => selectType(type)} sx={{ p: 1.5, minHeight: 110, cursor: 'pointer', borderRadius: 3, textAlign: 'center', bgcolor: selected ? alpha(binThemeTokens.gold, 0.14) : 'rgba(255,255,255,0.03)', border: `1px solid ${selected ? binThemeTokens.gold : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 0.7 }}><Icon size={22} color={selected ? binThemeTokens.gold : 'rgba(255,255,255,0.45)'} /><Typography variant="caption" fontWeight={900} color="#FFF">{label(en, arText)}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{label(...categories[category])}</Typography></Paper></Grid>; })}</Grid>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1.5, color: '#4B5563 !important' }}>{label('The scan suggests values for you to check. It is not a verified title-deed result until Admin reviews the document.', 'يقترح المسح قيماً لمراجعتها. ليست نتيجة موثّقة لسند الملكية حتى يراجعها المسؤول.')}</Typography>
+              <Grid container spacing={1.5}>{types.map((type) => { const [id, en, arText, Icon, category] = type; const selected = active.propertyType === id; return <Grid item xs={6} sm={4} key={id}><Paper className={selected ? 'asset-type-card asset-type-card--selected' : 'asset-type-card'} onClick={() => selectType(type)} sx={{ p: 1.5, minHeight: 110, cursor: 'pointer', borderRadius: 3, textAlign: 'center', bgcolor: selected ? alpha('#C6A75E', 0.18) : '#F8F9FB', border: `1px solid ${selected ? '#7A5C12' : '#D1D5DB'}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 0.7 }}><Icon className="asset-type-card__icon" size={22} color={selected ? '#7A5C12' : '#1F2937'} aria-hidden /><Typography className="asset-type-card__name" variant="caption" fontWeight={900} sx={{ color: '#111827 !important' }}>{label(en, arText)}</Typography><Typography className="asset-type-card__category" variant="caption" sx={{ color: '#4B5563 !important' }}>{label(...categories[category])}</Typography></Paper></Grid>; })}</Grid>
             </Paper>
           </Grid>
 
@@ -328,21 +343,26 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void; init
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <Typography variant="h6" fontWeight={950} color="#FFF" mb={2}>{label(`Property ${activeIndex + 1} measurements`, `قياسات العقار ${activeIndex + 1}`)}</Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12}><TextField fullWidth select label={label('Emirate', 'الإمارة')} value={active.emirate || ''} onChange={(event) => setProperty({ emirate: event.target.value })}><MenuItem value="">{label('Select emirate', 'اختر الإمارة')}</MenuItem>{UAE_EMIRATES.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Grid>
-                <Grid item xs={12}><TextField fullWidth label={label('Area / community', 'المنطقة / المجتمع')} helperText={label('e.g. Yas Island, Al Reem Island', 'مثال: جزيرة ياس، جزيرة الريم')} value={active.area || ''} onChange={(event) => setProperty({ area: event.target.value })} /></Grid>
+                <Grid item xs={12}><TextField fullWidth select label={label('Emirate / pricing region', 'الإمارة / منطقة التسعير')} helperText={label('Al Ain and Al Dhafra are priced as their own regions inside Abu Dhabi.', 'يُسعَّر العين والظفرة كمنطقتين مستقلتين داخل أبوظبي.')} value={active.emirate || ''} onChange={(event) => setProperty({ emirate: event.target.value })}><MenuItem value="">{label('Select emirate or region', 'اختر الإمارة أو المنطقة')}</MenuItem>{UAE_EMIRATES.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Grid>
+                <Grid item xs={12}><TextField fullWidth label={label('Area / community', 'المنطقة / المجتمع')} helperText={label('e.g. Yas Island, Al Reem Island. If left blank, the estimate uses Zone A (1.20x) until Admin confirms the area.', 'مثال: جزيرة ياس، جزيرة الريم. إذا تُركت فارغة يُستخدم نطاق أ (1.20×) حتى يؤكد المسؤول المنطقة.')} value={active.area || ''} onChange={(event) => setProperty({ area: event.target.value })} /></Grid>
+                {isApartment && <Grid item xs={12}><TextField fullWidth required select label={label('Bedrooms', 'غرف النوم')} helperText={label('Required. Studio/1BR 1.00x, 2BR 1.25x, 3BR 1.50x, 4BR+ 1.75x. A blank count is not priced as 2BR on this form.', 'مطلوب. استوديو/غرفة 1.00×، غرفتان 1.25×، 3 غرف 1.50×، 4 فأكثر 1.75×. لا يُسعَّر العدد الفارغ هنا كغرفتين.')} value={active.bedrooms === undefined || active.bedrooms === null || String(active.bedrooms).trim() === '' ? '' : (Number(active.bedrooms) >= 4 ? 4 : Number(active.bedrooms))} onChange={(event) => setProperty({ bedrooms: event.target.value === '' ? undefined : Number(event.target.value), assetDetails: { ...(active.assetDetails || {}), bedroomCount: event.target.value } })}><MenuItem value="">{label('Select bedrooms', 'اختر عدد غرف النوم')}</MenuItem><MenuItem value={0}>{label('Studio', 'استوديو')}</MenuItem><MenuItem value={1}>{label('1 bedroom', 'غرفة نوم واحدة')}</MenuItem><MenuItem value={2}>{label('2 bedrooms', 'غرفتان')}</MenuItem><MenuItem value={3}>{label('3 bedrooms', '3 غرف')}</MenuItem><MenuItem value={4}>{label('4 bedrooms or more', '4 غرف أو أكثر')}</MenuItem></TextField></Grid>}
                 <Grid item xs={6}><TextField fullWidth type="number" label={unitsLabel(active.propertyType, ar)} helperText={isEventOperations ? label('Operational capacity only — does not affect base FM price', 'السعة التشغيلية فقط — لا تؤثر على سعر إدارة المرافق الأساسي') : isGym ? label('Information only — does not multiply Gym pricing', 'للمعلومات فقط — لا تضاعف سعر النادي') : undefined} value={Number(active.units) > 0 ? active.units : ''} onChange={(event) => { const value = Math.max(0, Number(event.target.value)); if (isGym) updateGym({ maxLicensedCapacity: value }); else setProperty({ units: value }); }} /></Grid>
-                <Grid item xs={6}><TextField fullWidth type="number" label={isGym ? label('Floors occupied', 'الطوابق المشغولة') : label('Floors', 'الطوابق')} value={Number(active.floors) > 0 ? active.floors : ''} onChange={(event) => setProperty({ floors: Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={6}><TextField fullWidth type="number" label={isGym ? label('Floors occupied', 'الطوابق المشغولة') : label('Floors', 'الطوابق')} helperText={isMultiStorey ? label('Leave blank if unknown. Blank is treated as unknown, not as zero floors.', 'اتركه فارغاً إذا كان غير معروف. الفراغ يُعدّ غير معروف وليس صفراً.') : undefined} value={Number(active.floors) > 0 ? active.floors : ''} onChange={(event) => setProperty({ floors: parseOptionalCount(event.target.value) })} /></Grid>
+                {showLiftsField && <Grid item xs={6}><TextField fullWidth type="number" label={label('Lifts', 'المصاعد')} helperText={label('Leave blank if unknown. Blank is treated as unknown, not as zero lifts.', 'اتركه فارغاً إذا كان غير معروف. الفراغ يُعدّ غير معروف وليس صفراً.')} value={active.lifts === undefined || active.lifts === null || String(active.lifts).trim() === '' ? '' : active.lifts} onChange={(event) => setProperty({ lifts: parseOptionalCount(event.target.value) })} /></Grid>}
                 <Grid item xs={6}><TextField fullWidth required={SQFT_PRICED_TYPES.has(active.propertyType)} type="number" label={label('Measured service area (sq ft)', 'مساحة الخدمة المقاسة (قدم²)')} helperText={isEventOperations ? label('Required for the FM quote — measured service area is the pricing driver', 'مطلوبة لعرض إدارة المرافق — مساحة الخدمة المقاسة هي عامل التسعير') : undefined} value={Number(active.sqft) > 0 ? active.sqft : ''} onChange={(event) => { const value = Math.max(0, Number(event.target.value)); if (isGym) updateGym({ declaredServiceAreaSqft: value }); else setProperty({ sqft: value }); }} /></Grid>
                 <Grid item xs={6}><TextField fullWidth required inputMode="numeric" label={label('Building age (years) or year built', 'عمر المبنى (سنوات) أو سنة البناء')} value={ageDraft} error={Boolean(ageDraft) && !ageParse.ok} helperText={ageHelper} inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 4 }} onChange={(event) => setAgeInput(event.target.value)} /></Grid>
                 {!isGym && !isEventOperations && <Grid item xs={12}><TextField fullWidth type="number" label={label('Annual rent / managed revenue (AED) — required only for PM', 'الإيجار / الإيراد السنوي المدار (درهم) — مطلوب فقط للإدارة')} value={active.annualRent ?? ''} onChange={(event) => setProperty({ annualRent: event.target.value === '' ? undefined : Math.max(0, Number(event.target.value)) })} /></Grid>}
-                <Grid item xs={12}><TextField fullWidth select label={label('Asset grade', 'درجة العقار')} value={active.assetGrade || 'Standard'} onChange={(event) => setProperty({ assetGrade: event.target.value as any })}><MenuItem value="Standard">{label('Standard', 'قياسي')}</MenuItem><MenuItem value="Premium">{label('Premium', 'مميز')}</MenuItem><MenuItem value="Luxury">{label('Luxury', 'فاخر')}</MenuItem><MenuItem value="Ultra-Luxury">{label('Ultra-Luxury', 'فائق الفخامة')}</MenuItem><MenuItem value="Sovereign">{label('Sovereign', 'سيادي')}</MenuItem></TextField></Grid>
+                <Grid item xs={12}><TextField fullWidth select label={label('Asset grade', 'درجة العقار')} helperText={label('Premium does not change the rate. Only Luxury, Ultra-Luxury and Sovereign move a villa or apartment onto the luxury class.', 'درجة مميز لا تغيّر السعر. فقط فاخر وفائق الفخامة وسيادي ينقلان الفيلا أو الشقة إلى الفئة الفاخرة.')} value={active.assetGrade || 'Standard'} onChange={(event) => setProperty({ assetGrade: event.target.value as any })}><MenuItem value="Standard">{label('Standard', 'قياسي')}</MenuItem><MenuItem value="Premium">{label('Premium', 'مميز')}</MenuItem><MenuItem value="Luxury">{label('Luxury', 'فاخر')}</MenuItem><MenuItem value="Ultra-Luxury">{label('Ultra-Luxury', 'فائق الفخامة')}</MenuItem><MenuItem value="Sovereign">{label('Sovereign', 'سيادي')}</MenuItem></TextField></Grid>
               </Grid>
               <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'rgba(255,255,255,0.5)' }}>{label('Pricing uses the driver appropriate to the selected asset: unit, bed, measured service area, or one facility. Capacity is never used as a price multiplier unless the class is explicitly bed/unit priced.', 'يستخدم التسعير عامل القياس المناسب للعقار: وحدة أو سرير أو مساحة خدمة مقاسة أو منشأة واحدة. لا تُستخدم السعة كمضاعف للسعر إلا عندما يكون التسعير صراحةً حسب السرير/الوحدة.')}</Typography>
+              {!(String(active.area || '').trim()) && <Alert severity="warning" sx={{ mt: 2 }}>{label('Area / community is blank, so the pre-visit estimate uses Zone A (1.20x) until Admin confirms the location. This is not a final payable price.', 'المنطقة / المجتمع فارغ، لذلك يستخدم التقدير قبل الزيارة نطاق أ (1.20×) حتى يؤكد المسؤول الموقع. هذا ليس السعر النهائي المستحق.')}</Alert>}
               {isEventOperations && <Alert severity="info" sx={{ mt: 2 }}>{label('Event operations are FM-only in the automatic quote. Enter the measured service area; venue capacity is operational scope information and annual rent / managed revenue is not requested here.', 'يتم تسعير تشغيل الفعاليات تلقائياً كإدارة مرافق فقط. أدخل مساحة الخدمة المقاسة؛ سعة الموقع معلومة تشغيلية ولا يُطلب هنا الإيجار أو الإيراد السنوي المدار.')}</Alert>}
               {!!activeWarnings.length && <Alert severity="warning" sx={{ mt: 2 }}>{label('Missing', 'ناقص')}: {activeWarnings.join(ar ? '، ' : ', ')}</Alert>}
             </Paper>
           </Grid>
         </Grid>
+
+        {active.propertyType ? <AssetTypeDetailsPanel propertyType={active.propertyType} property={active} arabic={ar} onChange={setProperty} /> : null}
 
         {isGym && <Paper sx={{ p: { xs: 3, md: 4 }, mt: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} gap={2} mb={3}>
