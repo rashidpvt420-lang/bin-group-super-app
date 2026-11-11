@@ -946,7 +946,7 @@ export function buildOwnerQuoteCommercialBreakdown(
   }
   lines.push({ id: 'annual_total', labelEn: 'Annual contract value', labelAr: 'القيمة السنوية للعقد', amountAed: money2(quote.annualTotal) });
   lines.push({ id: 'mobilization', labelEn: '15% mobilisation (due after the verified re-quote and signature)', labelAr: 'دفعة التفعيل 15٪ (تُستحق بعد إعادة التسعير المُتحقق منه والتوقيع)', amountAed: money2(quote.mobilizationFee) });
-  lines.push({ id: 'complimentary_month', labelEn: 'Complimentary first-month recurring service fee', labelAr: 'رسوم الخدمة المتكررة للشهر الأول المجاني', amountAed: 0, noteEn: 'Applies to the initial contract only.', noteAr: 'يسري على العقد الأولي فقط.' });
+  lines.push({ id: 'complimentary_month', labelEn: "First month's management fee waived", labelAr: 'رسوم الإدارة للشهر الأول مُعفاة', amountAed: 0, noteEn: 'Applies to the initial 13-month contract only. The 30-day administrative disbursement fee still applies if the Owner cancels within that window.', noteAr: 'يسري على العقد الأولي لمدة 13 شهراً فقط. ويبقى رسم المصروفات الإدارية خلال 30 يوماً مستحقاً إذا ألغى المالك خلال تلك المهلة.' });
 
   const derivedTotal = money2(quote.annualTotal);
   const lineTotal = lines.find((line) => line.id === 'annual_total');

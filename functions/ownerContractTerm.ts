@@ -6,6 +6,7 @@ import {
   ownerCancellationWindowCopy,
   ownerComplimentaryMonthCopy,
   ownerMobilisationRefundCopy,
+  ownerCancellationFeePreSignNoticeCopy,
   OWNER_CONTRACT_AUTO_RENEWAL,
   OWNER_CONTRACT_RENEWAL_REQUIRES_EXPLICIT_CONSENT,
   OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
@@ -76,7 +77,7 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
     contractCycle: cycle,
     contractTermMonths: termMonths,
     contractTermLabel: isInitial
-      ? `${termMonths} months initial term: ${OWNER_COMPLIMENTARY_MONTHS} complimentary service month + ${OWNER_SERVICE_TERM_MONTHS} months paid service`
+      ? `${termMonths} months initial term: first month management fee waived + ${OWNER_SERVICE_TERM_MONTHS} months billed at the contract rate`
       : `${termMonths} months renewal term`,
     initialContractTermMonths: OWNER_INITIAL_CONTRACT_TERM_MONTHS,
     renewalContractTermMonths: OWNER_RENEWAL_CONTRACT_TERM_MONTHS,
@@ -116,7 +117,7 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
       initialServiceMonths: OWNER_SERVICE_TERM_MONTHS,
       initialReviewMonths: OWNER_INITIAL_REVIEW_MONTHS,
       complimentaryMonths: isInitial ? OWNER_COMPLIMENTARY_MONTHS : 0,
-      note: "The first owner contract is 13 months: one complimentary service month plus 12 months of paid service. The contract does not auto-renew; any renewal requires the owner's explicit consent and then runs for 12 months unless changed by written agreement.",
+      note: "The first owner contract is 13 months: the first month's management fee is waived, and months 2 to 13 are billed at the contract rate. The contract does not auto-renew; any renewal requires the owner's explicit consent and then runs for 12 months unless changed by written agreement.",
       autoRenewal: OWNER_CONTRACT_AUTO_RENEWAL,
       renewalRequiresExplicitConsent: OWNER_CONTRACT_RENEWAL_REQUIRES_EXPLICIT_CONSENT,
     },
@@ -137,6 +138,8 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
       cancellationFeeDisplayAr: formatOwnerInitialCancellationFee().displayAr,
       cancellationFeeNatureEn: OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
       cancellationFeeNatureAr: OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR,
+      preSignNoticeEn: ownerCancellationFeePreSignNoticeCopy(false),
+      preSignNoticeAr: ownerCancellationFeePreSignNoticeCopy(true),
       mobilisationRefundPolicy: OWNER_INITIAL_MOBILISATION_REFUND_POLICY,
       mobilisationRefundNoteEn: ownerMobilisationRefundCopy(false),
       mobilisationRefundNoteAr: ownerMobilisationRefundCopy(true),

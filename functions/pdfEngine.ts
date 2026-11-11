@@ -6,17 +6,25 @@ import {
   OWNER_COMPLIMENTARY_MONTHS,
   OWNER_INITIAL_CANCELLATION_WINDOW_DAYS,
   OWNER_INITIAL_CONTRACT_TERM_MONTHS,
+  OWNER_QUOTE_PRICES_ARE_VAT_EXCLUSIVE,
+  OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT,
   OWNER_SERVICE_TERM_MONTHS,
   formatOwnerInitialCancellationFee,
   formatPropertyManagementLicenceRef,
+  ownerAgencyNoGuaranteeCopy,
+  ownerAmlCashThresholdCopy,
+  ownerCancellationFeePreSignNoticeCopy,
   ownerCancellationWindowCopy,
   ownerComplimentaryMonthCopy,
   ownerDecennialAndMollakCopy,
+  ownerEmergencyRepairCopy,
   ownerGoverningLawJurisdictionCopy,
   ownerLanguagePrecedenceCopy,
   ownerLicenceBlockCopy,
   ownerMobilisationRefundCopy,
   ownerPdplCopy,
+  ownerReturnedChequeCopy,
+  ownerVatTreatmentCopy,
 } from './ownerInitialContractPolicy';
 import { describeAddOnLine, buildOwnerQuoteCommercialBreakdown } from './pricing/calculateUaeQuote2026';
 
@@ -92,7 +100,7 @@ const GOLD = '#C6A75E';
 const INK = '#111827';
 const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
-const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.2';
+const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.3';
 
 function money(value: any) {
     const amount = Number(value || 0);
@@ -482,7 +490,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         const doc = new (PDFDocument as any)({
             margin: 50,
             size: 'A4',
-            info: { Title: '13-Month Owner Service Agreement (1 complimentary month + 12 months paid service)', Author: 'BIN GROUP Super App' }
+            info: { Title: '13-Month Owner Service Agreement (first month management fee waived + 12 months billed at the contract rate)', Author: 'BIN GROUP Super App' }
         });
 
         if (fontBuffer) {
@@ -539,9 +547,9 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         });
 
         doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
-        doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT — 1 COMPLIMENTARY MONTH + 12 MONTHS PAID SERVICE', { align: 'center' });
+        doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT — FIRST MONTH MANAGEMENT FEE WAIVED + 12 MONTHS BILLED AT THE CONTRACT RATE', { align: 'center' });
         doc.fillColor(MUTED).fontSize(9);
-        bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً — شهر خدمة مجاني واحد + 12 شهراً مدفوعاً', null, null, { align: 'center' });
+        bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً — رسوم الإدارة للشهر الأول مُعفاة + 12 شهراً تُفوتر حسب سعر العقد', null, null, { align: 'center' });
         doc.moveDown(0.6);
         doc.fillColor(MUTED).fontSize(7).text(`Version: ${AGREEMENT_VERSION} | Contract ID: ${contractId} | Hash: ${documentHash.slice(0, 20)}...`, { align: 'center' });
         doc.moveDown(0.9);
@@ -577,7 +585,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             data.createdAt
         ) || new Date();
         const end = addMonthsPreservingTime(start, OWNER_INITIAL_CONTRACT_TERM_MONTHS);
-        row(doc, 'Contract Term / مدة العقد', `${OWNER_INITIAL_CONTRACT_TERM_MONTHS} months (${OWNER_COMPLIMENTARY_MONTHS} complimentary + ${OWNER_SERVICE_TERM_MONTHS} paid): ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / ${OWNER_INITIAL_CONTRACT_TERM_MONTHS} شهراً (${OWNER_COMPLIMENTARY_MONTHS} شهر مجاني + ${OWNER_SERVICE_TERM_MONTHS} شهراً مدفوعاً)`);
+        row(doc, 'Contract Term / مدة العقد', `${OWNER_INITIAL_CONTRACT_TERM_MONTHS} months (first month management fee waived + ${OWNER_SERVICE_TERM_MONTHS} billed at the contract rate): ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / ${OWNER_INITIAL_CONTRACT_TERM_MONTHS} شهراً (رسوم الإدارة للشهر الأول مُعفاة + ${OWNER_SERVICE_TERM_MONTHS} شهراً حسب سعر العقد)`);
 
         section(doc, '2. Property and Submitted Details', 'بيانات العقار والمستندات المقدمة');
         const primaryProperty = asPlainRecord(data.properties?.[0] || data.commercialSchedule?.propertyDetails?.[0] || data);
@@ -611,10 +619,10 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Annual Value / القيمة السنوية', money(data.annualValue || data.totalAnnualValue || data.estimatedAnnualValue || data.annualContractValue || data.commercialSchedule?.annualContractValue));
         row(doc, 'Mobilization / Activation / التفعيل', money(data.mobilizationFee || data.mobilizationAmount || data.upfrontAmount || data.commercialSchedule?.mobilizationAmount));
         row(doc, 'Payment Plan / خطة السداد', textValue(data.paymentPlan || data.billingFrequency || data.commercialSchedule?.paymentPlan));
-        row(doc, 'VAT / ضريبة القيمة المضافة', textValue(data.vatTreatment || 'VAT applies where legally required'));
-        row(doc, 'Complimentary first month / الشهر الأول المجاني', 'AED 0 recurring service fee / رسوم خدمة متكررة 0 درهم');
+        row(doc, 'VAT / ضريبة القيمة المضافة', `${OWNER_QUOTE_PRICES_ARE_VAT_EXCLUSIVE ? 'Quoted fees exclusive of' : 'Quoted fees inclusive of'} ${OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT}% UAE VAT; invoices currently ${textValue(data.vatTreatment || 'NOT_APPLIED')} until company TRN is verified / الرسوم المعروضة غير شاملة ضريبة القيمة المضافة ${OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT}٪ في دولة الإمارات`);
+        row(doc, "First month's management fee waived / رسوم الإدارة للشهر الأول مُعفاة", 'AED 0 recurring management fee / رسوم إدارة متكررة 0 درهم');
         const cancellationFee = formatOwnerInitialCancellationFee(data.cancellationFeeAed ?? data.commercialSchedule?.cancellationFeeAed);
-        row(doc, '30-day cancellation fee / رسوم الإلغاء خلال 30 يوماً', `${cancellationFee.displayEn} / ${cancellationFee.displayAr}`);
+        row(doc, '30-day administrative disbursement fee / رسم المصروفات الإدارية خلال 30 يوماً', `${cancellationFee.displayEn} / ${cancellationFee.displayAr}`);
         renderQuoteLineItems(doc, data);
 
         section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');
@@ -641,10 +649,11 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         const complimentaryEnds = addMonthsPreservingTime(startForWindow, OWNER_COMPLIMENTARY_MONTHS);
         para(doc, ownerComplimentaryMonthCopy(false), ownerComplimentaryMonthCopy(true));
         para(doc,
-            `${ownerCancellationWindowCopy(false)} The request window ends on ${firstMonthEnds.toLocaleDateString('en-AE')}. The complimentary service month ends on ${complimentaryEnds.toLocaleDateString('en-AE')}.`,
-            `${ownerCancellationWindowCopy(true)} وتنتهي مهلة الطلب في ${firstMonthEnds.toLocaleDateString('en-AE')}. وينتهي الشهر المجاني في ${complimentaryEnds.toLocaleDateString('en-AE')}.`
+            `${ownerCancellationFeePreSignNoticeCopy(false)} ${ownerCancellationWindowCopy(false)} The request window ends on ${firstMonthEnds.toLocaleDateString('en-AE')}. The waived first-month management-fee period ends on ${complimentaryEnds.toLocaleDateString('en-AE')}.`,
+            `${ownerCancellationFeePreSignNoticeCopy(true)} ${ownerCancellationWindowCopy(true)} وتنتهي مهلة الطلب في ${firstMonthEnds.toLocaleDateString('en-AE')}. وتنتهي فترة إعفاء رسوم الإدارة للشهر الأول في ${complimentaryEnds.toLocaleDateString('en-AE')}.`
         );
         para(doc, ownerMobilisationRefundCopy(false), ownerMobilisationRefundCopy(true));
+        para(doc, ownerVatTreatmentCopy(false), ownerVatTreatmentCopy(true));
 
         section(doc, '5. Institutional and Non-Tenant Property Logic', 'منطق العقارات المؤسسية وغير القائمة على المستأجرين');
         para(doc,
@@ -739,6 +748,11 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         }));
         para(doc, ownerMobilisationRefundCopy(false), ownerMobilisationRefundCopy(true));
         para(doc, ownerDecennialAndMollakCopy(false), ownerDecennialAndMollakCopy(true));
+        para(doc, ownerAgencyNoGuaranteeCopy(false), ownerAgencyNoGuaranteeCopy(true));
+        para(doc, ownerAmlCashThresholdCopy(false), ownerAmlCashThresholdCopy(true));
+        para(doc, ownerReturnedChequeCopy(false), ownerReturnedChequeCopy(true));
+        para(doc, ownerEmergencyRepairCopy(false), ownerEmergencyRepairCopy(true));
+        para(doc, ownerVatTreatmentCopy(false), ownerVatTreatmentCopy(true));
 
         section(doc, '16. Digital Acceptance and Signatures', '١٦. القبول الرقمي والتوقيعات');
         para(doc,
@@ -995,8 +1009,12 @@ function renderPaymentScheduleClauses(doc: any) {
         '9ج. طرق الدفع: تُقبل الدفعات بالدرهم الإماراتي فقط نقداً أو بشيك محرر لصالح المنشأة المرخصة المذكورة في هذه الاتفاقية. ولا تُقبل أي طريقة دفع أخرى.'
     );
     para(doc,
-        `9D. Cheques: a cheque counts as payment only when the bank has cleared it. If a cheque is returned unpaid, the related amount remains due, any service activation that depended on it does not proceed, and BIN-GROUPS may pursue the remedies available under applicable UAE law, including enforcement of the cheque. A returned-cheque fee of AED ${RETURNED_CHEQUE_FEE_AED} per returned cheque is payable by the Owner in addition to the unpaid amount.`,
-        `9د. الشيكات: لا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. وإذا أُعيد الشيك دون صرف يبقى المبلغ المتعلق به مستحقاً، ولا يتم أي تفعيل للخدمة يتوقف عليه، ويجوز لشركة BIN-GROUPS اللجوء إلى سبل الانتصاف المتاحة بموجب القوانين المعمول بها في دولة الإمارات، بما في ذلك تنفيذ الشيك. ويلتزم المالك بسداد رسم قدره ${RETURNED_CHEQUE_FEE_AED} درهم عن كل شيك مرتجع، بالإضافة إلى المبلغ غير المسدد.`
+        `9C2. ${ownerAmlCashThresholdCopy(false)}`,
+        `9ج2. ${ownerAmlCashThresholdCopy(true)}`
+    );
+    para(doc,
+        `9D. Cheques: a cheque counts as payment only when the bank has cleared it. If a cheque is returned unpaid, the related amount remains due, any service activation that depended on it does not proceed, and BIN-GROUPS may pursue the remedies available under applicable UAE law, including enforcement of the cheque as an executive instrument. Acceptance of a partial payment does not waive the outstanding balance. A returned-cheque fee of AED ${RETURNED_CHEQUE_FEE_AED} per returned cheque is payable by the Owner in addition to the unpaid amount. ${ownerReturnedChequeCopy(false)}`,
+        `9د. الشيكات: لا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. وإذا أُعيد الشيك دون صرف يبقى المبلغ المتعلق به مستحقاً، ولا يتم أي تفعيل للخدمة يتوقف عليه، ويجوز لشركة BIN-GROUPS اللجوء إلى سبل الانتصاف المتاحة بموجب القوانين المعمول بها في دولة الإمارات، بما في ذلك تنفيذ الشيك بوصفه سنداً تنفيذياً. وقبول دفعة جزئية لا يسقط الحق في المطالبة بالرصيد المتبقي. ويلتزم المالك بسداد رسم قدره ${RETURNED_CHEQUE_FEE_AED} درهم عن كل شيك مرتجع، بالإضافة إلى المبلغ غير المسدد. ${ownerReturnedChequeCopy(true)}`
     );
     para(doc,
         '9E. Receipts: BIN-GROUPS issues a receipt for every payment once it is verified. The Owner can see each invoice and its status (pending, received awaiting verification, verified, bounced or overdue) in the app.',
@@ -1009,6 +1027,10 @@ function renderPaymentScheduleClauses(doc: any) {
     para(doc,
         `9G. Fixed approval limit: the Owner's prior written approval is required for ANY job costing more than AED ${FIXED_OWNER_APPROVAL_LIMIT_AED.toLocaleString('en-GB')}. This is a fixed limit per job; a job may not be split to avoid it. The only exception is a genuine emergency, where up to AED ${EMERGENCY_SPEND_LIMIT_AED.toLocaleString('en-GB')} per event may be spent without prior approval and the Owner is notified within ${EMERGENCY_OWNER_NOTIFY_HOURS} hours.`,
         `9ز. حد الموافقة الثابت: يلزم الحصول على موافقة المالك الكتابية المسبقة على أي عمل تزيد تكلفته على ${FIXED_OWNER_APPROVAL_LIMIT_AED.toLocaleString('en-GB')} درهم. وهذا حد ثابت لكل عمل، ولا يجوز تجزئة العمل لتجنبه. ويُستثنى من ذلك فقط حالات الطوارئ الحقيقية، إذ يجوز إنفاق ما يصل إلى ${EMERGENCY_SPEND_LIMIT_AED.toLocaleString('en-GB')} درهم للحالة الواحدة دون موافقة مسبقة، مع إبلاغ المالك خلال ${EMERGENCY_OWNER_NOTIFY_HOURS} ساعة.`
+    );
+    para(doc,
+        `9H. ${ownerEmergencyRepairCopy(false)}`,
+        `9ح. ${ownerEmergencyRepairCopy(true)}`
     );
 }
 
