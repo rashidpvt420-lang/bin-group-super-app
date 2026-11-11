@@ -572,6 +572,180 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
+    function assetDetailsMapIsSafe(details) {
+      return details is map &&
+        details.keys().hasOnly([
+        'ageRange', 'anchorTenants', 'balcony', 'bathroomsCount', 'beachfront', 'bedCount',
+        'bedroomCount', 'bedroomsCount', 'bmuFacadeAccess', 'boarding', 'buildingManagementName', 'buildingName',
+        'buildingsCount', 'canteen', 'centralAcChiller', 'cinema', 'civilDefenceCertificateExpiry', 'classrooms',
+        'clearHeightM', 'clinicOnSite', 'clinics', 'coldStorage', 'coldStorageTemp', 'commonAreas',
+        'communityName', 'consultationRooms', 'coveredParking', 'cranes', 'datePalms', 'dentalChairs',
+        'departmentName', 'diningHall', 'districtCoolingService', 'dockLevelers', 'eventDaysPerYear', 'eventFrequency',
+        'facadeType', 'farmhouse', 'fbOutlets', 'fireAlarmSystem', 'fireWarden', 'fitOutStandard',
+        'fiveBedUnits', 'floodlights', 'floorNumber', 'floorsAboveGround', 'floorsBelowGround', 'foodCourt',
+        'fourBedUnits', 'fridayCapacity', 'funeralFacility', 'generators', 'greenhouses', 'guestCapacity',
+        'hazardousGoods', 'hazardousMaterials', 'helicopterPad', 'hospitalBeds', 'hospitalityBoxes', 'hotelKeys',
+        'icuBeds', 'imaging', 'imamResidence', 'irrigation', 'isolationRooms', 'kitchen',
+        'kitchens', 'labOnSite', 'labs', 'landAreaSqft', 'laundry', 'livestock',
+        'loadingDocks', 'majlisRooms', 'mediaCentre', 'medicalGas', 'meetingHalls', 'meetingRooms',
+        'mensHallCapacity', 'minarets', 'mosqueOwnership', 'oaContactName', 'oaContactPhone', 'occupancy',
+        'officeAreaSqft', 'officeMezzanine', 'officeUnits', 'oneBedUnits', 'outdoorMajlis', 'parkingLevels',
+        'parkingSpaces', 'passengerLifts', 'pharmacy', 'pitchType', 'playgrounds', 'plotNumber',
+        'powerCapacityKva', 'prayerHallAreaSqft', 'prayerRoom', 'privateGarden', 'privatePool', 'productionLines',
+        'publicAccess', 'racking', 'reception', 'recreation', 'reraDldOrPermitNumber', 'retailUnits',
+        'roomCount', 'seatedCapacity', 'serviceLifts', 'soundSystem', 'spa', 'sportsHalls',
+        'sprinklers', 'staffHousingOnSite', 'staffRoom', 'standingCapacity', 'starRating', 'studentCapacity',
+        'studios', 'tenancyType', 'theatres', 'threeBedUnits', 'totalUnits', 'towerBlockCount',
+        'tradingHours', 'treatmentRooms', 'truckCourts', 'twoBedUnits', 'typicalFloorPlateSqft', 'unitNumber',
+        'unitsPerFloor', 'utilityAccount', 'washrooms', 'waterPumps', 'waterTanks', 'wells',
+        'womensHallCapacity', 'workshops'
+        ]) &&
+        (!('ageRange' in details) || (details.ageRange is string && details.ageRange.size() <= 80)) &&
+        (!('bedroomCount' in details) || (details.bedroomCount is string && details.bedroomCount.size() <= 80)) &&
+        (!('buildingManagementName' in details) || (details.buildingManagementName is string && details.buildingManagementName.size() <= 200)) &&
+        (!('buildingName' in details) || (details.buildingName is string && details.buildingName.size() <= 200)) &&
+        (!('civilDefenceCertificateExpiry' in details) || (details.civilDefenceCertificateExpiry is string && details.civilDefenceCertificateExpiry.size() <= 32)) &&
+        (!('coldStorageTemp' in details) || (details.coldStorageTemp is string && details.coldStorageTemp.size() <= 80)) &&
+        (!('commonAreas' in details) || (details.commonAreas is string && details.commonAreas.size() <= 1000)) &&
+        (!('communityName' in details) || (details.communityName is string && details.communityName.size() <= 200)) &&
+        (!('departmentName' in details) || (details.departmentName is string && details.departmentName.size() <= 200)) &&
+        (!('eventFrequency' in details) || (details.eventFrequency is string && details.eventFrequency.size() <= 120)) &&
+        (!('facadeType' in details) || (details.facadeType is string && details.facadeType.size() <= 80)) &&
+        (!('fitOutStandard' in details) || (details.fitOutStandard is string && details.fitOutStandard.size() <= 80)) &&
+        (!('mosqueOwnership' in details) || (details.mosqueOwnership is string && details.mosqueOwnership.size() <= 80)) &&
+        (!('oaContactName' in details) || (details.oaContactName is string && details.oaContactName.size() <= 200)) &&
+        (!('oaContactPhone' in details) || (details.oaContactPhone is string && details.oaContactPhone.size() <= 30)) &&
+        (!('pitchType' in details) || (details.pitchType is string && details.pitchType.size() <= 80)) &&
+        (!('plotNumber' in details) || (details.plotNumber is string && details.plotNumber.size() <= 80)) &&
+        (!('reraDldOrPermitNumber' in details) || (details.reraDldOrPermitNumber is string && details.reraDldOrPermitNumber.size() <= 80)) &&
+        (!('starRating' in details) || (details.starRating is string && details.starRating.size() <= 80)) &&
+        (!('tenancyType' in details) || (details.tenancyType is string && details.tenancyType.size() <= 80)) &&
+        (!('tradingHours' in details) || (details.tradingHours is string && details.tradingHours.size() <= 120)) &&
+        (!('unitNumber' in details) || (details.unitNumber is string && details.unitNumber.size() <= 40)) &&
+        (!('utilityAccount' in details) || (details.utilityAccount is string && details.utilityAccount.size() <= 80)) &&
+        (!('anchorTenants' in details) || (details.anchorTenants is number && details.anchorTenants >= 0 && details.anchorTenants <= 200)) &&
+        (!('bathroomsCount' in details) || (details.bathroomsCount is number && details.bathroomsCount >= 0 && details.bathroomsCount <= 50)) &&
+        (!('bedCount' in details) || (details.bedCount is number && details.bedCount >= 0 && details.bedCount <= 100000)) &&
+        (!('bedroomsCount' in details) || (details.bedroomsCount is number && details.bedroomsCount >= 0 && details.bedroomsCount <= 50)) &&
+        (!('buildingsCount' in details) || (details.buildingsCount is number && details.buildingsCount >= 0 && details.buildingsCount <= 500)) &&
+        (!('classrooms' in details) || (details.classrooms is number && details.classrooms >= 0 && details.classrooms <= 2000)) &&
+        (!('clearHeightM' in details) || (details.clearHeightM is number && details.clearHeightM >= 0 && details.clearHeightM <= 80)) &&
+        (!('clinics' in details) || (details.clinics is number && details.clinics >= 0 && details.clinics <= 2000)) &&
+        (!('consultationRooms' in details) || (details.consultationRooms is number && details.consultationRooms >= 0 && details.consultationRooms <= 500)) &&
+        (!('coveredParking' in details) || (details.coveredParking is number && details.coveredParking >= 0 && details.coveredParking <= 50)) &&
+        (!('dentalChairs' in details) || (details.dentalChairs is number && details.dentalChairs >= 0 && details.dentalChairs <= 200)) &&
+        (!('eventDaysPerYear' in details) || (details.eventDaysPerYear is number && details.eventDaysPerYear >= 0 && details.eventDaysPerYear <= 366)) &&
+        (!('fbOutlets' in details) || (details.fbOutlets is number && details.fbOutlets >= 0 && details.fbOutlets <= 200)) &&
+        (!('fiveBedUnits' in details) || (details.fiveBedUnits is number && details.fiveBedUnits >= 0 && details.fiveBedUnits <= 100000)) &&
+        (!('floorNumber' in details) || (details.floorNumber is number && details.floorNumber >= 0 && details.floorNumber <= 300)) &&
+        (!('floorsAboveGround' in details) || (details.floorsAboveGround is number && details.floorsAboveGround >= 0 && details.floorsAboveGround <= 300)) &&
+        (!('floorsBelowGround' in details) || (details.floorsBelowGround is number && details.floorsBelowGround >= 0 && details.floorsBelowGround <= 50)) &&
+        (!('fourBedUnits' in details) || (details.fourBedUnits is number && details.fourBedUnits >= 0 && details.fourBedUnits <= 100000)) &&
+        (!('fridayCapacity' in details) || (details.fridayCapacity is number && details.fridayCapacity >= 0 && details.fridayCapacity <= 100000)) &&
+        (!('guestCapacity' in details) || (details.guestCapacity is number && details.guestCapacity >= 0 && details.guestCapacity <= 20000)) &&
+        (!('hospitalBeds' in details) || (details.hospitalBeds is number && details.hospitalBeds >= 0 && details.hospitalBeds <= 10000)) &&
+        (!('hospitalityBoxes' in details) || (details.hospitalityBoxes is number && details.hospitalityBoxes >= 0 && details.hospitalityBoxes <= 2000)) &&
+        (!('hotelKeys' in details) || (details.hotelKeys is number && details.hotelKeys >= 0 && details.hotelKeys <= 10000)) &&
+        (!('icuBeds' in details) || (details.icuBeds is number && details.icuBeds >= 0 && details.icuBeds <= 2000)) &&
+        (!('isolationRooms' in details) || (details.isolationRooms is number && details.isolationRooms >= 0 && details.isolationRooms <= 500)) &&
+        (!('kitchens' in details) || (details.kitchens is number && details.kitchens >= 0 && details.kitchens <= 200)) &&
+        (!('labs' in details) || (details.labs is number && details.labs >= 0 && details.labs <= 200)) &&
+        (!('landAreaSqft' in details) || (details.landAreaSqft is number && details.landAreaSqft >= 0 && details.landAreaSqft <= 50000000)) &&
+        (!('loadingDocks' in details) || (details.loadingDocks is number && details.loadingDocks >= 0 && details.loadingDocks <= 500)) &&
+        (!('majlisRooms' in details) || (details.majlisRooms is number && details.majlisRooms >= 0 && details.majlisRooms <= 20)) &&
+        (!('meetingHalls' in details) || (details.meetingHalls is number && details.meetingHalls >= 0 && details.meetingHalls <= 200)) &&
+        (!('meetingRooms' in details) || (details.meetingRooms is number && details.meetingRooms >= 0 && details.meetingRooms <= 500)) &&
+        (!('mensHallCapacity' in details) || (details.mensHallCapacity is number && details.mensHallCapacity >= 0 && details.mensHallCapacity <= 100000)) &&
+        (!('minarets' in details) || (details.minarets is number && details.minarets >= 0 && details.minarets <= 20)) &&
+        (!('occupancy' in details) || (details.occupancy is number && details.occupancy >= 0 && details.occupancy <= 100000)) &&
+        (!('officeAreaSqft' in details) || (details.officeAreaSqft is number && details.officeAreaSqft >= 0 && details.officeAreaSqft <= 1000000)) &&
+        (!('officeUnits' in details) || (details.officeUnits is number && details.officeUnits >= 0 && details.officeUnits <= 100000)) &&
+        (!('oneBedUnits' in details) || (details.oneBedUnits is number && details.oneBedUnits >= 0 && details.oneBedUnits <= 100000)) &&
+        (!('parkingLevels' in details) || (details.parkingLevels is number && details.parkingLevels >= 0 && details.parkingLevels <= 100)) &&
+        (!('parkingSpaces' in details) || (details.parkingSpaces is number && details.parkingSpaces >= 0 && details.parkingSpaces <= 100000)) &&
+        (!('passengerLifts' in details) || (details.passengerLifts is number && details.passengerLifts >= 0 && details.passengerLifts <= 200)) &&
+        (!('powerCapacityKva' in details) || (details.powerCapacityKva is number && details.powerCapacityKva >= 0 && details.powerCapacityKva <= 1000000)) &&
+        (!('prayerHallAreaSqft' in details) || (details.prayerHallAreaSqft is number && details.prayerHallAreaSqft >= 0 && details.prayerHallAreaSqft <= 1000000)) &&
+        (!('productionLines' in details) || (details.productionLines is number && details.productionLines >= 0 && details.productionLines <= 200)) &&
+        (!('retailUnits' in details) || (details.retailUnits is number && details.retailUnits >= 0 && details.retailUnits <= 100000)) &&
+        (!('roomCount' in details) || (details.roomCount is number && details.roomCount >= 0 && details.roomCount <= 100000)) &&
+        (!('seatedCapacity' in details) || (details.seatedCapacity is number && details.seatedCapacity >= 0 && details.seatedCapacity <= 200000)) &&
+        (!('serviceLifts' in details) || (details.serviceLifts is number && details.serviceLifts >= 0 && details.serviceLifts <= 200)) &&
+        (!('sportsHalls' in details) || (details.sportsHalls is number && details.sportsHalls >= 0 && details.sportsHalls <= 50)) &&
+        (!('standingCapacity' in details) || (details.standingCapacity is number && details.standingCapacity >= 0 && details.standingCapacity <= 200000)) &&
+        (!('studentCapacity' in details) || (details.studentCapacity is number && details.studentCapacity >= 0 && details.studentCapacity <= 20000)) &&
+        (!('studios' in details) || (details.studios is number && details.studios >= 0 && details.studios <= 100000)) &&
+        (!('theatres' in details) || (details.theatres is number && details.theatres >= 0 && details.theatres <= 200)) &&
+        (!('threeBedUnits' in details) || (details.threeBedUnits is number && details.threeBedUnits >= 0 && details.threeBedUnits <= 100000)) &&
+        (!('totalUnits' in details) || (details.totalUnits is number && details.totalUnits >= 0 && details.totalUnits <= 100000)) &&
+        (!('towerBlockCount' in details) || (details.towerBlockCount is number && details.towerBlockCount >= 0 && details.towerBlockCount <= 200)) &&
+        (!('treatmentRooms' in details) || (details.treatmentRooms is number && details.treatmentRooms >= 0 && details.treatmentRooms <= 500)) &&
+        (!('truckCourts' in details) || (details.truckCourts is number && details.truckCourts >= 0 && details.truckCourts <= 500)) &&
+        (!('twoBedUnits' in details) || (details.twoBedUnits is number && details.twoBedUnits >= 0 && details.twoBedUnits <= 100000)) &&
+        (!('typicalFloorPlateSqft' in details) || (details.typicalFloorPlateSqft is number && details.typicalFloorPlateSqft >= 0 && details.typicalFloorPlateSqft <= 1000000)) &&
+        (!('unitsPerFloor' in details) || (details.unitsPerFloor is number && details.unitsPerFloor >= 0 && details.unitsPerFloor <= 500)) &&
+        (!('washrooms' in details) || (details.washrooms is number && details.washrooms >= 0 && details.washrooms <= 5000)) &&
+        (!('womensHallCapacity' in details) || (details.womensHallCapacity is number && details.womensHallCapacity >= 0 && details.womensHallCapacity <= 100000)) &&
+        (!('workshops' in details) || (details.workshops is number && details.workshops >= 0 && details.workshops <= 200)) &&
+        (!('balcony' in details) || details.balcony is bool) &&
+        (!('beachfront' in details) || details.beachfront is bool) &&
+        (!('bmuFacadeAccess' in details) || details.bmuFacadeAccess is bool) &&
+        (!('boarding' in details) || details.boarding is bool) &&
+        (!('canteen' in details) || details.canteen is bool) &&
+        (!('centralAcChiller' in details) || details.centralAcChiller is bool) &&
+        (!('cinema' in details) || details.cinema is bool) &&
+        (!('clinicOnSite' in details) || details.clinicOnSite is bool) &&
+        (!('coldStorage' in details) || details.coldStorage is bool) &&
+        (!('cranes' in details) || details.cranes is bool) &&
+        (!('datePalms' in details) || details.datePalms is bool) &&
+        (!('diningHall' in details) || details.diningHall is bool) &&
+        (!('districtCoolingService' in details) || details.districtCoolingService is bool) &&
+        (!('dockLevelers' in details) || details.dockLevelers is bool) &&
+        (!('farmhouse' in details) || details.farmhouse is bool) &&
+        (!('fireAlarmSystem' in details) || details.fireAlarmSystem is bool) &&
+        (!('fireWarden' in details) || details.fireWarden is bool) &&
+        (!('floodlights' in details) || details.floodlights is bool) &&
+        (!('foodCourt' in details) || details.foodCourt is bool) &&
+        (!('funeralFacility' in details) || details.funeralFacility is bool) &&
+        (!('generators' in details) || details.generators is bool) &&
+        (!('greenhouses' in details) || details.greenhouses is bool) &&
+        (!('hazardousGoods' in details) || details.hazardousGoods is bool) &&
+        (!('hazardousMaterials' in details) || details.hazardousMaterials is bool) &&
+        (!('helicopterPad' in details) || details.helicopterPad is bool) &&
+        (!('imaging' in details) || details.imaging is bool) &&
+        (!('imamResidence' in details) || details.imamResidence is bool) &&
+        (!('irrigation' in details) || details.irrigation is bool) &&
+        (!('kitchen' in details) || details.kitchen is bool) &&
+        (!('labOnSite' in details) || details.labOnSite is bool) &&
+        (!('laundry' in details) || details.laundry is bool) &&
+        (!('livestock' in details) || details.livestock is bool) &&
+        (!('mediaCentre' in details) || details.mediaCentre is bool) &&
+        (!('medicalGas' in details) || details.medicalGas is bool) &&
+        (!('officeMezzanine' in details) || details.officeMezzanine is bool) &&
+        (!('outdoorMajlis' in details) || details.outdoorMajlis is bool) &&
+        (!('pharmacy' in details) || details.pharmacy is bool) &&
+        (!('playgrounds' in details) || details.playgrounds is bool) &&
+        (!('prayerRoom' in details) || details.prayerRoom is bool) &&
+        (!('privateGarden' in details) || details.privateGarden is bool) &&
+        (!('privatePool' in details) || details.privatePool is bool) &&
+        (!('publicAccess' in details) || details.publicAccess is bool) &&
+        (!('racking' in details) || details.racking is bool) &&
+        (!('reception' in details) || details.reception is bool) &&
+        (!('recreation' in details) || details.recreation is bool) &&
+        (!('soundSystem' in details) || details.soundSystem is bool) &&
+        (!('spa' in details) || details.spa is bool) &&
+        (!('sprinklers' in details) || details.sprinklers is bool) &&
+        (!('staffHousingOnSite' in details) || details.staffHousingOnSite is bool) &&
+        (!('staffRoom' in details) || details.staffRoom is bool) &&
+        (!('waterPumps' in details) || details.waterPumps is bool) &&
+        (!('waterTanks' in details) || details.waterTanks is bool) &&
+        (!('wells' in details) || details.wells is bool);
+    }
+
+    function assetDetailsWriteIsSafe(data) {
+      return !data.keys().hasAny(['assetDetails']) || assetDetailsMapIsSafe(data.assetDetails);
+    }
+
     function submittedPropertyGeoIsUnverified(data) {
       return !('submittedGeo' in data) || (
         data.submittedGeo is map &&
@@ -641,6 +815,7 @@ service cloud.firestore {
       return propertyOwnedByCaller(data) &&
         ownerDraftCreate(data) &&
         propertyCreateHasNoCanonicalGeo(data) &&
+        assetDetailsWriteIsSafe(data) &&
         !data.keys().hasAny([
           'active',
           'isActive',
@@ -659,6 +834,7 @@ service cloud.firestore {
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
         safeManagedPropertyUpdate() &&
+        assetDetailsWriteIsSafe(request.resource.data) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
           'lifecycleStatus',

@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { applyAssetDetailsToProperty, sanitizeAssetDetails } from "./pricing/assetTypeDetails";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { verifiedOwnerDocumentPaths } from "./ownerOnboardingDocuments";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
@@ -539,8 +540,11 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
       const clientDraftId = safeId(property.id || property.propertyId, `draft_property_${index + 1}`);
       const propertyId = safeId(`${intakeId}_property_${index + 1}`, `owner_${owner.uid}_property_${index + 1}`);
+      const detailsPatch = applyAssetDetailsToProperty(text(property.propertyType), property.assetDetails);
       return {
         ...property,
+        ...detailsPatch,
+        assetDetails: sanitizeAssetDetails(text(property.propertyType), property.assetDetails),
         clientDraftId,
         id: propertyId,
         propertyId,

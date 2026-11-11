@@ -133,6 +133,7 @@ const propertyFunctions = `    function submittedPropertyGeoIsUnverified(data) {
       return propertyOwnedByCaller(data) &&
         ownerDraftCreate(data) &&
         propertyCreateHasNoCanonicalGeo(data) &&
+        assetDetailsWriteIsSafe(data) &&
         !data.keys().hasAny([
           'active',
           'isActive',
@@ -151,6 +152,7 @@ const propertyFunctions = `    function submittedPropertyGeoIsUnverified(data) {
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
         safeManagedPropertyUpdate() &&
+        assetDetailsWriteIsSafe(request.resource.data) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
           'lifecycleStatus',
