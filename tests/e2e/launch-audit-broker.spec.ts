@@ -34,6 +34,12 @@ async function login(page: Page) {
 async function waitForResolvedBrokerShell(page: Page, context: string) {
   const authSpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
   await expect(authSpinner, `${context}: broker identity must resolve before shell assertions`).toBeHidden({ timeout: 20_000 });
+  const moduleLoader = page.getByText(/Loading BIN GROUP module/i).first();
+  await expect(moduleLoader, `${context}: broker module must finish loading before shell assertions`).toBeHidden({ timeout: 30_000 });
+  await expect(
+    page.locator('#broker-nav-dashboard, #broker-mobile-nav-dashboard, [data-testid="broker-language-toggle"]').first(),
+    `${context}: broker shell chrome must render`,
+  ).toBeVisible({ timeout: 20_000 });
 }
 
 async function assertHealthy(page: Page, context: string) {
@@ -42,6 +48,7 @@ async function assertHealthy(page: Page, context: string) {
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
   expect(body, `${context}: no access-denied`).not.toMatch(ACCESS_DENIED);
+  expect(body, `${context}: broker module must not still be loading`).not.toMatch(/Loading BIN GROUP module/i);
 }
 
 test.describe('Broker launch audit', () => {

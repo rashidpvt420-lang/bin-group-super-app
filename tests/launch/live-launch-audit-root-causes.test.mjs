@@ -137,6 +137,7 @@ test('Phase 3 control repairs label icon-only controls and keep owner activation
   assert.doesNotMatch(ownerAudit, /owner AR\/EN switch works in shell[\s\S]{0,500}page\.goto\('\/owner\/dashboard'/);
   assert.match(brokerAudit, /waitForResolvedBrokerShell/);
   assert.match(brokerAudit, /Authenticating BIN-Groups Identity/);
+  assert.match(brokerAudit, /Loading BIN GROUP module/);
 });
 
 test('portal language proofs bind to explicit controls instead of substring selectors', () => {

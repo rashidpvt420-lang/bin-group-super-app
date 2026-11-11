@@ -1,7 +1,7 @@
 import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
+import { AppBar, Avatar, Box, Button, CircularProgress, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
 import { ArrowLeft, Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
@@ -11,19 +11,33 @@ import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import BinConnectChatBox from '../components/BinConnectChatBox';
-import BinConnectInboxPage from '../components/BinConnectInboxPage';
-
-import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
-import BrokerDashboardPage from './pages/BrokerDashboardPage';
-import BrokerLeadsPage from './pages/BrokerLeadsPage';
-import BrokerReferralsPage from './pages/BrokerReferralsPage';
-import BrokerCommissionsPage from './pages/BrokerCommissionsPage';
-import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
-import BrokerProfilePage from './pages/BrokerProfilePage';
-import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
-import BrokerListingsPage from './pages/BrokerListingsPage';
-import DesignStudioPage from '../pages/DesignStudioPage';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
+
+// Keep the broker shell (nav labels, language toggle, mobile nav) independent of
+// heavy route pages such as Design Studio so the module can resolve without
+// leaving the user on the app-level "Loading BIN GROUP module..." fallback.
+const BinConnectInboxPage = React.lazy(() => import('../components/BinConnectInboxPage'));
+const BrokerSimpleDashboardPage = React.lazy(() => import('./pages/BrokerSimpleDashboardPage'));
+const BrokerDashboardPage = React.lazy(() => import('./pages/BrokerDashboardPage'));
+const BrokerLeadsPage = React.lazy(() => import('./pages/BrokerLeadsPage'));
+const BrokerReferralsPage = React.lazy(() => import('./pages/BrokerReferralsPage'));
+const BrokerCommissionsPage = React.lazy(() => import('./pages/BrokerCommissionsPage'));
+const BrokerDocumentsPage = React.lazy(() => import('./pages/BrokerDocumentsPage'));
+const BrokerProfilePage = React.lazy(() => import('./pages/BrokerProfilePage'));
+const BrokerAttributionProofPage = React.lazy(() => import('./pages/BrokerAttributionProofPage'));
+const BrokerListingsPage = React.lazy(() => import('./pages/BrokerListingsPage'));
+const DesignStudioPage = React.lazy(() => import('../pages/DesignStudioPage'));
+
+function BrokerPageFallback() {
+  return (
+    <Box sx={{ py: 6, textAlign: 'center' }}>
+      <CircularProgress sx={{ color: '#C9A646', mb: 2 }} size={28} thickness={3} />
+      <Typography variant="body2" sx={{ color: '#667085', fontWeight: 800 }}>
+        Loading broker page...
+      </Typography>
+    </Box>
+  );
+}
 
 type BrokerMenuItem = {
   key: string;
@@ -126,6 +140,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
 export default function BrokerApp() {
   return (
     <BrokerLayout>
+      <React.Suspense fallback={<BrokerPageFallback />}>
       <Routes>
         <Route path="/" element={<BrokerSimpleDashboardPage />} />
         <Route path="/dashboard" element={<BrokerSimpleDashboardPage />} />
@@ -145,6 +160,7 @@ export default function BrokerApp() {
         <Route path="/profile" element={<BrokerProfilePage />} />
         <Route path="*" element={<Navigate to="/broker/dashboard" replace />} />
       </Routes>
+      </React.Suspense>
     </BrokerLayout>
   );
 }
