@@ -200,10 +200,8 @@ const propertyBlock = `    match /properties/{propertyId} {
       allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        assetDetailsWriteIsSafe(request.resource.data) &&
         (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
-      allow update: if isNotSuspended() &&
-        assetDetailsWriteIsSafe(request.resource.data) && (
+      allow update: if isNotSuspended() && (
         (canManageProperties() && safeManagedPropertyUpdate()) ||
         safeOwnerPropertyUpdate()
       );
