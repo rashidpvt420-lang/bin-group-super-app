@@ -117,6 +117,16 @@ export const adminReviewBrokerPayoutRequest = onCall(
         throw new HttpsError("failed-precondition", "A commission no longer matches this Broker payout request.");
       }
 
+      const voidCommission = commissionSnaps.find((snapshot) => {
+        const data = snapshot.data() || {};
+        const status = upper(data.status || data.commissionStatus || data.payoutStatus || data.settlementStatus);
+        return data.voided === true || data.isVoid === true || Boolean(text(data.voidReason)) ||
+          status.includes("VOID") || status.includes("CANCEL");
+      });
+      if (voidCommission) {
+        throw new HttpsError("failed-precondition", "VOID or cancelled commissions cannot be settled.");
+      }
+
       const state = requestState(payout);
       const notificationRef = db.collection("notifications").doc(
         "broker_payout_" + requestId + "_" + action.toLowerCase(),

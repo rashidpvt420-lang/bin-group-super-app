@@ -6,6 +6,9 @@ import {
 } from '@mui/material';
 import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
 import { collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
+import { useLanguage } from '@bin/shared';
+import { useAuth } from '../../context/AuthContext';
+import { canSettlePayroll } from './PayrollManagementPage';
 
 type PaymentRecord = {
     id: string;
@@ -127,6 +130,9 @@ type ReceiptRepairRecord = {
 };
 
 export default function PaymentApprovalsPage() {
+    const { t } = useLanguage();
+    const { user, mfaVerified } = useAuth();
+    const canApprovePayments = canSettlePayroll(user, mfaVerified);
     const [rows, setRows] = React.useState<PaymentRecord[]>([]);
     const [receiptRepairs, setReceiptRepairs] = React.useState<ReceiptRepairRecord[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -354,6 +360,10 @@ export default function PaymentApprovalsPage() {
     };
 
     const approvePayment = async () => {
+        if (!canApprovePayments) {
+            setError('Payment approvals are limited to Admin, CEO and Finance Admin with a verified MFA session.');
+            return;
+        }
         if (!approvalTarget) return;
         const rent = isRentPayment(approvalTarget);
         const design = isDesignPayment(approvalTarget);
@@ -552,11 +562,13 @@ export default function PaymentApprovalsPage() {
                 <Box>
                     <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>FINANCE COMMAND</Typography>
                     <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1 }}>15% Payment Verification & Final Approval</Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>Owner activation follows completed property visits. Design deposits use their own quote-bound Cash/Cheque verification and do not unlock an Owner account.</Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.86)', mt: 1 }}>Owner activation follows completed property visits. Design deposits use their own quote-bound Cash/Cheque verification and do not unlock an Owner account.</Typography>
                 </Box>
                 <Button startIcon={<RefreshCw size={16} />} onClick={() => window.location.reload()} sx={{ color: '#DAA520', borderColor: 'rgba(218,165,32,0.35)' }} variant="outlined">Refresh</Button>
             </Stack>
 
+            <Alert severity="info" data-testid="payment-approval-gate" sx={{ mb: 3 }}>{t('fin.payment_approval_gate')}</Alert>
+            {!canApprovePayments && <Alert severity="warning" sx={{ mb: 3 }}>Approve stays off until this session is Admin, CEO or Finance Admin with MFA.</Alert>}
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
             {queueLimitWarnings.length > 0 && <Alert severity="warning" data-testid="admin-payment-queue-capped" sx={{ mb: 3 }}>At least one Finance queue reached its display limit ({queueLimitWarnings.join(', ')}). Older items may be hidden. Do not treat the visible rows or an empty subset as a complete queue until the full queue is reviewed.</Alert>}
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
@@ -638,7 +650,7 @@ export default function PaymentApprovalsPage() {
                                         <TableCell><Typography variant="body2" sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><FileCheck2 size={13} color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'} /><Typography variant="caption" color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'}>{hasImmutableReceipt(row) ? 'Immutable receipt recorded' : 'Receipt required'}</Typography></Stack>{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open evidence</Button>}</TableCell>
                                         <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                         <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : (row.status || row.paymentStatus || row.verificationState || 'pending')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
-                                        <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button data-testid="admin-payment-approve" size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{design ? 'Verify Design Deposit' : rent ? 'Verify Rent' : hasImmutableReceipt(row) ? 'Review 15% Payment' : 'Record 15% Receipt'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
+                                        <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button data-testid="admin-payment-approve" size="small" startIcon={<CheckCircle size={14} />} disabled={!canApprovePayments || busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{design ? 'Verify Design Deposit' : rent ? 'Verify Rent' : hasImmutableReceipt(row) ? 'Review 15% Payment' : 'Record 15% Receipt'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
                                     </TableRow>;
                                 })}
                             </TableBody>
@@ -666,7 +678,7 @@ export default function PaymentApprovalsPage() {
                         <TextField label="Internal verification notes" value={internalNotes} onChange={(event) => setInternalNotes(event.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button data-testid="admin-payment-confirm-approval" onClick={() => void approvePayment()} disabled={!approvalTarget || busyId === approvalTarget?.id} startIcon={busyId === approvalTarget?.id ? <CircularProgress size={16} /> : <CheckCircle size={16} />} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'Verify 15% & Approve Owner' : 'Record 15% Receipt'}</Button></DialogActions>
+                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button data-testid="admin-payment-confirm-approval" onClick={() => void approvePayment()} disabled={!canApprovePayments || !approvalTarget || busyId === approvalTarget?.id} startIcon={busyId === approvalTarget?.id ? <CircularProgress size={16} /> : <CheckCircle size={16} />} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'Verify 15% & Approve Owner' : 'Record 15% Receipt'}</Button></DialogActions>
             </Dialog>
 
             <Dialog open={Boolean(rejectTarget)} onClose={() => !busyId && setRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>

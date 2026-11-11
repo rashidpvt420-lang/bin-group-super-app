@@ -35,3 +35,24 @@ export function paidCommissionAmount(rows: Array<{ status?: unknown; amount?: un
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 }
+
+/** Settlement column: VOID rows are never shown as AVAILABLE or settleable. */
+export function settlementLabel(row: { status?: unknown; payoutStatus?: unknown; settlementStatus?: unknown; voided?: unknown; isVoid?: unknown; voidReason?: unknown }): string {
+  if (isVoidOrClosedCommission(row) || String(row?.status || "").toUpperCase() === "VOID") {
+    return "VOID — not settleable";
+  }
+  const payout = String(row?.payoutStatus || row?.settlementStatus || "").trim();
+  if (!payout) return "NOT REQUESTED";
+  return payout.replaceAll("_", " ").toUpperCase();
+}
+
+export function settlementLabelLocalized(row: Parameters<typeof settlementLabel>[0], lang: "en" | "ar" = "en"): string {
+  const value = settlementLabel(row);
+  if (value === "VOID — not settleable") {
+    return lang === "ar" ? "ملغاة — غير قابلة للتسوية" : value;
+  }
+  if (value === "NOT REQUESTED") {
+    return lang === "ar" ? "لم يُطلب" : value;
+  }
+  return value;
+}

@@ -170,8 +170,8 @@ export default function PaintingProjectsAdminPage() {
     <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight={800} gutterBottom>{t('Painting projects', 'مشاريع الدهان')}</Typography>
       <Typography color="text.secondary" sx={{ mb: 2 }}>
-        {t('One-time jobs. Quotes enforce the minimum margin on the server; only the owner can approve, by email code.',
-          'أعمال لمرة واحدة. يفرض الخادم الحد الأدنى للهامش؛ الموافقة للمالك فقط عبر رمز البريد الإلكتروني.')}
+        {t('One-time jobs. Quotes enforce the minimum margin on the server. The owner accepts the quote by email code. Internal payment approval is limited to a Finance Manager or Finance Controller with MFA, and the invoice issuer cannot approve.',
+          'أعمال لمرة واحدة. يفرض الخادم الحد الأدنى للهامش. يقبل المالك العرض عبر رمز البريد الإلكتروني. الموافقة الداخلية على الدفع مقتصرة على مدير أو مراقب مالي مع MFA، ولا يجوز لمُصدر الفاتورة الموافقة.')}
       </Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {notice && <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert>}

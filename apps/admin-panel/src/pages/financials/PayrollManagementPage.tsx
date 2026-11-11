@@ -190,6 +190,9 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 3 }}>{actionError}</Alert>}
+      <Alert severity="info" data-testid="payroll-duty-gate" sx={{ mb: 3 }}>{mode === 'prepare' ? t('fin.payroll_prep_gate') : t('fin.payroll_settle_gate')}</Alert>
+      {mode === 'prepare' && !showPrepare && <Alert severity="warning" sx={{ mb: 3 }}>{t('fin.payroll_prep_denied')}</Alert>}
+      {mode === 'settle' && !showSettle && <Alert severity="warning" sx={{ mb: 3 }}>{t('fin.payroll_settle_gate')}</Alert>}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
         <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>

@@ -116,7 +116,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
               ⚙ {t('nav.settings')}
             </MenuItem>
             <MenuItem onClick={handleLogout} sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-              <LogoutIcon sx={{ mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 }} /> {t('nav.logout')}
+              <LogoutIcon sx={{ mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 }} /> <Box component="span" dir={isRTL ? 'rtl' : 'ltr'} lang={isRTL ? 'ar' : 'en'} sx={{ unicodeBidi: 'isolate' }}>{t('nav.logout')}</Box>
             </MenuItem>
           </Menu>
         </Toolbar>

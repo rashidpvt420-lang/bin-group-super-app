@@ -29,7 +29,7 @@ const Navigation = () => {
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
+        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/hr/payroll-prep', color: '#6366f1' },
         { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
         { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
         { text: navText('Design Studio Manager', 'مدير استوديو التصميم'), icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
@@ -207,7 +207,7 @@ const Navigation = () => {
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                     >
                         <ListItemIcon sx={{ color: '#ef4444', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><LogoutIcon /></ListItemIcon>
-                        <ListItemText primary={t('nav.logout') || navText('Sign Out', 'تسجيل الخروج')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#ef4444' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        <ListItemText primary={t('nav.logout') || navText('Sign Out', 'تسجيل الخروج')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#ef4444', dir: isRTL ? 'rtl' : 'ltr', lang: isRTL ? 'ar' : 'en', sx: { unicodeBidi: 'isolate' } }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
                 </List>
             </Box>

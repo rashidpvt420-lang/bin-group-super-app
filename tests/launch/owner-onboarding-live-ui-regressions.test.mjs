@@ -32,17 +32,18 @@ const requiredSystemKeys = [
   'evReadiness',
 ];
 
-test('property-location fallback iframe is permitted by production CSP', async () => {
+test('property-location fallback map tiles are permitted by production CSP', async () => {
   const firebaseConfig = JSON.parse(await read('firebase.json'));
   const appHosting = firebaseConfig.hosting.find((entry) => entry.target === 'app');
   assert.ok(appHosting, 'app hosting target must exist');
   const globalHeaders = appHosting.headers.find((entry) => entry.source === '**');
   const csp = globalHeaders?.headers?.find((header) => header.key === 'Content-Security-Policy')?.value || '';
-  assert.match(csp, /frame-src[^;]*https:\/\/www\.openstreetmap\.org/);
+  assert.match(csp, /img-src[^;]*https:/);
 
   const locationSource = await read('src/components/onboarding/PropertyLocationStep.tsx');
-  assert.match(locationSource, /www\.openstreetmap\.org\/export\/embed\.html/);
-  assert.match(locationSource, /component="iframe"/);
+  const osmSource = await read('src/components/maps/OsmDraggableMap.tsx');
+  assert.match(locationSource, /OsmDraggableMap/);
+  assert.match(osmSource, /tile\.openstreetmap\.org/);
 });
 
 test('commercial review renders every selectable building system with visible theme-aware chips', async () => {

@@ -238,7 +238,7 @@ function Layout() {
                             </Box>
                         </Button>
                         <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>
-                            {t('nav.logout') || shellText('LOGOUT', 'تسجيل الخروج')}
+                            <Box component="span" dir={isRTL ? 'rtl' : 'ltr'} lang={isRTL ? 'ar' : 'en'} sx={{ unicodeBidi: 'isolate' }}>{t('nav.logout') || shellText('LOGOUT', 'تسجيل الخروج')}</Box>
                         </Button>
                     </Box>
                 </Box>

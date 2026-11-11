@@ -54,7 +54,29 @@ export const TECH_STRINGS: Record<string, Row> = {
   'tech.job.speak': { en: 'Speak your note', ar: 'قل ملاحظتك بصوتك', hi: 'बोलकर नोट लिखें', ur: 'بول کر نوٹ لکھیں', ml: 'സംസാരിച്ച് കുറിപ്പ്', tl: 'Sabihin ang tala', bn: 'বলে নোট লিখুন' },
   'tech.job.listening': { en: 'Listening… tap to stop', ar: 'جارٍ الاستماع… اضغط للإيقاف', hi: 'सुन रहे हैं… रोकने के लिए टैप करें', ur: 'سن رہے ہیں… روکنے کے لیے ٹیپ کریں', ml: 'കേൾക്കുന്നു… നിർത്താൻ തൊടുക', tl: 'Nakikinig… i-tap para tumigil', bn: 'শুনছি… থামাতে চাপুন' },
   'tech.job.voiceUnavailable': { en: 'Voice typing is not available on this phone. Tap the buttons instead.', ar: 'الكتابة الصوتية غير متاحة على هذا الهاتف. استخدم الأزرار.', hi: 'इस फ़ोन पर बोलकर लिखना उपलब्ध नहीं। बटन दबाएँ।', ur: 'اس فون پر بول کر لکھنا دستیاب نہیں۔ بٹن دبائیں۔', ml: 'ഈ ഫോണിൽ വോയ്സ് ടൈപ്പിംഗ് ഇല്ല. ബട്ടണുകൾ ഉപയോഗിക്കുക.', tl: 'Walang voice typing sa phone na ito. Gamitin ang mga button.', bn: 'এই ফোনে ভয়েস টাইপিং নেই। বোতাম ব্যবহার করুন।' },
+  'tech.home.designJobs': { en: 'Design jobs', ar: 'أعمال التصميم', hi: 'डिज़ाइन काम', ur: 'ڈیزائن کے کام', ml: 'ഡിസൈൻ ജോലികൾ', tl: 'Mga design job', bn: 'ডিজাইন কাজ' },
+  'tech.home.designJobsTitle': { en: 'Locked room designs', ar: 'تصاميم الغرف المقفلة', hi: 'लॉक किए कमरे के डिज़ाइन', ur: 'مقفل کمرے کے ڈیزائن', ml: 'ലോക്ക് ചെയ്ത മുറി ഡിസൈനുകൾ', tl: 'Mga naka-lock na disenyo ng kwarto', bn: 'লক করা রুম ডিজাইন' },
+  'tech.home.designJobsDetail': { en: 'Open the picture and layout brief for a design the tenant locked.', ar: 'افتح الصورة وموجز التنفيذ للتصميم الذي قفله المستأجر.', hi: 'किरायेदार द्वारा लॉक किया गया चित्र और लेआउट खोलें।', ur: 'کرایہ دار کے مقفل کردہ تصویر اور لے آؤٹ کو کھولیں۔', ml: 'ടെനന്റ് ലോക്ക് ചെയ്ത ഡിസൈനിന്റെ ചിത്രവും ലേഔട്ടും തുറക്കുക.', tl: 'Buksan ang larawan at layout brief ng disenyong ni-lock ng tenant.', bn: 'ভাড়াটিয়া লক করা ডিজাইনের ছবি ও লেআউট খুলুন।' },
+  'tech.history.propertyFallback': { en: 'Property', ar: 'العقار', hi: 'संपत्ति', ur: 'پراپرٹی', ml: 'പ്രോപ്പർട്ടി', tl: 'Property', bn: 'সম্পত্তি' },
 };
+
+
+let techDirLocks = 0;
+
+function appDocumentDir(): 'ltr' | 'rtl' {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage.getItem('bin_language') === 'ar') return 'rtl';
+  } catch { /* ignore */ }
+  return 'ltr';
+}
+
+function applyTechnicianDocumentDir(dir: 'ltr' | 'rtl') {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dir = dir;
+  document.body.dir = dir;
+  document.documentElement.setAttribute('dir', dir);
+  document.body.setAttribute('dir', dir);
+}
 
 const STORAGE_KEY = 'bin_tech_language';
 const LANGUAGE_EVENT = 'bin-tech-language-change';
@@ -100,6 +122,18 @@ export function useTechnicianLanguage(appLang: string) {
     try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* ignore */ }
     try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { /* ignore */ }
   }, []);
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    applyTechnicianDocumentDir(techDir(lang));
+    techDirLocks += 1;
+    return () => {
+      techDirLocks -= 1;
+      if (techDirLocks <= 0) {
+        techDirLocks = 0;
+        applyTechnicianDocumentDir(appDocumentDir());
+      }
+    };
+  }, [lang]);
   const tt = useCallback((key: string, fallbackEn: string) => techT(lang, key, fallbackEn), [lang]);
   return { lang, setLang, tt, isRTL: techDir(lang) === 'rtl', locale: techLocale(lang) };
 }

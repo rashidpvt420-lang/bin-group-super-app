@@ -55,7 +55,17 @@ export default function OwnerSimpleDashboardPage() {
   const openMaintenance = commandCounts.openTickets;
   const failedSources = commandCounts.failedSources || [];
   const truncatedSources = commandCounts.truncatedSources || [];
-  const incompleteSources = [...failedSources, ...truncatedSources.map((source) => `${source} (query limit reached)`)];
+  const sourceLabel = (source: string) => {
+    const key = source.replace(/ \(query limit reached\)$/, '');
+    const labels: Record<string, [string, string]> = {
+      tickets: ['repair tickets', 'تذاكر الإصلاح'],
+      approvals: ['cost approvals', 'موافقات التكاليف'],
+    };
+    const [en, arText] = labels[key] || [key.replace(/_/g, ' '), key.replace(/_/g, ' ')];
+    const base = lang === 'ar' ? arText : en;
+    return source.includes('query limit reached') ? `${base} (${lang === 'ar' ? 'تم بلوغ حد الاستعلام' : 'query limit reached'})` : base;
+  };
+  const incompleteSources = [...failedSources, ...truncatedSources.map((source) => `${source} (query limit reached)`)].map(sourceLabel);
 
   const todo = [
     { key: 'approvals', count: commandCounts.pendingCostApprovals, partial: truncatedSources.includes('approvals') || truncatedSources.includes('tickets'), title: t('owner.home.approvals', 'Approve quotes and finished work', 'اعتماد العروض والأعمال المنجزة'), path: '/owner/approvals', tone: 'warn' as const },

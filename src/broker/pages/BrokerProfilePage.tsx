@@ -56,6 +56,8 @@ type BrokerKycResult = {
   commissionTermsVersion: string;
 };
 
+import { brokerTermsLabel } from '../brokerTermsLabel';
+
 const CURRENT_TERMS_VERSION = 'BIN_BROKER_TERMS_2026_01';
 const inputSx = {
   '& .MuiFilledInput-root': { bgcolor: '#F3F4F6', borderRadius: 3, color: binThemeTokens.textPrimary },
@@ -213,7 +215,7 @@ export default function BrokerProfilePage() {
     { label: label('RERA licence', 'رخصة ريرا'), complete: summary.kyc.reraVerified, value: summary.kyc.reraLicenseMasked || localizedStatus(summary.kyc.reraStatus) },
     { label: label('Identity evidence', 'إثبات الهوية'), complete: Boolean(summary.kyc.tradeLicenseMasked || summary.kyc.emiratesIdMasked || summary.kyc.passportMasked), value: summary.kyc.tradeLicenseMasked || summary.kyc.emiratesIdMasked || summary.kyc.passportMasked || '—' },
     { label: label('Verified IBAN', 'الآيبان الموثّق'), complete: summary.kyc.ibanVerified, value: summary.kyc.bankIbanMasked || '—' },
-    { label: label('Commission agreement', 'اتفاقية العمولة'), complete: summary.kyc.commissionAgreementAccepted, value: summary.kyc.commissionTermsVersion || '—' },
+    { label: label('Commission agreement', 'اتفاقية العمولة'), complete: summary.kyc.commissionAgreementAccepted, value: summary.kyc.commissionTermsVersion ? brokerTermsLabel(summary.kyc.commissionTermsVersion, lang === 'ar' ? 'ar' : 'en') : '—' },
     { label: label('Approval hash', 'ربط الاعتماد'), complete: summary.kyc.approvalBound, value: summary.kyc.approvalBound ? label('Bound', 'مرتبط') : label('Pending', 'معلق') },
   ] : [], [summary, lang]);
 
@@ -283,7 +285,7 @@ export default function BrokerProfilePage() {
                 <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Account holder', 'صاحب الحساب')} value={bankAccountHolder} onChange={(event) => setBankAccountHolder(event.target.value)} sx={inputSx} /></Grid>
                 <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Full UAE IBAN', 'الآيبان الإماراتي الكامل')} value={bankIban} onChange={(event) => setBankIban(event.target.value)} placeholder={summary?.kyc.bankIbanMasked || ''} sx={inputSx} /></Grid>
               </Grid>
-              <FormControlLabel sx={{ mt: 3 }} control={<Checkbox checked={commissionAgreementAccepted} onChange={(event) => setCommissionAgreementAccepted(event.target.checked)} />} label={label(`I accept Broker commission terms ${CURRENT_TERMS_VERSION}.`, `أوافق على شروط عمولة الوسيط ${CURRENT_TERMS_VERSION}.`)} />
+              <FormControlLabel sx={{ mt: 3 }} control={<Checkbox checked={commissionAgreementAccepted} onChange={(event) => setCommissionAgreementAccepted(event.target.checked)} />} label={label(`I accept ${brokerTermsLabel(CURRENT_TERMS_VERSION, 'en')}.`, `أوافق على ${brokerTermsLabel(CURRENT_TERMS_VERSION, 'ar')}.`)} />
               {summary?.kyc.reviewReason && <Alert severity={String(summary.kyc.brokerKycStatus).toUpperCase() === 'REJECTED' ? 'error' : 'info'} sx={{ mt: 2 }}>{summary.kyc.reviewReason}</Alert>}
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 3 }}>
                 <Button variant="contained" startIcon={updating ? <CircularProgress size={18} /> : <Save size={18} />} disabled={updating} onClick={() => void handleSave()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{label('SUBMIT KYC FOR REVIEW', 'إرسال التحقق للمراجعة')}</Button>

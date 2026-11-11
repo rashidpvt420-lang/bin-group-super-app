@@ -28,7 +28,7 @@ export default function BrokerSimpleDashboardPage() {
           <StatTile isRTL={isRTL} label={t('broker.home.leads', 'Active leads', 'عملاء نشطون')} value={ready ? signals.activeLeads : null} onClick={() => navigate('/broker/leads')} />
           <StatTile isRTL={isRTL} label={t('broker.home.contracts', 'Contracts signed', 'عقود موقعة')} value={ready ? signals.attributedContracts : null} onClick={() => navigate('/broker/deals')} />
           <StatTile isRTL={isRTL} label={t('broker.home.commission', 'Pending settlement', 'تسوية معلقة')} value={ready ? aed(signals.pendingCommissionAmount) : null} onClick={() => navigate('/broker/commissions')} />
-          <StatTile isRTL={isRTL} label={t('broker.home.referrals', 'Referrals', 'الإحالات')} value={t('broker.home.open', 'Open', 'فتح')} onClick={() => navigate('/broker/referrals')} />
+          <StatTile isRTL={isRTL} label={t('broker.home.referrals', 'Referrals', 'الإحالات')} value={ready ? signals.referralCount : null} onClick={() => navigate('/broker/referrals')} />
         </StatGrid>
 
         <UiButton tone="primary" onClick={() => navigate('/broker/leads/new')}>{t('broker.home.addLead', 'Add a lead', 'إضافة عميل')}</UiButton>

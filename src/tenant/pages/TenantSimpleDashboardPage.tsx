@@ -13,6 +13,8 @@ import { leaseEndMs, useTenantHomeData } from '../hooks/useTenantHomeData';
 import { useTenantHomeExtras } from '../components/TenantHomeSummary';
 import { daysUntil } from '../components/TenantRentSchedulePanel';
 import { useRole } from '../../context/RoleContext';
+import { tenantEmergencySlaCopy } from '../utils/emergencySlaCopy';
+import { formatResidenceLabel } from '../utils/residenceLabel';
 
 /** Services that used to be reachable only from the full dashboard. */
 export const TENANT_MORE_SERVICES: { path: string; en: string; ar: string }[] = [
@@ -55,7 +57,7 @@ export default function TenantSimpleDashboardPage() {
   const { user } = useRole();
   const { unitLoading, unit, ticketsLoading, ticketsError, activeTickets } = useTenantHomeData();
   const { lease, rent, lastPaid, notices } = useTenantHomeExtras(user?.uid || '', String(unit?.propertyId || ''), unitLoading);
-  const unitTitle = unit ? [unit.unitNumber ? `${t('tenant.home.unit', 'Unit', 'وحدة')} ${unit.unitNumber}` : '', unit.propertyName || unit.buildingName || ''].filter(Boolean).join(' · ') : '';
+  const unitTitle = formatResidenceLabel(unit, ar ? 'ar' : 'en');
   const endMs = leaseEndMs(unit) ?? leaseEndMs(lease.data ? { leaseEndDate: lease.data.leaseEndDate || lease.data.endDate } : null);
   const daysLeft = endMs ? Math.ceil((endMs - Date.now()) / DAY) : null;
   const active = activeTickets[0];
@@ -131,10 +133,16 @@ export default function TenantSimpleDashboardPage() {
           </Box>
         </UiCard>
 
-        <Box component="button" type="button" onClick={() => navigate('/tenant/emergency')} sx={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', minHeight: ui.touchTarget, borderRadius: '14px', bgcolor: ui.badBg, color: ui.badText, px: 2, py: 1.5, textAlign: isRTL ? 'right' : 'left', '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
-          <Typography sx={{ ...uiType.body, fontWeight: 800, color: ui.badText }}>{t('tenant.home.emergency', 'Emergency? Get help now', 'طوارئ؟ اطلب المساعدة الآن')}</Typography>
-          <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : tx('tenant.home.responseWithin', 'Response within {{minutes}} minutes', { minutes: CANONICAL_SLA_POLICY.EMERGENCY.minutes })}</Typography>
-        </Box>
+        {(() => {
+          const sla = tenantEmergencySlaCopy({ hasResidence: Boolean(unit), minutes: CANONICAL_SLA_POLICY.EMERGENCY.minutes, lang: ar ? 'ar' : 'en' });
+          return (
+            <Box component="button" type="button" onClick={() => navigate('/tenant/emergency')} data-testid="tenant-home-emergency" sx={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', minHeight: ui.touchTarget, borderRadius: '14px', bgcolor: ui.badBg, color: ui.badText, px: 2, py: 1.5, textAlign: isRTL ? 'right' : 'left', '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
+              <Typography sx={{ ...uiType.body, fontWeight: 800, color: ui.badText }}>{sla.title}</Typography>
+              <Typography sx={{ ...uiType.small, color: ui.badText }}>{sla.detail}</Typography>
+              <Typography sx={{ ...uiType.small, color: ui.badText, mt: 0.5, fontWeight: 700 }}>{sla.nextStep}</Typography>
+            </Box>
+          );
+        })()}
 
         <WhatsAppJobUpdatesCard />
         <SuggestionBoxCard role="tenant" />

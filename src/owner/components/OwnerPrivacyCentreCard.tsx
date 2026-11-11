@@ -3,6 +3,7 @@ import { MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useLanguage } from '@bin/shared';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { EmptyState, ErrorState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
+import { privacyActionLabel, privacyFieldLabel, privacyRoleLabel, privacyScopeLabel, privacyStatusLabel } from '../utils/privacyCentreLabels';
 
 type Centre = {
   accessLog: { id: string; action: string; actorRole: string | null; byYou: boolean; at: string | null }[];
@@ -43,11 +44,11 @@ export default function OwnerPrivacyCentreCard() {
       {msg && <Typography variant="body2" sx={{ mb: 1 }}>{msg}</Typography>}
       <Typography variant="subtitle2">{t('Recorded access to your data', 'سجل الوصول إلى بياناتك')}</Typography>
       {data && data.accessLog.length === 0 && <EmptyState isRTL={isRTL} title={t('No recorded access events yet', 'لا توجد أحداث وصول مسجلة بعد')} />}
-      {data?.accessLog.slice(0, 10).map((e) => <ListRow key={e.id} isRTL={isRTL} title={e.action} subtitle={`${e.byYou ? t('You', 'أنت') : e.actorRole ?? '—'} · ${e.at ?? ''}`} />)}
+      {data?.accessLog.slice(0, 10).map((e) => <ListRow key={e.id} isRTL={isRTL} title={privacyActionLabel(e.action, lang === 'ar' ? 'ar' : 'en')} subtitle={`${e.byYou ? t('You', 'أنت') : privacyRoleLabel(e.actorRole, lang === 'ar' ? 'ar' : 'en')} · ${e.at ?? ''}`} />)}
       <UiButton tone="outline" onClick={exportData} sx={{ my: 1 }}>{t('Download my data (JSON)', 'تنزيل بياناتي (JSON)')}</UiButton>
       <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('Shares', 'المشاركات')}</Typography>
       {data?.shares.map((s) => (
-        <ListRow key={s.shareId} isRTL={isRTL} title={`${s.granteeEmail} · ${s.scope}`} subtitle={s.expiresAt ?? ''}
+        <ListRow key={s.shareId} isRTL={isRTL} title={`${s.granteeEmail} · ${privacyScopeLabel(s.scope, lang === 'ar' ? 'ar' : 'en')}`} subtitle={s.expiresAt ?? ''}
           trailing={s.state === 'ACTIVE'
             ? <UiButton tone="outline" onClick={() => run('ownerRevokeDataShare', { shareId: s.shareId }, t('Share revoked.', 'تم إلغاء المشاركة.'))}>{t('Revoke', 'إلغاء')}</UiButton>
             : <StatusChip tone={sTone(s.state)} label={sLabel(s.state)} />} />
@@ -63,10 +64,10 @@ export default function OwnerPrivacyCentreCard() {
         <UiButton disabled={!share.granteeEmail} onClick={() => run('ownerCreateDataShare', share, t('Share created.', 'تم إنشاء المشاركة.'))}>{t('Create share', 'إنشاء مشاركة')}</UiButton>
       </Stack>
       <Typography variant="subtitle2" sx={{ mt: 2 }}>{t('Ask for a correction', 'طلب تصحيح')}</Typography>
-      {data?.corrections.map((c) => <ListRow key={c.requestId} isRTL={isRTL} title={c.field} subtitle={c.details} trailing={<StatusChip label={c.status} />} />)}
+      {data?.corrections.map((c) => <ListRow key={c.requestId} isRTL={isRTL} title={privacyFieldLabel(c.field, lang === 'ar' ? 'ar' : 'en')} subtitle={c.details} trailing={<StatusChip label={privacyStatusLabel(c.status, lang === 'ar' ? 'ar' : 'en')} />} />)}
       <Stack spacing={1} sx={{ mt: 1 }}>
         <TextField select size="small" label={t('What is wrong', 'ما الخطأ')} value={corr.field} onChange={(e) => setCorr({ ...corr, field: e.target.value })}>
-          {['PROFILE', 'PROPERTY', 'LEASE', 'PAYMENT_RECORD', 'OTHER'].map((f) => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+          {['PROFILE', 'PROPERTY', 'LEASE', 'PAYMENT_RECORD', 'OTHER'].map((f) => <MenuItem key={f} value={f}>{privacyFieldLabel(f, lang === 'ar' ? 'ar' : 'en')}</MenuItem>)}
         </TextField>
         <TextField size="small" multiline minRows={2} label={t('Details', 'التفاصيل')} value={corr.details} onChange={(e) => setCorr({ ...corr, details: e.target.value })} />
         <UiButton disabled={corr.details.trim().length < 5} onClick={() => run('ownerSubmitCorrectionRequest', corr, t('Request sent to BIN.', 'تم إرسال الطلب إلى BIN.'))}>{t('Send request', 'إرسال الطلب')}</UiButton>

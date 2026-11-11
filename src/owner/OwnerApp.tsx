@@ -18,6 +18,7 @@ import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import { useRole } from '../context/RoleContext';
 import { useOwnerPropertyLabels } from './hooks/useOwnerPropertyLabels';
 import { useOwnerCommandCounts } from './hooks/useOwnerCommandCounts';
+import { formatOwnerCompletionAlert } from './utils/ownerCompletionAlertText';
 import PropertyOnboardingPage from '../pages/PropertyOnboardingPage';
 
 import OwnerSimpleDashboardPage from './pages/OwnerSimpleDashboardPage';
@@ -56,10 +57,12 @@ const OwnerProfileWithReadiness = () => <><OwnerProfileReadinessCard /><OwnerPro
 
 // Owner bell: stored notification text may reference a property by its raw
 // document ID; show the readable property name/address instead.
-const OwnerNotificationBell = ({ label }: { label?: string }) => {
+const OwnerNotificationBell = ({ label, pendingSignOffs }: { label?: string; pendingSignOffs: number }) => {
     const { user } = useRole();
+    const { lang } = useLanguage();
     const { formatPropertyText } = useOwnerPropertyLabels(user?.uid);
-    return <NotificationBell formatText={formatPropertyText} label={label} />;
+    const formatText = (value: string) => formatOwnerCompletionAlert(formatPropertyText(value), pendingSignOffs, lang === 'ar' ? 'ar' : 'en');
+    return <NotificationBell formatText={formatText} label={label} />;
 };
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
@@ -69,7 +72,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const label = (key: string, en: string) => tx(key, en);
     const isPhoneHeader = usePhoneHeader();
     const isHome = location.pathname === '/owner' || location.pathname === '/owner/dashboard';
-    const approvalCount = useOwnerCommandCounts().pendingCostApprovals;
+    const commandCounts = useOwnerCommandCounts();
+    const approvalCount = commandCounts.pendingCostApprovals;
+    const approvalSignOffs = commandCounts.pendingTicketSignOffs;
     const approvalsLabel = approvalCount > 0 ? `${label('nav.owner_approvals', 'Approvals')} (${approvalCount})` : label('nav.owner_approvals', 'Approvals');
 
     return (
@@ -87,7 +92,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
                     {isPhoneHeader ? (
                     <Stack direction={'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
-                        <OwnerNotificationBell label="Alerts" />
+                        <OwnerNotificationBell label="Alerts" pendingSignOffs={approvalSignOffs} />
                         <PortalHeaderMenu role="owner" items={[
                             { key: 'approvals', label: approvalsLabel, onClick: () => navigate('/owner/approvals') },
                             { key: 'profile', label: label('nav.owner_profile', 'Owner profile'), onClick: () => navigate('/owner/profile'), icon: UserCircle },
@@ -98,7 +103,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <Badge badgeContent={approvalCount} color="warning" max={99} data-testid="owner-approvals-count">
                           <Button aria-label={approvalsLabel} onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         </Badge>
-                        <OwnerNotificationBell label="Alerts" />
+                        <OwnerNotificationBell label="Alerts" pendingSignOffs={approvalSignOffs} />
                         <IconButton aria-label={label('nav.owner_profile', 'Owner profile')} onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
                         <PortalSessionControls role="owner" accent={binThemeTokens.goldHover} />
                     </Stack>
