@@ -893,7 +893,13 @@ export function describeAddOnLine(id: string): OwnerQuoteCommercialLine {
   const noteEn = listed && listed.unit !== 'annual' && annual > 0
     ? `AED ${listed.price} ${listed.unit}, annualised.`
     : undefined;
-  return { id: canonicalId, labelEn, labelAr, amountAed: annual, noteEn, noteAr: noteEn ? 'تم تحويل السعر إلى مبلغ سنوي.' : undefined };
+  return {
+    id: canonicalId,
+    labelEn,
+    labelAr,
+    amountAed: annual,
+    ...(noteEn ? { noteEn, noteAr: 'تم تحويل السعر إلى مبلغ سنوي.' } : {}),
+  };
 }
 
 /**
