@@ -45,7 +45,13 @@ export interface QuoteInput {
   ratesVerified?: boolean;
   verifiedMaintenanceRate?: number;
   verifiedManagementRate?: number;
+  /**
+   * Optional override for tests or a future founder-set rate.
+   * The live default is OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT, which stays unset.
+   */
+  officeHighRiseLogisticsUpliftPercent?: number | null;
 }
+
 
 export interface QuoteOutput {
   baseQuote: number;
@@ -221,6 +227,46 @@ export const SYSTEM_DRIVEN_ADDON_IDS: ReadonlySet<string> = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
 ]);
+
+/**
+ * High-rise office logistics uplift. Pending a founder decision and must stay null until set.
+ * Unverified market research cited a 15-25% range; that range is not applied.
+ * When a confirmed percent is set, it applies only to Office (off-sml) with 15 or more floors.
+ */
+export const OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT: number | null = null;
+export const OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_FLOOR_THRESHOLD = 15;
+
+export function resolveOfficeHighRiseLogisticsUpliftPercent(
+  percent: number | null | undefined = OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+): number | null {
+  return typeof percent === 'number' && Number.isFinite(percent) && percent > 0 ? percent : null;
+}
+
+export function shouldApplyOfficeHighRiseLogisticsUplift(
+  assetId: string,
+  input: Pick<QuoteInput, 'floors' | 'officeHighRiseLogisticsUpliftPercent'>,
+  percent: number | null | undefined = input.officeHighRiseLogisticsUpliftPercent ?? OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+): boolean {
+  if (assetId !== 'off-sml') return false;
+  if (resolveOfficeHighRiseLogisticsUpliftPercent(percent) == null) return false;
+  return (input.floors || 0) >= OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_FLOOR_THRESHOLD;
+}
+
+export function applyOfficeHighRiseLogisticsUplift(
+  baseQuote: number,
+  assetId: string,
+  input: Pick<QuoteInput, 'floors' | 'officeHighRiseLogisticsUpliftPercent'>,
+  pricingExplanation: string[],
+): number {
+  const percent = resolveOfficeHighRiseLogisticsUpliftPercent(
+    input.officeHighRiseLogisticsUpliftPercent ?? OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+  );
+  if (percent == null || !shouldApplyOfficeHighRiseLogisticsUplift(assetId, input, percent)) return baseQuote;
+  const next = baseQuote * (1 + percent / 100);
+  pricingExplanation.push(`High-rise office logistics uplift ${percent}% applied to the Office base rate after a founder-set value; this is not an invented default.`);
+  return next;
+}
+
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
   standard_apartment: 'apt-std', apartment: 'apt-std', residential: 'apt-std', luxury_apartment: 'apt-lux',
@@ -443,6 +489,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     ratesVerified: raw.ratesVerified === true,
     verifiedMaintenanceRate: positiveNumber(raw.verifiedMaintenanceRate),
     verifiedManagementRate: positiveNumber(raw.verifiedManagementRate),
+    officeHighRiseLogisticsUpliftPercent: raw.officeHighRiseLogisticsUpliftPercent === undefined || raw.officeHighRiseLogisticsUpliftPercent === null
+      ? raw.officeHighRiseLogisticsUpliftPercent
+      : (Number.isFinite(Number(raw.officeHighRiseLogisticsUpliftPercent)) ? Number(raw.officeHighRiseLogisticsUpliftPercent) : null),
   };
 }
 
@@ -696,6 +745,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     baseQuote = assetClass.minimumAnnualContract;
     pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} applied.`);
   }
+  baseQuote = applyOfficeHighRiseLogisticsUplift(baseQuote, assetId, safeInput, pricingExplanation);
 
   const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
   const { emirateResolution, emirateMultiplier } = location;

@@ -11,6 +11,12 @@ import {
   formatPropertyManagementLicenceRef,
   ownerCancellationWindowCopy,
   ownerComplimentaryMonthCopy,
+  ownerDecennialAndMollakCopy,
+  ownerGoverningLawJurisdictionCopy,
+  ownerLanguagePrecedenceCopy,
+  ownerLicenceBlockCopy,
+  ownerMobilisationRefundCopy,
+  ownerPdplCopy,
 } from './ownerInitialContractPolicy';
 import { describeAddOnLine, buildOwnerQuoteCommercialBreakdown } from './pricing/calculateUaeQuote2026';
 
@@ -86,7 +92,7 @@ const GOLD = '#C6A75E';
 const INK = '#111827';
 const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
-const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.1';
+const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.2';
 
 function money(value: any) {
     const amount = Number(value || 0);
@@ -551,6 +557,15 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
         const licenceRef = formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || data.reraLicenceNumber || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF);
         row(doc, 'RERA / emirate PM licence / ترخيص إدارة العقارات', `${licenceRef.displayEn} / ${licenceRef.displayAr} (placeholder pending legal insertion; not an invented licence number)`);
+        para(doc, ownerLicenceBlockCopy(false, {
+            tradeLicence: data.tradeLicenceNumber || data.companyTradeLicence,
+            reraOrn: data.reraOrn || data.reraLicenceNumber,
+            adrecReg: data.adrecRegistrationNumber || data.adrecReg,
+        }), ownerLicenceBlockCopy(true, {
+            tradeLicence: data.tradeLicenceNumber || data.companyTradeLicence,
+            reraOrn: data.reraOrn || data.reraLicenceNumber,
+            adrecReg: data.adrecRegistrationNumber || data.adrecReg,
+        }));
 
         const start = asDate(
             data.ownerSignature?.signedAt || 
@@ -626,9 +641,10 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         const complimentaryEnds = addMonthsPreservingTime(startForWindow, OWNER_COMPLIMENTARY_MONTHS);
         para(doc, ownerComplimentaryMonthCopy(false), ownerComplimentaryMonthCopy(true));
         para(doc,
-            `${ownerCancellationWindowCopy(false)} The request window ends on ${firstMonthEnds.toLocaleDateString('en-AE')}. The complimentary service month ends on ${complimentaryEnds.toLocaleDateString('en-AE')}. Whether the 15% mobilisation payment is refundable on a cancellation inside this window is to be confirmed and is marked for legal review.`,
-            `${ownerCancellationWindowCopy(true)} وتنتهي مهلة الطلب في ${firstMonthEnds.toLocaleDateString('en-AE')}. وينتهي الشهر المجاني في ${complimentaryEnds.toLocaleDateString('en-AE')}. وما إذا كانت دفعة التفعيل 15٪ قابلة للاسترداد عند الإلغاء خلال هذه المهلة أمر يُؤكد لاحقاً وهو مُعلَّم للمراجعة القانونية.`
+            `${ownerCancellationWindowCopy(false)} The request window ends on ${firstMonthEnds.toLocaleDateString('en-AE')}. The complimentary service month ends on ${complimentaryEnds.toLocaleDateString('en-AE')}.`,
+            `${ownerCancellationWindowCopy(true)} وتنتهي مهلة الطلب في ${firstMonthEnds.toLocaleDateString('en-AE')}. وينتهي الشهر المجاني في ${complimentaryEnds.toLocaleDateString('en-AE')}.`
         );
+        para(doc, ownerMobilisationRefundCopy(false), ownerMobilisationRefundCopy(true));
 
         section(doc, '5. Institutional and Non-Tenant Property Logic', 'منطق العقارات المؤسسية وغير القائمة على المستأجرين');
         para(doc,
@@ -699,10 +715,8 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         );
 
         section(doc, '14. Governing Law, Jurisdiction, and Language', 'القانون الحاكم والاختصاص واللغة');
-        para(doc,
-            'This Agreement is governed by the laws of the United Arab Emirates as applicable in the Emirate of Abu Dhabi, unless another jurisdiction is expressly agreed in writing. Subject to mandatory law, Abu Dhabi Courts shall have jurisdiction. This Agreement is prepared in English and Arabic. If there is any conflict, the Arabic text shall prevail before UAE mainland courts unless the Parties agree otherwise in a signed addendum. DRAFT FOR LEGAL REVIEW: a UAE lawyer must confirm whether the forum should follow the property\'s emirate (for example Dubai Courts / RERA for a Dubai asset) or remain Abu Dhabi Courts, and whether any free-zone court or arbitration seat should be used instead.',
-            'تخضع هذه الاتفاقية لقوانين دولة الإمارات العربية المتحدة كما هي مطبقة في إمارة أبوظبي، ما لم يتم الاتفاق صراحةً كتابةً على اختصاص آخر. ومع مراعاة القوانين الإلزامية، تختص محاكم أبوظبي بالنظر في النزاعات. تم إعداد هذه الاتفاقية باللغتين الإنجليزية والعربية، وفي حال وجود أي تعارض يسود النص العربي أمام محاكم دولة الإمارات البرية ما لم يتفق الطرفان على خلاف ذلك في ملحق موقع. مسودة للمراجعة القانونية: يجب أن يؤكد محامٍ إماراتي ما إذا كان الاختصاص يجب أن يتبع إمارة العقار (مثل محاكم دبي / ريرا لعقار في دبي) أو يبقى لمحاكم أبوظبي، وما إذا كان ينبغي استخدام محكمة منطقة حرة أو مقر تحكيم بدلاً من ذلك.'
-        );
+        para(doc, ownerGoverningLawJurisdictionCopy(false), ownerGoverningLawJurisdictionCopy(true));
+        para(doc, ownerLanguagePrecedenceCopy(false), ownerLanguagePrecedenceCopy(true));
 
         section(doc, '15. Draft clauses for legal review (not a compliance certificate)', '١٥. بنود مسودة للمراجعة القانونية (ليست شهادة امتثال)');
         para(doc,
@@ -713,18 +727,18 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             'Draft — Consumer Protection (Federal Law No. 15 of 2020): BIN GROUP must describe the services, prices, payment methods, and material conditions clearly and must not make misleading quality, savings, or official-status claims. The Owner is entitled to clear information about the service, a way to raise a complaint, and the cancellation and fee terms stated in this Agreement. Any advertised price in the app must match the line items and annual total in this contract. This paragraph is a disclosure draft only.',
             'مسودة — حماية المستهلك (القانون الاتحادي رقم 15 لسنة 2020): تلتزم BIN GROUP بوصف الخدمات والأسعار وطرق الدفع والشروط الجوهرية بوضوح وألا تقدّم ادعاءات مضللة عن الجودة أو التوفير أو الصفة الرسمية. ويحق للمالك الحصول على معلومات واضحة عن الخدمة، ووسيلة لتقديم شكوى، وشروط الإلغاء والرسوم المبينة في هذه الاتفاقية. وأي سعر معروض في التطبيق يجب أن يطابق بنود هذا العقد وإجماله السنوي. وهذا الفقرة مسودة إفصاح فقط.'
         );
-        para(doc,
-            'Draft — PDPL (Federal Decree-Law No. 45 of 2021): BIN GROUP processes owner, property, tenant, payment, identification, and service-evidence data as needed to perform this Agreement, meet legal obligations, and operate the platform. Data is retained only as long as needed for those purposes or as required by law. The Owner may request access, correction, or deletion through the in-app privacy request, subject to legal retention duties. Cross-border transfers, if any, must follow PDPL conditions. A UAE lawyer must complete the lawful-basis, retention, processor, and transfer wording before relying on this clause.',
-            'مسودة — حماية البيانات الشخصية (المرسوم بقانون اتحادي رقم 45 لسنة 2021): تعالج BIN GROUP بيانات المالك والعقار والمستأجر والدفع والهوية وإثباتات الخدمة حسب الحاجة لتنفيذ هذه الاتفاقية والوفاء بالالتزامات القانونية وتشغيل المنصة. وتُحفظ البيانات فقط للمدة اللازمة لتلك الأغراض أو كما يقتضي القانون. ويجوز للمالك طلب الاطلاع أو التصحيح أو الحذف عبر طلب الخصوصية في التطبيق، مع مراعاة واجبات الحفظ القانونية. وأي نقل عبر الحدود، إن وُجد، يجب أن يتبع شروط القانون. ويجب أن يُكمل محامٍ إماراتي صياغة الأساس القانوني والحفظ والمعالجة والنقل قبل الاعتماد على هذا البند.'
-        );
-        para(doc,
-            `Draft — Property-management licence reference: the licensed entity named in this Agreement will insert its RERA / DLD or relevant emirate property-management licence reference here: ${formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF).displayEn}. This is a placeholder, not an invented licence number, and is marked for legal review.`,
-            `مسودة — مرجع ترخيص إدارة العقارات: تُدرج المنشأة المرخصة المذكورة في هذه الاتفاقية رقم ترخيص ريرا / دائرة الأراضي أو الترخيص المعتمد في الإمارة هنا: ${formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF).displayAr}. وهذا حقل مؤقت وليس رقم ترخيص مخترعاً، وهو مُعلَّم للمراجعة القانونية.`
-        );
-        para(doc,
-            'Draft — Refunds on 30-day cancellation: recurring service fees are not charged for the complimentary first month. The cancellation fee, once a confirmed AED amount is set by founder / Finance Admin decision, is payable if the Owner cancels within the 30-day window. Whether mobilisation is refundable, and how any other prepaid unused service fees are treated, must be confirmed in legal review. Until then those refund points stay "to be confirmed".',
-            'مسودة — الاسترداد عند الإلغاء خلال 30 يوماً: لا تُفوتر رسوم الخدمة المتكررة عن الشهر الأول المجاني. وتُستحق رسوم الإلغاء، بعد تحديد مبلغ بالدرهم بقرار من المؤسس / إدارة المالية، إذا ألغى المالك خلال مهلة الثلاثين يوماً. أما قابلية استرداد دفعة التفعيل وكيفية التعامل مع أي رسوم خدمة مدفوعة مقدماً وغير مستخدمة فيجب تأكيدها في المراجعة القانونية. وحتى ذلك الحين تبقى نقاط الاسترداد هذه "يُؤكد لاحقاً".'
-        );
+        para(doc, ownerPdplCopy(false), ownerPdplCopy(true));
+        para(doc, ownerLicenceBlockCopy(false, {
+            tradeLicence: data.tradeLicenceNumber || data.companyTradeLicence,
+            reraOrn: data.reraOrn || data.reraLicenceNumber,
+            adrecReg: data.adrecRegistrationNumber || data.adrecReg,
+        }), ownerLicenceBlockCopy(true, {
+            tradeLicence: data.tradeLicenceNumber || data.companyTradeLicence,
+            reraOrn: data.reraOrn || data.reraLicenceNumber,
+            adrecReg: data.adrecRegistrationNumber || data.adrecReg,
+        }));
+        para(doc, ownerMobilisationRefundCopy(false), ownerMobilisationRefundCopy(true));
+        para(doc, ownerDecennialAndMollakCopy(false), ownerDecennialAndMollakCopy(true));
 
         section(doc, '16. Digital Acceptance and Signatures', '١٦. القبول الرقمي والتوقيعات');
         para(doc,
