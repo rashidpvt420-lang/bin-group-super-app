@@ -11,7 +11,7 @@ const COVERED = [
   'adminGeneratePayrollBatch', 'adminSettlePayrollRecord',
   'adminGetHrOperations', 'adminRecordStaffAttendance', 'adminCreateStaffLeaveRequest', 'adminReviewStaffLeaveRequest', 'adminRegisterHrDocumentMetadata',
   'adminGetStaffLifecycle', 'adminGetStaffDetails', 'adminGetTechnicianOperationsDirectory', 'adminUpdateStaffProfile', 'adminUpdateStaffOnboarding', 'adminOffboardStaff', 'adminResendStaffInvitation',
-  'adminAssignTechnician', 'adminResolveTicketDispute', 'adminUpdateEmergencyTicket', 'adminProcessWhatsAppIntake',
+  'adminAssignTechnician', 'adminResolveTicketDispute', 'adminUpdateEmergencyTicket', 'adminProcessWhatsAppIntake', 'adminUpsertWhatsAppTemplate',
   'adminRevealScheduledServiceAccessCode', 'adminManageScheduledServiceAvailability', 'adminUpdateScheduledService',
   'adminResolveTenantUnitLink', 'adminResolveTenantCorrectionRequest', 'listAdminTenantCorrectionRequests',
   'getAdminReports', 'adminGetLaunchConfigurationSummary',

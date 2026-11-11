@@ -59,6 +59,7 @@ const Navigation = () => {
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
         { text: navText('Duty Command Center', 'مركز قيادة المناوبات'), icon: <PendingActionsIcon />, path: '/ops/technicians' },
         { text: navText('WhatsApp Triage', 'فرز واتساب'), icon: <ReceiptIcon />, path: '/ops/whatsapp-triage' },
+        { text: navText('WhatsApp templates', 'قوالب واتساب'), icon: <SettingsIcon />, path: '/ops/whatsapp-templates' },
         { text: navText('RFQ Trust Workflow', 'مسار موثوقية طلبات الأسعار'), icon: <PendingActionsIcon />, path: '/ops/rfq' },
         { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors' },
         { text: navText('Painting Projects', 'مشاريع الدهان'), icon: <PendingActionsIcon />, path: '/ops/painting' },

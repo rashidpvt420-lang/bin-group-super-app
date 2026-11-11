@@ -2640,6 +2640,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /whatsapp_rate_limits/{limitId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /whatsapp_status_events/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // Painting rates (AED): Admin read, callable-only writes, append-only history.
     match /painting_rates/{rateId} {
       allow read: if hasAdminClaim();
@@ -2754,6 +2764,8 @@ service cloud.firestore {
           'whatsapp_optins',
           'whatsapp_templates',
           'whatsapp_notifications',
+          'whatsapp_rate_limits',
+          'whatsapp_status_events',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',
@@ -2884,6 +2896,8 @@ service cloud.firestore {
           'whatsapp_optins',
           'whatsapp_templates',
           'whatsapp_notifications',
+          'whatsapp_rate_limits',
+          'whatsapp_status_events',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',

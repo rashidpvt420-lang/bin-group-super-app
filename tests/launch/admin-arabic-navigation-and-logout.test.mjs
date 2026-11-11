@@ -14,6 +14,7 @@ const bilingualLabels = [
   ['Tenant Unit Links', 'روابط وحدات المستأجرين'],
   ['Duty Command Center', 'مركز قيادة المناوبات'],
   ['WhatsApp Triage', 'فرز واتساب'],
+  ['WhatsApp templates', 'قوالب واتساب'],
   ['Vendor Command', 'قيادة الموردين'],
   ['PDPL Governance', 'حوكمة حماية البيانات الشخصية'],
   ['HR Command', 'قيادة الموارد البشرية'],

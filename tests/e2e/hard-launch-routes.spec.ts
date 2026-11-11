@@ -292,6 +292,7 @@ const roleCases: RoleCase[] = [
       '/pilot',
       '/ops/public',
       '/ops/whatsapp-triage',
+      '/ops/whatsapp-templates',
       '/ops/bin-connect',
       '/ops/pilot-completion',
       '/ops/public-launch-command',

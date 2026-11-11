@@ -146,6 +146,7 @@ export const isFullAdminUser = (user: any): boolean => {
 };
 
 export const MY_HR_PATH = '/my-hr';
+export const WHATSAPP_TEMPLATES_PATH = '/ops/whatsapp-templates';
 
 export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     if (!user) return false;
@@ -168,6 +169,7 @@ export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     }
     if (!STAFF_PORTAL_ROLES.has(role)) return false;
     if (pathname === '/mfa-recovery' || pathname.startsWith('/mfa-recovery/')) return false;
+    if (normalizedPath === WHATSAPP_TEMPLATES_PATH || normalizedPath.startsWith(`${WHATSAPP_TEMPLATES_PATH}/`)) return false;
 
     const requiredModule = moduleForAdminPath(pathname);
     if (!requiredModule) return false;

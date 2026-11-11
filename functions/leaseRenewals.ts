@@ -32,9 +32,17 @@ export function validateRenewalTerms(input: any, lease: any) {
   return { previousEndDate: oldEnd, newStartDate, newEndDate, newAnnualRent, previousAnnualRent: Number(lease?.annualRent || 0) || null, message: text(input?.message, 1000) };
 }
 
-async function notify(userId: string, role: string, type: string, title: string, body: string, link: string, id: string) {
+async function notify(userId: string, role: string, type: string, title: string, body: string, link: string, id: string, email?: string) {
   if (!userId) return;
-  await db.collection("notifications").doc(id).set({ userId, role, type, title, body, link, read: false, status: "PENDING", createdAt: FieldValue.serverTimestamp(), source: "LEASE_RENEWAL" }, { merge: true });
+  await db.collection("notifications").doc(id).set({ userId, recipientId: userId, recipientRole: role, role, type, title, body, link, read: false, status: "PENDING", createdAt: FieldValue.serverTimestamp(), source: "LEASE_RENEWAL" }, { merge: true });
+  const to = text(email, 320).toLowerCase();
+  if (to) {
+    await db.collection("mail").doc(id).set({
+      to, type, status: "PENDING",
+      message: { subject: `[BIN GROUP] ${title}`, html: `<p>${body}</p>` },
+      createdAt: FieldValue.serverTimestamp(), source: "LEASE_RENEWAL",
+    }, { merge: true });
+  }
 }
 
 export const ownerProposeLeaseRenewal = onCall(OPTS, async (request) => {
@@ -61,7 +69,7 @@ export const ownerProposeLeaseRenewal = onCall(OPTS, async (request) => {
   await ref.set({ leaseId, ownerId, tenantId, tenantUid: tenantId, unitId: text(lease.unitId, 160), propertyId: text(lease.propertyId, 160), ...terms, status: "PROPOSED", proposedBy: request.auth.uid, createdAt: now, updatedAt: now });
   await leaseRef.set({ renewalStatus: "RENEWAL_OFFERED", renewalOfferId: ref.id, updatedAt: now }, { merge: true });
   await notify(tenantId, "tenant", "LEASE_RENEWAL_OFFER", "Your owner offered a lease renewal",
-    `New term ${terms.newStartDate} to ${terms.newEndDate}, annual rent AED ${terms.newAnnualRent.toLocaleString("en-AE")}. Review and respond in the app.`, "/tenant/dashboard", `lease_renewal_offer_${ref.id}`);
+    `New term ${terms.newStartDate} to ${terms.newEndDate}, annual rent AED ${terms.newAnnualRent.toLocaleString("en-AE")}. Review and respond in the app.`, "/tenant/dashboard", `lease_renewal_offer_${ref.id}`, text(lease.tenantEmail, 320));
   await db.collection("audit_logs").add({ action: "LEASE_RENEWAL_PROPOSED", actorId: request.auth.uid, actorRole: role, leaseId, renewalId: ref.id, createdAt: now });
   return { status: "SUCCESS", renewalId: ref.id, ...terms };
 });
@@ -91,7 +99,7 @@ export const tenantRespondLeaseRenewal = onCall(OPTS, async (request) => {
   await notify(result.ownerId, "owner", "LEASE_RENEWAL_RESPONSE",
     decision === "ACCEPT" ? "Tenant accepted the renewal" : "Tenant declined the renewal",
     decision === "ACCEPT" ? `The lease now runs to ${result.newEndDate}. Set the new rent schedule from the Units page.` : "The unit will be flagged for vacancy at the lease end date.",
-    "/owner/units", `lease_renewal_response_${renewalId}`);
+    "/owner/units", `lease_renewal_response_${renewalId}`, text(result.ownerEmail, 320));
   await db.collection("audit_logs").add({ action: decision === "ACCEPT" ? "LEASE_RENEWAL_ACCEPTED" : "LEASE_RENEWAL_DECLINED", actorId: request.auth.uid, actorRole: "tenant", leaseId: result.leaseId, renewalId, createdAt: FieldValue.serverTimestamp() });
   return { status: "SUCCESS", decision, leaseId: result.leaseId };
 });

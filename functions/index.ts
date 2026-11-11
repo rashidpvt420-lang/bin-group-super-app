@@ -1021,7 +1021,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     const statusNorm = (after.status || "").toLowerCase();
 
     if (technicianAssignmentEvent) {
-        await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8} and will be on the way soon.`, { oncePerAssignment: true });
+        await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8}. You will get an update when they set off. / تم تعيين ${techName} للطلب #${ref8}. سيصلك تحديث عند انطلاقه.`, { oncePerAssignment: true });
         if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}`, notificationId: assignmentNotificationId(techId, "technician") });
         await notifyStakeholdersSafely(ticketId, after, "ASSIGNED");
     }

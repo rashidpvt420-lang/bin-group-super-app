@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 test('Functions files explicitly import the FirebaseFirestore type namespace', () => {
@@ -8,7 +8,7 @@ test('Functions files explicitly import the FirebaseFirestore type namespace', (
   const files = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'functions/*.ts'], { encoding: 'utf8' })
     .split('\0')
     .filter(Boolean)
-    .filter((file) => /FirebaseFirestore\./.test(readFileSync(file, 'utf8')));
+    .filter((file) => existsSync(file) && /FirebaseFirestore\./.test(readFileSync(file, 'utf8')));
 
   assert.ok(files.length > 20, 'expected to find the legacy Firestore namespace call sites');
   for (const file of files) {

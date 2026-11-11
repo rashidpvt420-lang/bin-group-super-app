@@ -224,7 +224,7 @@ async function onDutyTechnicianRecipients() {
 }
 
 async function recipientIdsForNotification(data: FirebaseFirestore.DocumentData) {
-    const recipientId = String(data.recipientId || "").trim();
+    const recipientId = String(data.recipientId || data.userId || "").trim();
     if (!recipientId) return [];
     if (recipientId === "ADMIN_GROUP") return adminRecipients();
     if (recipientId === "ON_DUTY_TECHNICIANS") return onDutyTechnicianRecipients();
