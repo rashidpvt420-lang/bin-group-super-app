@@ -140,6 +140,11 @@ function runOneTimeLegacyOnboardingCleanup() {
 runOneTimeLegacyOnboardingCleanup();
 
 function RouteFallback() {
+  const [slow, setSlow] = React.useState(false);
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 20_000);
+    return () => window.clearTimeout(timer);
+  }, []);
   return (
     <Box sx={{ minHeight: '42vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#FFFFFF', color: '#111827' }}>
       <Box sx={{ textAlign: 'center' }}>
@@ -147,6 +152,11 @@ function RouteFallback() {
         <Typography variant="body2" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase' }}>
           Loading BIN GROUP module...
         </Typography>
+        {slow && (
+          <Button variant="contained" sx={{ mt: 2, bgcolor: '#C9A646', color: '#111827', fontWeight: 900 }} onClick={() => window.location.reload()}>
+            RELOAD
+          </Button>
+        )}
       </Box>
     </Box>
   );

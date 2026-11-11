@@ -1,7 +1,7 @@
 import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
+import { AppBar, Avatar, Box, Button, CircularProgress, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
 import { ArrowLeft, Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
@@ -12,7 +12,6 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import BinConnectChatBox from '../components/BinConnectChatBox';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
-
 import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -22,8 +21,22 @@ import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
 import BrokerProfilePage from './pages/BrokerProfilePage';
 import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
 import BrokerListingsPage from './pages/BrokerListingsPage';
-import DesignStudioPage from '../pages/DesignStudioPage';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
+
+// Design Studio is a heavy route and must not block the broker shell
+// (Dashboard nav, language toggle, mobile nav) from rendering.
+const DesignStudioPage = React.lazy(() => import('../pages/DesignStudioPage'));
+
+function BrokerPageFallback() {
+  return (
+    <Box sx={{ py: 6, textAlign: 'center' }}>
+      <CircularProgress sx={{ color: '#C9A646', mb: 2 }} size={28} thickness={3} />
+      <Typography variant="body2" sx={{ color: '#667085', fontWeight: 800 }}>
+        Loading broker page...
+      </Typography>
+    </Box>
+  );
+}
 
 type BrokerMenuItem = {
   key: string;
@@ -126,6 +139,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
 export default function BrokerApp() {
   return (
     <BrokerLayout>
+      <React.Suspense fallback={<BrokerPageFallback />}>
       <Routes>
         <Route path="/" element={<BrokerSimpleDashboardPage />} />
         <Route path="/dashboard" element={<BrokerSimpleDashboardPage />} />
@@ -145,6 +159,7 @@ export default function BrokerApp() {
         <Route path="/profile" element={<BrokerProfilePage />} />
         <Route path="*" element={<Navigate to="/broker/dashboard" replace />} />
       </Routes>
+      </React.Suspense>
     </BrokerLayout>
   );
 }
