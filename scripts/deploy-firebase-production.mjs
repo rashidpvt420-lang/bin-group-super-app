@@ -9,6 +9,7 @@ import { verifyAdminMfaProduction } from './verify-admin-mfa-production.mjs';
 import { adminMfaBootstrapWorkflowState } from './verify-production-workflow-env.mjs';
 import { classifyPermanentFirebaseDeploymentFailure } from './lib/firebase-deployment-failure-classifier.mjs';
 import { NONFUNCTIONS_TARGET } from './firebase-nonfunctions-production-cli.mjs';
+import { writeFunctionsDeployParams } from './write-functions-deploy-params.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -141,6 +142,8 @@ try {
   console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
   process.exit(1);
 }
+
+writeFunctionsDeployParams({ projectId });
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {

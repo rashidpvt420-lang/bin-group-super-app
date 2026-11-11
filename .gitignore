@@ -63,6 +63,11 @@ hosting/public/
 apps/**/.env
 apps/**/.env.local
 **/.env.local
+# Generated Firebase Functions project dotenv (written at deploy time).
+# Keep the committed .example/.template tracked.
+functions/.env.*
+!functions/.env.*.example
+!functions/.env.*.template
 
 # IDE / OS
 .vscode/
