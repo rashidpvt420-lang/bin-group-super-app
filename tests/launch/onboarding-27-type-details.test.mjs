@@ -211,7 +211,8 @@ test('Majlis SLA labels are separated from the unused 12k/25k/45k package list',
   assert.match(matrix, /legacy catalogue, not live pricing/);
   assert.match(matrix, /These package prices must not be shown as selectable SLA or quote amounts/);
   assert.doesNotMatch(commercial, /12000|25000|45000/);
-  assert.match(matrix, /id: 'mosque_fm'/);
+  assert.match(matrix, /Mosque \/ Masjid is priced by calculateMosqueQuote/);
+  assert.doesNotMatch(matrix, /id: 'mosque_fm'/);
   assert.match(matrix, /custom FM formula/);
 });
 
@@ -228,18 +229,26 @@ test('Firestore rules and the geo hardener allowlist owner assetDetails writes',
   }
   assert.doesNotMatch(rules, /paymentVerified.*assetDetails/);
   const { ASSET_DETAIL_ALLOWED_KEYS: allowedKeys } = detailsMod;
-  const mapFn = rules.slice(rules.indexOf('function assetDetailsMapIsSafe'), rules.indexOf('function assetDetailsWriteIsSafe'));
+  const mapFn = rules.slice(rules.indexOf('BEGIN ASSET_DETAILS_ALLOWLIST'), rules.indexOf('END ASSET_DETAILS_ALLOWLIST'));
+  assert.match(mapFn, /function assetDetailsKeysAreAllowed/);
+  assert.match(mapFn, /function assetDetailsStringsAreSafe/);
+  assert.match(mapFn, /function assetDetailsNumbersAreSafeA/);
+  assert.match(mapFn, /function assetDetailsNumbersAreSafeB/);
+  assert.match(mapFn, /function assetDetailsBoolsAreSafeA/);
+  assert.match(mapFn, /function assetDetailsBoolsAreSafeB/);
+  assert.match(mapFn, /function assetDetailsMapIsSafe/);
   assert.match(mapFn, /details\.floorsAboveGround <= 300/);
   const conditionLines = mapFn.split('\n').filter((line) => line.trim().startsWith("(!('"));
   assert.equal(conditionLines.length, allowedKeys.length);
-  for (const line of conditionLines.slice(0, -1)) {
-    assert.ok(line.trim().endsWith('&&'), line);
+  for (const line of conditionLines) {
+    // Helper functions close with ');' on the following line, so the last condition ends with ')'.
+    assert.ok(/(&&|\))$/.test(line.trim()), line);
   }
-  assert.ok(conditionLines.at(-1).trim().endsWith(';'), conditionLines.at(-1));
   for (const key of allowedKeys) {
     assert.ok(mapFn.includes("'" + key + "'"), key);
     assert.ok(mapFn.includes("(!('" + key + "' in details)"), 'type check missing for ' + key);
   }
+  assert.match(rules, /assetDetailsWriteIsSafe\(request\.resource.data\) && \(/);
 });
 
 test('leftover payment screens stay quarantined off the live five-page route', () => {

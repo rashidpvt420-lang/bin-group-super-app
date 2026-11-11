@@ -272,11 +272,9 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
       pmRate: 'N/A', ifm: '18,000 / yr target', pricingUnit: 'facility', riskLevel: 'Medium',
       maintenanceRange: { min: 12000, max: 35000, target: 18000 }, managementRange: { min: 0, max: 0, target: 0 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
-    {
-      id: 'mosque_fm', category: 'Religious', label: 'Mosque / Masjid (custom FM formula)', minimumAnnualContract: 0,
-      pmRate: '0%', ifm: 'Custom FM formula in calculateMosqueQuote; this row is published for auditors and does not replace that function', pricingUnit: 'sqft+capacity', riskLevel: 'High',
-      maintenanceRange: { min: 0, max: 0, target: 0 }, managementRange: { min: 0, max: 0, target: 0 }, combinedRange: { min: 0, max: 0, target: 0 },
-    },
+    // Mosque / Masjid is priced by calculateMosqueQuote (custom FM formula), not a matrix row.
+    // Do not add a mosque_fm asset class here: a 0% management row would be treated as a live
+    // 0% PM class and would not produce a Maintenance Only price through the generic engine.
     {
       id: 'mix-dev', category: 'Mixed Use', label: 'Mixed-Use Tower', minimumAnnualContract: 100000,
       pmRate: '5-8% annual rent/revenue', ifm: 'FM + PM', pricingUnit: 'sqft', riskLevel: 'High',

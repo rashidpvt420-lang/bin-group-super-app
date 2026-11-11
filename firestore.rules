@@ -572,34 +572,40 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
-    function assetDetailsMapIsSafe(details) {
-      return details is map &&
+    // BEGIN ASSET_DETAILS_ALLOWLIST
+    function assetDetailsKeysAreAllowed(details) {
+      return (
         details.keys().hasOnly([
-        'ageRange', 'anchorTenants', 'balcony', 'bathroomsCount', 'beachfront', 'bedCount',
-        'bedroomCount', 'bedroomsCount', 'bmuFacadeAccess', 'boarding', 'buildingManagementName', 'buildingName',
-        'buildingsCount', 'canteen', 'centralAcChiller', 'cinema', 'civilDefenceCertificateExpiry', 'classrooms',
-        'clearHeightM', 'clinicOnSite', 'clinics', 'coldStorage', 'coldStorageTemp', 'commonAreas',
-        'communityName', 'consultationRooms', 'coveredParking', 'cranes', 'datePalms', 'dentalChairs',
-        'departmentName', 'diningHall', 'districtCoolingService', 'dockLevelers', 'eventDaysPerYear', 'eventFrequency',
-        'facadeType', 'farmhouse', 'fbOutlets', 'fireAlarmSystem', 'fireWarden', 'fitOutStandard',
-        'fiveBedUnits', 'floodlights', 'floorNumber', 'floorsAboveGround', 'floorsBelowGround', 'foodCourt',
-        'fourBedUnits', 'fridayCapacity', 'funeralFacility', 'generators', 'greenhouses', 'guestCapacity',
-        'hazardousGoods', 'hazardousMaterials', 'helicopterPad', 'hospitalBeds', 'hospitalityBoxes', 'hotelKeys',
-        'icuBeds', 'imaging', 'imamResidence', 'irrigation', 'isolationRooms', 'kitchen',
-        'kitchens', 'labOnSite', 'labs', 'landAreaSqft', 'laundry', 'livestock',
-        'loadingDocks', 'majlisRooms', 'mediaCentre', 'medicalGas', 'meetingHalls', 'meetingRooms',
-        'mensHallCapacity', 'minarets', 'mosqueOwnership', 'oaContactName', 'oaContactPhone', 'occupancy',
-        'officeAreaSqft', 'officeMezzanine', 'officeUnits', 'oneBedUnits', 'outdoorMajlis', 'parkingLevels',
-        'parkingSpaces', 'passengerLifts', 'pharmacy', 'pitchType', 'playgrounds', 'plotNumber',
-        'powerCapacityKva', 'prayerHallAreaSqft', 'prayerRoom', 'privateGarden', 'privatePool', 'productionLines',
-        'publicAccess', 'racking', 'reception', 'recreation', 'reraDldOrPermitNumber', 'retailUnits',
-        'roomCount', 'seatedCapacity', 'serviceLifts', 'soundSystem', 'spa', 'sportsHalls',
-        'sprinklers', 'staffHousingOnSite', 'staffRoom', 'standingCapacity', 'starRating', 'studentCapacity',
-        'studios', 'tenancyType', 'theatres', 'threeBedUnits', 'totalUnits', 'towerBlockCount',
-        'tradingHours', 'treatmentRooms', 'truckCourts', 'twoBedUnits', 'typicalFloorPlateSqft', 'unitNumber',
-        'unitsPerFloor', 'utilityAccount', 'washrooms', 'waterPumps', 'waterTanks', 'wells',
-        'womensHallCapacity', 'workshops'
-        ]) &&
+          'ageRange', 'anchorTenants', 'balcony', 'bathroomsCount', 'beachfront', 'bedCount',
+          'bedroomCount', 'bedroomsCount', 'bmuFacadeAccess', 'boarding', 'buildingManagementName', 'buildingName',
+          'buildingsCount', 'canteen', 'centralAcChiller', 'cinema', 'civilDefenceCertificateExpiry', 'classrooms',
+          'clearHeightM', 'clinicOnSite', 'clinics', 'coldStorage', 'coldStorageTemp', 'commonAreas',
+          'communityName', 'consultationRooms', 'coveredParking', 'cranes', 'datePalms', 'dentalChairs',
+          'departmentName', 'diningHall', 'districtCoolingService', 'dockLevelers', 'eventDaysPerYear', 'eventFrequency',
+          'facadeType', 'farmhouse', 'fbOutlets', 'fireAlarmSystem', 'fireWarden', 'fitOutStandard',
+          'fiveBedUnits', 'floodlights', 'floorNumber', 'floorsAboveGround', 'floorsBelowGround', 'foodCourt',
+          'fourBedUnits', 'fridayCapacity', 'funeralFacility', 'generators', 'greenhouses', 'guestCapacity',
+          'hazardousGoods', 'hazardousMaterials', 'helicopterPad', 'hospitalBeds', 'hospitalityBoxes', 'hotelKeys',
+          'icuBeds', 'imaging', 'imamResidence', 'irrigation', 'isolationRooms', 'kitchen',
+          'kitchens', 'labOnSite', 'labs', 'landAreaSqft', 'laundry', 'livestock',
+          'loadingDocks', 'majlisRooms', 'mediaCentre', 'medicalGas', 'meetingHalls', 'meetingRooms',
+          'mensHallCapacity', 'minarets', 'mosqueOwnership', 'oaContactName', 'oaContactPhone', 'occupancy',
+          'officeAreaSqft', 'officeMezzanine', 'officeUnits', 'oneBedUnits', 'outdoorMajlis', 'parkingLevels',
+          'parkingSpaces', 'passengerLifts', 'pharmacy', 'pitchType', 'playgrounds', 'plotNumber',
+          'powerCapacityKva', 'prayerHallAreaSqft', 'prayerRoom', 'privateGarden', 'privatePool', 'productionLines',
+          'publicAccess', 'racking', 'reception', 'recreation', 'reraDldOrPermitNumber', 'retailUnits',
+          'roomCount', 'seatedCapacity', 'serviceLifts', 'soundSystem', 'spa', 'sportsHalls',
+          'sprinklers', 'staffHousingOnSite', 'staffRoom', 'standingCapacity', 'starRating', 'studentCapacity',
+          'studios', 'tenancyType', 'theatres', 'threeBedUnits', 'totalUnits', 'towerBlockCount',
+          'tradingHours', 'treatmentRooms', 'truckCourts', 'twoBedUnits', 'typicalFloorPlateSqft', 'unitNumber',
+          'unitsPerFloor', 'utilityAccount', 'washrooms', 'waterPumps', 'waterTanks', 'wells',
+          'womensHallCapacity', 'workshops'
+        ])
+      );
+    }
+
+    function assetDetailsStringsAreSafe(details) {
+      return (
         (!('ageRange' in details) || (details.ageRange is string && details.ageRange.size() <= 80)) &&
         (!('bedroomCount' in details) || (details.bedroomCount is string && details.bedroomCount.size() <= 80)) &&
         (!('buildingManagementName' in details) || (details.buildingManagementName is string && details.buildingManagementName.size() <= 200)) &&
@@ -622,7 +628,12 @@ service cloud.firestore {
         (!('tenancyType' in details) || (details.tenancyType is string && details.tenancyType.size() <= 80)) &&
         (!('tradingHours' in details) || (details.tradingHours is string && details.tradingHours.size() <= 120)) &&
         (!('unitNumber' in details) || (details.unitNumber is string && details.unitNumber.size() <= 40)) &&
-        (!('utilityAccount' in details) || (details.utilityAccount is string && details.utilityAccount.size() <= 80)) &&
+        (!('utilityAccount' in details) || (details.utilityAccount is string && details.utilityAccount.size() <= 80))
+      );
+    }
+
+    function assetDetailsNumbersAreSafeA(details) {
+      return (
         (!('anchorTenants' in details) || (details.anchorTenants is number && details.anchorTenants >= 0 && details.anchorTenants <= 200)) &&
         (!('bathroomsCount' in details) || (details.bathroomsCount is number && details.bathroomsCount >= 0 && details.bathroomsCount <= 50)) &&
         (!('bedCount' in details) || (details.bedCount is number && details.bedCount >= 0 && details.bedCount <= 100000)) &&
@@ -654,7 +665,12 @@ service cloud.firestore {
         (!('loadingDocks' in details) || (details.loadingDocks is number && details.loadingDocks >= 0 && details.loadingDocks <= 500)) &&
         (!('majlisRooms' in details) || (details.majlisRooms is number && details.majlisRooms >= 0 && details.majlisRooms <= 20)) &&
         (!('meetingHalls' in details) || (details.meetingHalls is number && details.meetingHalls >= 0 && details.meetingHalls <= 200)) &&
-        (!('meetingRooms' in details) || (details.meetingRooms is number && details.meetingRooms >= 0 && details.meetingRooms <= 500)) &&
+        (!('meetingRooms' in details) || (details.meetingRooms is number && details.meetingRooms >= 0 && details.meetingRooms <= 500))
+      );
+    }
+
+    function assetDetailsNumbersAreSafeB(details) {
+      return (
         (!('mensHallCapacity' in details) || (details.mensHallCapacity is number && details.mensHallCapacity >= 0 && details.mensHallCapacity <= 100000)) &&
         (!('minarets' in details) || (details.minarets is number && details.minarets >= 0 && details.minarets <= 20)) &&
         (!('occupancy' in details) || (details.occupancy is number && details.occupancy >= 0 && details.occupancy <= 100000)) &&
@@ -686,7 +702,12 @@ service cloud.firestore {
         (!('unitsPerFloor' in details) || (details.unitsPerFloor is number && details.unitsPerFloor >= 0 && details.unitsPerFloor <= 500)) &&
         (!('washrooms' in details) || (details.washrooms is number && details.washrooms >= 0 && details.washrooms <= 5000)) &&
         (!('womensHallCapacity' in details) || (details.womensHallCapacity is number && details.womensHallCapacity >= 0 && details.womensHallCapacity <= 100000)) &&
-        (!('workshops' in details) || (details.workshops is number && details.workshops >= 0 && details.workshops <= 200)) &&
+        (!('workshops' in details) || (details.workshops is number && details.workshops >= 0 && details.workshops <= 200))
+      );
+    }
+
+    function assetDetailsBoolsAreSafeA(details) {
+      return (
         (!('balcony' in details) || details.balcony is bool) &&
         (!('beachfront' in details) || details.beachfront is bool) &&
         (!('bmuFacadeAccess' in details) || details.bmuFacadeAccess is bool) &&
@@ -713,7 +734,12 @@ service cloud.firestore {
         (!('hazardousMaterials' in details) || details.hazardousMaterials is bool) &&
         (!('helicopterPad' in details) || details.helicopterPad is bool) &&
         (!('imaging' in details) || details.imaging is bool) &&
-        (!('imamResidence' in details) || details.imamResidence is bool) &&
+        (!('imamResidence' in details) || details.imamResidence is bool)
+      );
+    }
+
+    function assetDetailsBoolsAreSafeB(details) {
+      return (
         (!('irrigation' in details) || details.irrigation is bool) &&
         (!('kitchen' in details) || details.kitchen is bool) &&
         (!('labOnSite' in details) || details.labOnSite is bool) &&
@@ -739,8 +765,21 @@ service cloud.firestore {
         (!('staffRoom' in details) || details.staffRoom is bool) &&
         (!('waterPumps' in details) || details.waterPumps is bool) &&
         (!('waterTanks' in details) || details.waterTanks is bool) &&
-        (!('wells' in details) || details.wells is bool);
+        (!('wells' in details) || details.wells is bool)
+      );
     }
+
+    function assetDetailsMapIsSafe(details) {
+      return details is map &&
+        details.size() <= 140 &&
+        assetDetailsKeysAreAllowed(details) &&
+        assetDetailsStringsAreSafe(details) &&
+        assetDetailsNumbersAreSafeA(details) &&
+        assetDetailsNumbersAreSafeB(details) &&
+        assetDetailsBoolsAreSafeA(details) &&
+        assetDetailsBoolsAreSafeB(details);
+    }
+    // END ASSET_DETAILS_ALLOWLIST
 
     function assetDetailsWriteIsSafe(data) {
       return !data.keys().hasAny(['assetDetails']) || assetDetailsMapIsSafe(data.assetDetails);
@@ -1524,8 +1563,10 @@ service cloud.firestore {
       allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
+        assetDetailsWriteIsSafe(request.resource.data) &&
         (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
-      allow update: if isNotSuspended() && (
+      allow update: if isNotSuspended() &&
+        assetDetailsWriteIsSafe(request.resource.data) && (
         (canManageProperties() && safeManagedPropertyUpdate()) ||
         safeOwnerPropertyUpdate()
       );
