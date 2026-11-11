@@ -347,6 +347,13 @@ function moneyOrPending(value: any, pending = 'to be confirmed / يُؤكد لا
     return money(numeric);
 }
 
+function asRecordArray(value: any): any[] {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (value && typeof value === 'object') return Object.values(value).filter(Boolean);
+    if (typeof value === 'string' && value.trim()) return value.split(',').map((item) => item.trim()).filter(Boolean);
+    return [];
+}
+
 function collectContractAddOnIds(data: any): string[] {
     const bags = [
         data.selectedAddOns, data.addOns, data.addons,
@@ -357,7 +364,7 @@ function collectContractAddOnIds(data: any): string[] {
     ];
     const ids: string[] = [];
     for (const bag of bags) {
-        for (const item of asArray(bag)) {
+        for (const item of asRecordArray(bag)) {
             const id = typeof item === 'string' ? item : textValue(item?.id || item?.addonId || item?.label, '');
             if (id) ids.push(id);
         }
@@ -408,8 +415,8 @@ function renderPricedAddOns(doc: any, data: any) {
 }
 
 function renderQuoteLineItems(doc: any, data: any) {
-    const stored = asArray(data.commercialSchedule?.lineItems || data.quoteSnapshot?.commercialLines?.[0]?.lines || data.commercialLines?.[0]?.lines);
-    let lines = stored;
+    const stored = asRecordArray(data.commercialSchedule?.lineItems || data.quoteSnapshot?.commercialLines?.[0]?.lines || data.commercialLines?.[0]?.lines);
+    let lines: any[] = stored;
     if (!lines.length) {
         try {
             const property = asPlainRecord(data.properties?.[0] || data);
