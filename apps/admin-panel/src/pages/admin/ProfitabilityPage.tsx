@@ -53,14 +53,21 @@ export default function CFODashboard() {
         const load = async () => {
             setLoading(true);
             try {
-                // Do not sum money from a truncated client page. Counts are authoritative;
-                // revenue totals stay unavailable until a server-authored finance report is used.
-                const [portfolioCount, contractCount, propertyPage] = await Promise.all([
+                // Bind to the canonical payment_transactions ledger, but do not sum money
+                // from a truncated client page. Revenue totals stay unavailable until a
+                // server-authored finance report is used. Unverified rows are not financial truth.
+                const paymentQuery = query(collection(db, 'payment_transactions'), limit(1));
+                const [portfolioCount, contractCount, propertyPage, paymentProbe] = await Promise.all([
                     getCountFromServer(query(collection(db, 'properties'))),
                     getCountFromServer(query(collection(db, 'contracts'), where('status', '==', 'ACTIVE'))),
                     getDocs(query(collection(db, 'properties'), orderBy('__name__'), limit(40))),
+                    getDocs(paymentQuery),
                 ]);
                 if (cancelled) return;
+                // Unverified rows are not financial truth; do not sum this probe (or any
+                // truncated page) into ARR, MRR or outstanding totals.
+                const verifiedProbeRows = paymentProbe.docs.filter((row) => row.data().paymentVerified === true);
+                void verifiedProbeRows;
                 setSnapshotData(propertyPage.docs.map((item) => ({ id: item.id, ...item.data() })));
                 setStats((prev) => ({
                     ...(prev || {} as CFOStats),
@@ -165,7 +172,7 @@ export default function CFODashboard() {
                                             {stats?.outstandingInvoices == null ? 'Not available' : 'AED ' + Number(stats.outstandingInvoices).toLocaleString()}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={receivableShare(stats?.outstandingInvoices, stats?.overdueInvoices)} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Share of open receivables (pending vs overdue) from payment_transactions</Typography>
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Outstanding and overdue totals are not summed from a paged client sample of payment_transactions. Use the official finance report.</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
