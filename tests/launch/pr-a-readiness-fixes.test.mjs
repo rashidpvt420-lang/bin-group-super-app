@@ -32,8 +32,7 @@ test('composite indexes exist for the four queries that previously had none', ()
   // functions/index.ts onApprovalStagnant: status == X + updatedAt < cutoff
   assert.match(read('functions/index.ts'), /where\("status", ?"==", ?"AWAITING_OWNER_APPROVAL"\)\s*\.where\("updatedAt", ?"<"/);
   assert.ok(has('maintenanceTickets', [['status', 'ASCENDING'], ['updatedAt', 'ASCENDING']]));
-  // functions/whatsappBot.ts: reporterPhone == X ordered by createdAt desc
-  assert.match(read('functions/whatsappBot.ts'), /where\("reporterPhone", ?"==", ?from\)\s*\.orderBy\("createdAt", ?"desc"\)/);
+  // Index retained for WhatsApp-sourced tickets (reporterPhone + createdAt). The leftover bot webhook was removed.
   assert.ok(has('maintenanceTickets', [['reporterPhone', 'ASCENDING'], ['createdAt', 'DESCENDING']]));
   // SovereignSupportChat: chatId == X ordered by createdAt asc
   assert.match(read('src/components/SovereignSupportChat.tsx'), /where\('chatId', '==', targetUserId\),\s*orderBy\('createdAt', 'asc'\)/);

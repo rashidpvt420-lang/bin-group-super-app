@@ -3,6 +3,14 @@ import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { verifyWhatsAppSignature } from "./whatsappSignature";
+import { claimRateLimit } from "./whatsappRateLimit";
+import {
+  INBOUND_DAILY_LIMIT,
+  INBOUND_HOURLY_LIMIT,
+  dubaiCalendarDay,
+  dubaiHourKey,
+  inboundAckMessage,
+} from "./whatsappPolicy";
 
 const whatsappToken = defineSecret("WHATSAPP_TOKEN");
 const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
@@ -96,8 +104,14 @@ async function sendWhatsAppText(to: string, body: string) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error("WhatsApp send failed", { status: response.status, errorText });
+    let code: string | number = response.status;
+    try {
+      const payload = await response.json() as { error?: { code?: string | number } };
+      if (payload?.error?.code !== undefined) code = payload.error.code;
+    } catch {
+      /* never log provider error bodies */
+    }
+    console.error("WhatsApp send failed", { status: response.status, code });
   }
 }
 
@@ -216,6 +230,15 @@ export const whatsappWebhook = onRequest(
         for (const change of entry.changes || []) {
           const value: WhatsAppWebhookValue = change.value || {};
           for (const message of value.messages || []) {
+            const from = String(message.from || "").trim();
+            if (from) {
+              const dayOk = await claimRateLimit(db, "in", from, dubaiCalendarDay(), INBOUND_DAILY_LIMIT);
+              const hourOk = dayOk && await claimRateLimit(db, "inburst", from, dubaiHourKey(), INBOUND_HOURLY_LIMIT);
+              if (!dayOk || !hourOk) {
+                console.warn("WhatsApp inbound rate-limited", { reason: dayOk ? "hourly" : "daily" });
+                continue;
+              }
+            }
             const persisted = await persistInboundMessage({
               entryId: entry.id || "",
               changeField: change.field || "",
@@ -226,7 +249,7 @@ export const whatsappWebhook = onRequest(
             if (persisted.from) {
               await sendWhatsAppText(
                 persisted.from,
-                `BIN GROUP received your ${persisted.category} request. Reference: ${persisted.intakeId}. Our team will review and convert it into a maintenance ticket if action is required.`
+                inboundAckMessage(persisted.category, persisted.intakeId),
               );
             }
           }

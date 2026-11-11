@@ -59,6 +59,7 @@ import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
+import WhatsAppTemplatesPage from './pages/admin/WhatsAppTemplatesPage';
 import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
 import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
 import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
@@ -145,6 +146,7 @@ function AppContent() {
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
                     <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/whatsapp-templates" element={<ProtectedRoute adminOnly><WhatsAppTemplatesPage /></ProtectedRoute>} />
                     <Route path="/ops/bin-connect" element={<ProtectedRoute adminOnly><BinConnectInboxPage /></ProtectedRoute>} />
                     <Route path="/ops/pilot-completion" element={<ProtectedRoute adminOnly><PilotCompletionCommandPage /></ProtectedRoute>} />
                     <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />

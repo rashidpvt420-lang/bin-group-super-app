@@ -13,6 +13,7 @@ const COVERED = {
   'functions/adminStaffLifecycle.ts': ['adminGetStaffLifecycle', 'adminGetStaffDetails', 'adminGetTechnicianOperationsDirectory', 'adminUpdateStaffProfile', 'adminUpdateStaffOnboarding', 'adminOffboardStaff', 'adminResendStaffInvitation'],
   'functions/secureAdminTechnicianAssignment.ts': ['adminAssignTechnician'],
   'functions/ticketDispatchOperations.ts': ['adminAssignTechnician', 'adminResolveTicketDispute', 'adminUpdateEmergencyTicket', 'adminProcessWhatsAppIntake'],
+  'functions/whatsappJobStatusNotifications.ts': ['adminUpsertWhatsAppTemplate'],
   'functions/scheduledServices.ts': ['adminRevealScheduledServiceAccessCode'],
   'functions/scheduledServiceAvailability.ts': ['adminManageScheduledServiceAvailability', 'adminUpdateScheduledService'],
   'functions/secureTenantUnitLinkOperations.ts': ['adminResolveTenantUnitLink'],

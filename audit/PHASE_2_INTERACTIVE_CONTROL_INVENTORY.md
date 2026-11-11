@@ -2,11 +2,11 @@
 
 Generated from the checked-out source tree. This is an executable source inventory paired with Playwright runtime checks; it is not a manual checklist.
 
-- Interactive controls discovered: **2726**
-- Source files containing controls: **342**
-- Controls with a static label/test identity signal: **2454 / 2726 (90.0%)**
-- Mutation-like controls detected: **140**
-- Mutation-like controls with a disabled/loading signal in the JSX opening element: **140 / 140 (100.0%)**
+- Interactive controls discovered: **2803**
+- Source files containing controls: **348**
+- Controls with a static label/test identity signal: **2443 / 2803 (87.2%)**
+- Mutation-like controls detected: **151**
+- Mutation-like controls with a disabled/loading signal in the JSX opening element: **151 / 151 (100.0%)**
 - Runtime route coverage: **tests/e2e/hard-launch-routes.spec.ts**
 - Cross-platform public shell coverage: **tests/e2e/phase3-platform-shell.spec.ts**
 - Protected live evidence binding: **launchAuditLive**

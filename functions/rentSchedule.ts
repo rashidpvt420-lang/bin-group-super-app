@@ -17,6 +17,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { generateTenantRentReceiptPdfArtifact } from "./pdfEngine";
+import { notifyJobEvent, whatsappPhoneNumberIdSecret, whatsappTokenSecret } from "./whatsappJobStatusNotifications";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -126,7 +127,7 @@ async function notifyTenant(inst: any, id: string, key: string, copy: { title: s
   const tenantUid = text(inst.tenantUid, 160);
   if (tenantUid) {
     await db.collection("notifications").doc(`${type}_${id}_${key}`).set({
-      userId: tenantUid, role: "tenant", type, title: copy.title, body: copy.body, titleAr: copy.titleAr, bodyAr: copy.bodyAr,
+      userId: tenantUid, recipientId: tenantUid, recipientRole: "tenant", role: "tenant", type, title: copy.title, body: copy.body, titleAr: copy.titleAr, bodyAr: copy.bodyAr,
       link: "/tenant/payments", read: false, status: "PENDING", installmentId: id, unitId: inst.unitId || null,
       propertyId: inst.propertyId || null, createdAt: FieldValue.serverTimestamp(), source: "RENT_SCHEDULE",
     }, { merge: true });
@@ -164,7 +165,19 @@ export async function runRentReminders(now = new Date()) {
     const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
     if (plan.markOverdue) { update.status = "OVERDUE"; overdue += 1; }
     if (plan.key) {
-      await notifyTenant(inst, doc.id, plan.key, reminderCopy(plan.days, Number(inst.amount || 0), text(inst.dueDate, 10)), "RENT_DUE_REMINDER");
+      const copy = reminderCopy(plan.days, Number(inst.amount || 0), text(inst.dueDate, 10));
+      await notifyTenant(inst, doc.id, plan.key, copy, "RENT_DUE_REMINDER");
+      try {
+        await notifyJobEvent(`${doc.id}_${plan.key}`, "RENT_DUE_REMINDER", {
+          tenantId: inst.tenantUid,
+          tenantUid: inst.tenantUid,
+          category: "RENT",
+          amount: inst.amount,
+          dueDate: inst.dueDate,
+        });
+      } catch (error: any) {
+        console.error("[rentReminders] whatsapp skipped", { code: error?.code || error?.status || "error" });
+      }
       update[`remindersSent.${plan.key}`] = true;
       sent += 1;
     }
@@ -174,7 +187,7 @@ export async function runRentReminders(now = new Date()) {
   return { scanned: snap.size, sent, overdue };
 }
 
-export const sendRentDueReminders = onSchedule({ schedule: "0 9 * * *", timeZone: "Asia/Dubai", region: "europe-west3" }, async () => {
+export const sendRentDueReminders = onSchedule({ schedule: "0 9 * * *", timeZone: "Asia/Dubai", region: "europe-west3", secrets: [whatsappTokenSecret, whatsappPhoneNumberIdSecret] }, async () => {
   const r = await runRentReminders();
   console.log(`[rentReminders] scanned=${r.scanned} sent=${r.sent} overdue=${r.overdue}`);
 });

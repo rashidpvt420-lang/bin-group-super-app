@@ -112,7 +112,8 @@ export async function checkQuoteReapproval(quoteId: string, before: admin.firest
       if (!fresh || fresh.status === "reapproval_required") return;
       tx.update(a.ref, { status: "reapproval_required", reapprovalReason: { approvedAmountAed: d.approvedAmountAed, newAmountAed: newAed, quoteId }, updatedAt: FieldValue.serverTimestamp() });
       tx.create(db.collection("notifications").doc(), {
-        userId: ownerId, type: "SPEND_REAPPROVAL_REQUIRED", approvalRequestId: a.id, read: false,
+        userId: ownerId, recipientId: ownerId, recipientRole: "owner", type: "SPEND_REAPPROVAL_REQUIRED", approvalRequestId: a.id, read: false,
+        title: "Re-approval needed", body: `A quote rose from AED ${d.approvedAmountAed} to AED ${newAed}, above your tolerance. Nothing proceeds until you decide.`,
         titleEn: "Re-approval needed", titleAr: "مطلوب إعادة الموافقة",
         bodyEn: `A quote rose from AED ${d.approvedAmountAed} to AED ${newAed}, above your tolerance. Nothing proceeds until you decide.`,
         bodyAr: `ارتفع عرض سعر من ${d.approvedAmountAed} إلى ${newAed} درهم، فوق الهامش المحدد. لن يتم أي إجراء حتى تقرر.`,
