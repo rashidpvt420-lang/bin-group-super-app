@@ -73,6 +73,8 @@ test('minInstances stays default 0 and App Check is kept on critical callables',
   assert.match(scale, /default:\s*0/);
   assert.match(scale, /enforceAppCheck/);
   assert.doesNotMatch(scale, /enforceAppCheck:\s*false/);
+  const dotenvExample = read('functions/.env.bin-group-57c60.example');
+  assert.match(dotenvExample, /^CRITICAL_FN_MIN_INSTANCES=0$/m);
 });
 
 test('summary counters are sharded and the reconcile script refuses production', () => {
