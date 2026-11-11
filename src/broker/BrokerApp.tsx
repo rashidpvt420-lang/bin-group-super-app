@@ -11,21 +11,20 @@ import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import BinConnectChatBox from '../components/BinConnectChatBox';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
+import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
+import BrokerDashboardPage from './pages/BrokerDashboardPage';
+import BrokerLeadsPage from './pages/BrokerLeadsPage';
+import BrokerReferralsPage from './pages/BrokerReferralsPage';
+import BrokerCommissionsPage from './pages/BrokerCommissionsPage';
+import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
+import BrokerProfilePage from './pages/BrokerProfilePage';
+import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
+import BrokerListingsPage from './pages/BrokerListingsPage';
 import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 
-// Keep the broker shell (nav labels, language toggle, mobile nav) independent of
-// heavy route pages such as Design Studio so the module can resolve without
-// leaving the user on the app-level "Loading BIN GROUP module..." fallback.
-const BinConnectInboxPage = React.lazy(() => import('../components/BinConnectInboxPage'));
-const BrokerSimpleDashboardPage = React.lazy(() => import('./pages/BrokerSimpleDashboardPage'));
-const BrokerDashboardPage = React.lazy(() => import('./pages/BrokerDashboardPage'));
-const BrokerLeadsPage = React.lazy(() => import('./pages/BrokerLeadsPage'));
-const BrokerReferralsPage = React.lazy(() => import('./pages/BrokerReferralsPage'));
-const BrokerCommissionsPage = React.lazy(() => import('./pages/BrokerCommissionsPage'));
-const BrokerDocumentsPage = React.lazy(() => import('./pages/BrokerDocumentsPage'));
-const BrokerProfilePage = React.lazy(() => import('./pages/BrokerProfilePage'));
-const BrokerAttributionProofPage = React.lazy(() => import('./pages/BrokerAttributionProofPage'));
-const BrokerListingsPage = React.lazy(() => import('./pages/BrokerListingsPage'));
+// Design Studio is a heavy route and must not block the broker shell
+// (Dashboard nav, language toggle, mobile nav) from rendering.
 const DesignStudioPage = React.lazy(() => import('../pages/DesignStudioPage'));
 
 function BrokerPageFallback() {
