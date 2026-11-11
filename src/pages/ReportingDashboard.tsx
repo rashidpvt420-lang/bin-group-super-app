@@ -20,11 +20,17 @@ import { loadReportingCollection } from '../lib/loadReportingCollections';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 import { computeReportingStats, formatOccupancy, formatResolutionTime, NOT_AVAILABLE, type ReportingStats } from './reportingDashboardStats';
+
+type ReportingView = ReportingStats & {
+  _truncated?: boolean;
+  _totals?: { properties: number; tickets: number; contracts: number; units: number };
+};
+
 import Bi from '../components/Bi';
 
 const ReportingDashboard: React.FC = () => {
     const { user, role } = useRole();
-    const [stats, setStats] = useState<ReportingStats | null>(null);
+    const [stats, setStats] = useState<ReportingView | null>(null);
     const [selectedEmirate, setSelectedEmirate] = useState('ALL');
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -118,7 +124,7 @@ const ReportingDashboard: React.FC = () => {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: '#7A5C12' }} /></Box>;
     if (loadError) return <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}><Alert severity="error">{loadError}</Alert></Container>;
     if (!stats) return null;
-    const truncated = Boolean((stats as any)._truncated);
+    const truncated = Boolean(stats._truncated);
     const emergencyMax = Math.max(1, ...stats.emergencyByMonth.map((m) => m.count));
 
     return (
