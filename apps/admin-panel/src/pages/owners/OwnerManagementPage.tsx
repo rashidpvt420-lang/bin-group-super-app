@@ -21,7 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import { db, functions, httpsCallable } from '../../lib/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { usePagedCollection } from '../../lib/usePagedCollection';
 import { useLanguage } from '@bin/shared';
 
@@ -57,6 +57,16 @@ const PENDING_PROPERTY_STATUSES = new Set([
   'pending_review',
   'onboarding',
 ]);
+
+// One realtime approval-queue listener, constrained so it is not a full-collection
+// scan. Lowercase and uppercase forms stay inside Firestore's 10-value 'in' limit.
+const PENDING_PROPERTY_STATUS_QUERY = [
+  'pending', 'PENDING',
+  'pending_approval', 'PENDING_APPROVAL',
+  'pending-review', 'PENDING-REVIEW',
+  'pending_review', 'PENDING_REVIEW',
+  'onboarding', 'ONBOARDING',
+];
 
 function propertyName(property: PropertyRecord | null) {
   return property?.name || property?.propertyName || 'Property';
@@ -94,7 +104,7 @@ export default function OwnerManagementPage() {
   const [reviewingPropertyId, setReviewingPropertyId] = useState('');
 
   useEffect(() => {
-    const propertiesQuery = query(collection(db, 'properties'));
+    const propertiesQuery = query(collection(db, 'properties'), where('status', 'in', PENDING_PROPERTY_STATUS_QUERY));
     const unsubscribe = onSnapshot(
       propertiesQuery,
       (snapshot) => {

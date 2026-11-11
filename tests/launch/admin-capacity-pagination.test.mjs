@@ -48,8 +48,13 @@ test('audited admin and owner-reporting pages no longer open full-collection lis
   ];
   for (const path of AUDIT_PAGES) {
     const source = read(path);
+    // The live map must keep a complete technicians listener with no silent cap.
+    // That exception is locked by admin-map-ticket-lifecycle and hard-launch-source-blockers.
+    const inspected = path.endsWith('LiveMapPage.tsx')
+      ? source.replace(/onSnapshot\(\s*collection\(\s*db,\s*'technicians'\s*\)\s*,/g, '/* complete technicians listener */')
+      : source;
     for (const pattern of forbidden) {
-      assert.doesNotMatch(source, pattern, `${path} still has ${pattern}`);
+      assert.doesNotMatch(inspected, pattern, `${path} still has ${pattern}`);
     }
   }
 });
