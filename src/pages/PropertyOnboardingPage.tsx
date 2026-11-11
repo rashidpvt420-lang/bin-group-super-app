@@ -132,22 +132,23 @@ export default function PropertyOnboardingPage() {
     };
 
     const guardedAssetNext = () => {
-        const property = properties[0];
-        const descriptor = `${property?.propertyType || ''} ${property?.subType || ''}`.toLowerCase();
-        const isMosque = descriptor.includes('mosque') || descriptor.includes('masjid');
-        if (!isMosque) { advanceSection(); return; }
-        const mosque = property?.mosqueProfile || {};
-        const missing = [
-            !String(mosque.mosqueName || '').trim() ? label('mosque name', 'اسم المسجد') : '',
-            !(Number(mosque.grossFloorAreaSqft) > 0) ? label('gross floor area', 'المساحة الإجمالية') : '',
-            !(Number(mosque.maxWorshipperCapacity) > 0) ? label('worshipper capacity', 'سعة المصلين') : '',
-            !(Number(mosque.wuduAreasCount) > 0) ? label('Wudu areas', 'مناطق الوضوء') : '',
-            mosque.cctvInstalled && !(Number(mosque.storageDays) > 0) ? label('CCTV retention days', 'أيام الاحتفاظ بالكاميرات') : '',
-        ].filter(Boolean);
-        if (missing.length) {
-            setGuardError(label(`Complete the mandatory Mosque profile before continuing: ${missing.join(', ')}.`, `أكمل بيانات المسجد الإلزامية قبل المتابعة: ${missing.join('، ')}.`));
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            return;
+        for (const [index, property] of properties.entries()) {
+            const descriptor = `${property?.propertyType || ''} ${property?.subType || ''}`.toLowerCase();
+            const isMosque = descriptor.includes('mosque') || descriptor.includes('masjid');
+            if (!isMosque) continue;
+            const mosque = property?.mosqueProfile || {};
+            const missing = [
+                !String(mosque.mosqueName || '').trim() ? label('mosque name', 'اسم المسجد') : '',
+                !(Number(mosque.grossFloorAreaSqft) > 0) ? label('gross floor area', 'المساحة الإجمالية') : '',
+                !(Number(mosque.maxWorshipperCapacity) > 0) ? label('worshipper capacity', 'سعة المصلين') : '',
+                !(Number(mosque.wuduAreasCount) > 0) ? label('Wudu areas', 'مناطق الوضوء') : '',
+                mosque.cctvInstalled && !(Number(mosque.storageDays) > 0) ? label('CCTV retention days', 'أيام الاحتفاظ بالكاميرات') : '',
+            ].filter(Boolean);
+            if (missing.length) {
+                setGuardError(label(`Property ${index + 1}: complete the mandatory Mosque profile before continuing: ${missing.join(', ')}.`, `العقار ${index + 1}: أكمل بيانات المسجد الإلزامية قبل المتابعة: ${missing.join('، ')}.`));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
         }
         advanceSection();
     };

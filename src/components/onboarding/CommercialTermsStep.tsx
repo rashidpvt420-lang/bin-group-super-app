@@ -88,7 +88,7 @@ const ppmTextByTier: Record<string, LocalText> = {
 const majlisPpmTextByTier: Record<string, LocalText> = {
     standard: { en: '4x annual Majlis readiness and MEP continuity checks.', ar: '4 فحوصات سنوية لجاهزية المجلس واستمرارية MEP.' },
     premium: { en: '12x annual Majlis readiness checks with monthly inspections.', ar: '12 فحصاً سنوياً لجاهزية المجلس مع فحوصات شهرية.' },
-    elite: { en: 'Monthly PPM plus pre-event readiness check and standby coordination.', ar: 'صيانة وقائية شهرية مع فحص جاهزية قبل الفعاليات وتنسيق دعم احتياطي.' },
+    elite: { en: 'Monthly PPM plus pre-event readiness checks. Event standby is an optional add-on quoted separately.', ar: 'صيانة وقائية شهرية مع فحوصات جاهزية قبل الفعاليات. استعداد الفعاليات إضافة اختيارية تُسعَّر بشكل منفصل.' },
 };
 
 const responseTextByTier: Record<string, LocalText> = {
@@ -160,7 +160,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     ];
 
     const propertyType = String(property.propertyType || '').toLowerCase();
-    const isMajlis = Boolean(property.majlis || propertyType.includes('majlis') || property.useType === 'Government');
+    const isMajlis = Boolean(property.majlis || propertyType.includes('majlis'));
     const pmSupportedForPortfolio = properties.every((entry) => {
         const classId = resolveAssetClassIdForPropertyType(entry.propertyType, entry.assetGrade);
         const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === classId);
@@ -184,7 +184,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         { id: 'monthly', label: t('onboarding.payment.monthly'), desc: t('onboarding.payment.monthly_desc'), detail: paymentPlanDetails.monthly }
     ];
 
-    const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
+    const handleUpdate = (data: any) => properties.forEach((_, index) => updateProperty(index, data));
     const selectPlanForPortfolio = (strategy: 'fm_only' | 'pm_only' | 'both') => {
         properties.forEach((_, index) => updateProperty(index, { strategy }));
         calculateSummary();

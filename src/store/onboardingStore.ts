@@ -61,10 +61,10 @@ export interface PropertyData {
   subType: string;
   useType: 'Rental' | 'Personal' | 'Mixed' | 'Government' | string;
   ownerType: 'Private' | 'Government' | string;
-  floors: number;
+  floors?: number;
   units: number;
   beds?: number;
-  bedrooms: number;
+  bedrooms?: number;
   bathrooms: number;
   shops: number;
   offices: number;
@@ -75,7 +75,7 @@ export interface PropertyData {
   annualRent?: number;
   annualRevenue?: number;
   pool: boolean;
-  lifts: number;
+  lifts?: number;
   tank: boolean;
   bmu: boolean;
   sira: boolean;
@@ -110,6 +110,7 @@ export interface PropertyData {
   titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
   mosqueProfile?: Record<string, any>;
   gymProfile?: Record<string, any>;
+  assetDetails?: Record<string, string | number | boolean>;
   geo?: {
     point?: { latitude: number; longitude: number };
     lat: number;
@@ -278,9 +279,12 @@ export const buildPropertyQuoteInput = (property: PropertyData, selectedAddOns: 
     beds,
     annualRent,
     annualRevenue,
+    bedrooms: property.bedrooms,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
     floors: property.floors,
     lifts: property.lifts,
+    floorsUnknown: property.floors === undefined || property.floors === null || String(property.floors).trim() === '',
+    liftsUnknown: property.lifts === undefined || property.lifts === null || String(property.lifts).trim() === '',
     hasPool: isGym ? Boolean(gymProfile.swimmingPool || property.pool) : property.pool,
     hasGym: isGym || property.gym,
     hasCentralHVAC: isMosque ? true : property.hvac,
@@ -318,8 +322,8 @@ export const resolvePropertyMandatoryAddOns = (property: PropertyData): string[]
 // Zone/plan enums remain operational defaults, but property facts and measurements stay blank/zero.
 const defaultProperty: PropertyData = {
   id: '', emirate: '', area: '', zone: 'B', propertyType: '', subType: '',
-  useType: '', ownerType: '', floors: 0, units: 0, bedrooms: 0, bathrooms: 0,
-  shops: 0, offices: 0, rooms: 0, sqft: 0, age: undefined, pool: false, lifts: 0, tank: false,
+  useType: '', ownerType: '', floors: undefined, units: 0, bedrooms: undefined, bathrooms: 0,
+  shops: 0, offices: 0, rooms: 0, sqft: 0, age: undefined, pool: false, lifts: undefined, tank: false, assetDetails: {},
   bmu: false, sira: false, fireAlarm: false, firePump: false, escalators: false, centralLPG: false,
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,

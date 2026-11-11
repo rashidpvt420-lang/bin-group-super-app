@@ -7,6 +7,7 @@ import {
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
+import { applyAssetDetailsToProperty, sanitizeAssetDetails } from "./pricing/assetTypeDetails";
 import { normalizeAedMoney } from "./shared/aedMoney";
 
 const QUOTE_VERSION = "uae-owner-onboarding-2026-v4-gym-server-authority";
@@ -53,7 +54,7 @@ function rejectNegativeNumericInputs(property: PropertyInput, index: number) {
     const parsed = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw);
     if (Number.isFinite(parsed) && parsed < 0) throw new Error(`Property ${index + 1} has a negative ${key}; pricing inputs cannot be negative.`);
   }
-  for (const profileKey of ["gymProfile", "mosqueProfile"]) {
+  for (const profileKey of ["gymProfile", "mosqueProfile", "assetDetails"]) {
     const profile = property[profileKey];
     if (!profile || typeof profile !== "object") continue;
     for (const [key, raw] of Object.entries(profile)) {
@@ -279,6 +280,36 @@ function quoteInputForProperty(
   };
 }
 
+
+function mergeAssetDetails(property: PropertyInput): PropertyInput {
+  const patch = applyAssetDetailsToProperty(text(property.propertyType), property.assetDetails);
+  const prefer = (key: string, fallback: unknown) => {
+    const current = property[key];
+    return current === undefined || current === null || current === '' ? fallback : current;
+  };
+  return {
+    ...property,
+    ...patch,
+    assetDetails: sanitizeAssetDetails(text(property.propertyType), property.assetDetails),
+    floors: prefer('floors', patch.floors),
+    units: prefer('units', patch.units),
+    beds: prefer('beds', patch.beds),
+    bedrooms: prefer('bedrooms', patch.bedrooms),
+    lifts: prefer('lifts', patch.lifts),
+    offices: prefer('offices', patch.offices),
+    shops: prefer('shops', patch.shops),
+    bmu: property.bmu === true || patch.bmu === true,
+    fireAlarm: property.fireAlarm === true || patch.fireAlarm === true,
+    hvac: property.hvac === true || patch.hvac === true,
+    districtCooling: property.districtCooling === true || patch.districtCooling === true,
+    tank: property.tank === true || patch.tank === true,
+    pumps: property.pumps === true || patch.pumps === true,
+    gen: property.gen === true || patch.gen === true,
+    pool: property.pool === true || patch.pool === true,
+    ownerType: text(property.ownerType) || patch.ownerType || property.ownerType,
+  };
+}
+
 export function calculateOwnerOnboardingQuote(
   properties: unknown,
   addOns: unknown,
@@ -293,7 +324,7 @@ export function calculateOwnerOnboardingQuote(
 
   const selectedAddOns = Array.isArray(addOns) ? addOns.map(text).filter(Boolean) : [];
   const normalizedProperties: PropertyInput[] = properties.map((property: unknown) => (
-    property && typeof property === "object" ? property as PropertyInput : {}
+    mergeAssetDetails(property && typeof property === "object" ? property as PropertyInput : {})
   ));
   const contractModes = normalizedProperties.map((property: PropertyInput) => contractType(property));
   if (contractModes.some((mode: ContractMode) => mode !== contractModes[0])) {

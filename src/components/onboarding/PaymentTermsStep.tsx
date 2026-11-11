@@ -1,3 +1,8 @@
+/**
+ * QUARANTINED: this screen is not on the live five-page Owner onboarding route.
+ * Phase 1 payment is AED Cash or Cheque only. Do not re-attach this screen
+ * or treat its copy (including any Stripe, bank transfer, or discount text) as live policy.
+ */
 import React from 'react';
 import { 
     Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, Chip 

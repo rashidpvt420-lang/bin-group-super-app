@@ -37,17 +37,24 @@ export interface MajlisPackage {
   features: string[];
 }
 
+/**
+ * Legacy catalogue only — not the live Owner onboarding quote.
+ * Live Majlis pricing uses the facility minimum in assetClasses
+ * (AED 12,000 private / AED 25,000 government) times zone, emirate and
+ * SLA factors (Standard 1.00x, Premium 1.15x, Elite 1.30x).
+ * These package prices must not be shown as selectable SLA or quote amounts.
+ */
 export const MAJLIS_MAINTENANCE_PACKAGES: MajlisPackage[] = [
   {
-    id: 'majlis-basic', label: 'Majlis Basic Maintenance', basePrice: 12000,
+    id: 'majlis-basic', label: 'Majlis Basic Maintenance (legacy catalogue, not live pricing)', basePrice: 12000,
     features: ['AC Maintenance', 'Electrical', 'Plumbing', 'Civil / Handyman'],
   },
   {
-    id: 'majlis-premium', label: 'Majlis Premium Maintenance', basePrice: 25000,
+    id: 'majlis-premium', label: 'Majlis Premium Maintenance (legacy catalogue, not live pricing)', basePrice: 25000,
     features: ['AC Maintenance', 'Electrical', 'Plumbing', 'Civil / Handyman', 'Cleaning Add-on', 'Pre-event Inspection'],
   },
   {
-    id: 'majlis-elite', label: 'Majlis Elite / Standby Maintenance', basePrice: 45000,
+    id: 'majlis-elite', label: 'Majlis Elite / Standby Maintenance (legacy catalogue, not live pricing)', basePrice: 45000,
     features: ['AC Maintenance', 'Electrical', 'Plumbing', 'Civil / Handyman', 'Cleaning Team', 'Event Standby Technician', 'Emergency Response (30 min)', 'Pre/Post-event Inspection', 'VIP Support'],
   },
 ];
@@ -265,6 +272,9 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
       pmRate: 'N/A', ifm: '18,000 / yr target', pricingUnit: 'facility', riskLevel: 'Medium',
       maintenanceRange: { min: 12000, max: 35000, target: 18000 }, managementRange: { min: 0, max: 0, target: 0 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
+    // Mosque / Masjid is priced by calculateMosqueQuote (custom FM formula), not a matrix row.
+    // Do not add a mosque_fm asset class here: a 0% management row would be treated as a live
+    // 0% PM class and would not produce a Maintenance Only price through the generic engine.
     {
       id: 'mix-dev', category: 'Mixed Use', label: 'Mixed-Use Tower', minimumAnnualContract: 100000,
       pmRate: '5-8% annual rent/revenue', ifm: 'FM + PM', pricingUnit: 'sqft', riskLevel: 'High',

@@ -572,6 +572,17 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
+    // BEGIN ASSET_DETAILS_ALLOWLIST
+    // Clients cannot create or change assetDetails. The inspection-first and quote
+    // callables write a sanitised allowlisted map with the Admin SDK. Per-key type
+    // checks cannot live on this update path: they overflow Firestore's 1000-expression budget.
+    function assetDetailsWriteIsSafe(data) {
+      return resource == null
+        ? !data.keys().hasAny(['assetDetails'])
+        : !data.diff(resource.data).affectedKeys().hasAny(['assetDetails']);
+    }
+    // END ASSET_DETAILS_ALLOWLIST
+
     function submittedPropertyGeoIsUnverified(data) {
       return !('submittedGeo' in data) || (
         data.submittedGeo is map &&
@@ -641,6 +652,7 @@ service cloud.firestore {
       return propertyOwnedByCaller(data) &&
         ownerDraftCreate(data) &&
         propertyCreateHasNoCanonicalGeo(data) &&
+        assetDetailsWriteIsSafe(data) &&
         !data.keys().hasAny([
           'active',
           'isActive',
@@ -659,6 +671,7 @@ service cloud.firestore {
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
         safeManagedPropertyUpdate() &&
+        assetDetailsWriteIsSafe(request.resource.data) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
           'lifecycleStatus',
