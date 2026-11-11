@@ -1,6 +1,19 @@
 import { getStorage } from 'firebase-admin/storage';
 import { EMERGENCY_OWNER_NOTIFY_HOURS, EMERGENCY_SPEND_LIMIT_AED, FIXED_OWNER_APPROVAL_LIMIT_AED } from './ownerSpendingLimits';
 import { OWNER_MOBILIZATION_DUE_DAYS, OWNER_SUSPENSION_NOTICE_DAYS, RETURNED_CHEQUE_FEE_AED, mobilizationDueAt } from './ownerPaymentLedger';
+import {
+  BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF,
+  OWNER_COMPLIMENTARY_MONTHS,
+  OWNER_INITIAL_CANCELLATION_WINDOW_DAYS,
+  OWNER_INITIAL_CONTRACT_TERM_MONTHS,
+  OWNER_SERVICE_TERM_MONTHS,
+  formatOwnerInitialCancellationFee,
+  formatPropertyManagementLicenceRef,
+  ownerCancellationWindowCopy,
+  ownerComplimentaryMonthCopy,
+} from './ownerInitialContractPolicy';
+import { describeAddOnLine, buildOwnerQuoteCommercialBreakdown } from './pricing/calculateUaeQuote2026';
+
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
 import { isArabic, layoutBidiText } from "./arabicPdfText";
@@ -73,7 +86,7 @@ const GOLD = '#C6A75E';
 const INK = '#111827';
 const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
-const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.0';
+const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.1';
 
 function money(value: any) {
     const amount = Number(value || 0);
@@ -103,6 +116,11 @@ function asDate(value: any): Date | null {
 function addMonthsPreservingTime(date: Date, months: number): Date {
     const copy = new Date(date.getTime());
     copy.setMonth(copy.getMonth() + months);
+    return copy;
+}
+function addDaysPreservingTime(date: Date, days: number): Date {
+    const copy = new Date(date.getTime());
+    copy.setDate(copy.getDate() + days);
     return copy;
 }
 
@@ -303,6 +321,133 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
     };
 }
 
+
+function asPlainRecord(value: any): Record<string, any> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function moneyOrPending(value: any, pending = 'to be confirmed / يُؤكد لاحقاً') {
+    if (value === null || value === undefined || value === '') return pending;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return textValue(value, pending);
+    return money(numeric);
+}
+
+function collectContractAddOnIds(data: any): string[] {
+    const bags = [
+        data.selectedAddOns, data.addOns, data.addons,
+        data.commercialSchedule?.selectedAddOns, data.paymentSchedule?.selectedAddOns,
+        data.serviceDetails?.selectedAddOns, data.quoteSnapshot?.selectedAddOns,
+        ...(Array.isArray(data.properties) ? data.properties.map((item: any) => item?.selectedAddOns) : []),
+        ...(Array.isArray(data.commercialSchedule?.propertyDetails) ? data.commercialSchedule.propertyDetails.map((item: any) => item?.selectedAddOns) : []),
+    ];
+    const ids: string[] = [];
+    for (const bag of bags) {
+        for (const item of asArray(bag)) {
+            const id = typeof item === 'string' ? item : textValue(item?.id || item?.addonId || item?.label, '');
+            if (id) ids.push(id);
+        }
+    }
+    return Array.from(new Set(ids));
+}
+
+function collectAssetDetailRows(data: any): Array<{ label: string; value: string }> {
+    const details = asPlainRecord(
+        data.assetDetails
+        || data.properties?.[0]?.assetDetails
+        || data.commercialSchedule?.propertyDetails?.[0]?.assetDetails
+        || data.intakeData?.assetDetails
+    );
+    return Object.entries(details)
+        .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+        .slice(0, 80)
+        .map(([key, value]) => ({ label: key, value: typeof value === 'boolean' ? (value ? 'Yes / نعم' : 'No / لا') : String(value) }));
+}
+
+function renderPricedAddOns(doc: any, data: any) {
+    const fromSchedule = asArray(data.commercialSchedule?.addOnLines || data.quoteSnapshot?.commercialLines?.[0]?.addOnLines || data.commercialLines?.[0]?.addOnLines);
+    const lines = fromSchedule.length
+        ? fromSchedule.map((item: any) => ({
+            id: textValue(item.id),
+            labelEn: textValue(item.labelEn || item.label, textValue(item.id)),
+            labelAr: textValue(item.labelAr || item.labelEn || item.label, textValue(item.id)),
+            amountAed: item.amountAed === null || item.amountAed === undefined ? null : Number(item.amountAed),
+            manualQuote: item.manualQuote === true,
+        }))
+        : collectContractAddOnIds(data).map((id) => describeAddOnLine(id));
+    if (!lines.length) {
+        para(doc,
+            'No priced add-ons were recorded on this contract.',
+            'لم تُسجَّل إضافات مسعّرة في هذا العقد.'
+        );
+        return;
+    }
+    const bodyEn = lines.map((item: any) => {
+        const price = item.manualQuote || item.amountAed === null ? 'to be confirmed (manual quote)' : money(item.amountAed);
+        return `• ${item.labelEn} — ${price}`;
+    }).join('\n');
+    const bodyAr = lines.map((item: any) => {
+        const price = item.manualQuote || item.amountAed === null ? 'يُؤكد لاحقاً (عرض سعر يدوي)' : money(item.amountAed);
+        return `• ${item.labelAr} — ${price}`;
+    }).join('\n');
+    para(doc, 'Selected Add-ons and line prices:\n' + bodyEn, 'الإضافات المختارة وأسعار البنود:\n' + bodyAr);
+}
+
+function renderQuoteLineItems(doc: any, data: any) {
+    const stored = asArray(data.commercialSchedule?.lineItems || data.quoteSnapshot?.commercialLines?.[0]?.lines || data.commercialLines?.[0]?.lines);
+    let lines = stored;
+    if (!lines.length) {
+        try {
+            const property = asPlainRecord(data.properties?.[0] || data);
+            const addOns = collectContractAddOnIds(data);
+            if (property.propertyType || property.assetClassId) {
+                const breakdown = buildOwnerQuoteCommercialBreakdown({
+                    assetClassId: property.assetClassId || property.pricingClass || property.propertyType,
+                    emirate: property.emirate || data.emirate,
+                    area: property.area || data.area,
+                    zone: property.zone || data.zone,
+                    contractType: property.contractType || data.contractType || data.contractMode,
+                    sqft: property.sqft || property.areaSqft,
+                    units: property.units || property.unitCount,
+                    beds: property.beds || property.bedCount,
+                    bedrooms: property.bedrooms,
+                    annualRent: property.annualRent || data.annualRent,
+                    annualRevenue: property.annualRevenue || data.annualRevenue,
+                    propertyAge: property.propertyAge || property.buildingAge || data.propertyAge,
+                    floors: property.floors,
+                    lifts: property.lifts,
+                    floorsUnknown: property.floorsUnknown,
+                    liftsUnknown: property.liftsUnknown,
+                    slaTier: property.slaTier || data.slaTier,
+                    paymentPlan: property.paymentPlan || data.paymentPlan,
+                    addOns,
+                });
+                lines = breakdown.lines;
+            }
+        } catch (err) {
+            console.warn('Contract commercial lines could not be rebuilt from property facts:', err);
+        }
+    }
+    if (!lines.length) {
+        para(doc,
+            'A structured price breakdown was not stored on this contract. The annual value and mobilisation figures above remain the commercial totals.',
+            'لم يُحفظ تفصيل سعري منظم في هذا العقد. وتبقى القيمة السنوية ودفعة التفعيل أعلاه هي الإجماليات التجارية.'
+        );
+        return;
+    }
+    const bodyEn = lines.map((item: any) => {
+        const amount = item.amountAed === null || item.amountAed === undefined ? '' : ` — ${moneyOrPending(item.amountAed)}`;
+        const note = item.noteEn ? ` (${item.noteEn})` : '';
+        return `• ${item.labelEn || item.id}${amount}${note}`;
+    }).join('\n');
+    const bodyAr = lines.map((item: any) => {
+        const amount = item.amountAed === null || item.amountAed === undefined ? '' : ` — ${moneyOrPending(item.amountAed)}`;
+        const note = item.noteAr ? ` (${item.noteAr})` : '';
+        return `• ${item.labelAr || item.labelEn || item.id}${amount}${note}`;
+    }).join('\n');
+    para(doc, 'Price breakdown (must match the accepted quotation total):\n' + bodyEn, 'تفصيل الأسعار (يجب أن يطابق إجمالي عرض السعر المقبول):\n' + bodyAr);
+}
+
 /**
  * Full bilingual owner service agreement PDF generator.
  * This replaces the old short contract summary so the owner signs/downloads
@@ -331,7 +476,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         const doc = new (PDFDocument as any)({
             margin: 50,
             size: 'A4',
-            info: { Title: '13-Month Owner Service Agreement', Author: 'BIN GROUP Super App' }
+            info: { Title: '13-Month Owner Service Agreement (1 complimentary month + 12 months paid service)', Author: 'BIN GROUP Super App' }
         });
 
         if (fontBuffer) {
@@ -388,9 +533,9 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         });
 
         doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
-        doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT', { align: 'center' });
+        doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT — 1 COMPLIMENTARY MONTH + 12 MONTHS PAID SERVICE', { align: 'center' });
         doc.fillColor(MUTED).fontSize(9);
-        bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً', null, null, { align: 'center' });
+        bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً — شهر خدمة مجاني واحد + 12 شهراً مدفوعاً', null, null, { align: 'center' });
         doc.moveDown(0.6);
         doc.fillColor(MUTED).fontSize(7).text(`Version: ${AGREEMENT_VERSION} | Contract ID: ${contractId} | Hash: ${documentHash.slice(0, 20)}...`, { align: 'center' });
         doc.moveDown(0.9);
@@ -404,6 +549,8 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Company / الشركة', textValue(data.companyName || data.entityName || 'Private Owner'));
         row(doc, 'Service Provider / مقدم الخدمة', 'BIN GROUP L.L.C - S.P.C');
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
+        const licenceRef = formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || data.reraLicenceNumber || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF);
+        row(doc, 'RERA / emirate PM licence / ترخيص إدارة العقارات', `${licenceRef.displayEn} / ${licenceRef.displayAr} (placeholder pending legal insertion; not an invented licence number)`);
 
         const start = asDate(
             data.ownerSignature?.signedAt || 
@@ -414,27 +561,46 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             data.startedAt || 
             data.createdAt
         ) || new Date();
-        const end = addMonthsPreservingTime(start, 13);
-        row(doc, 'Contract Term / مدة العقد', `13 Months: ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / مستمر لمدة 13 شهراً`);
+        const end = addMonthsPreservingTime(start, OWNER_INITIAL_CONTRACT_TERM_MONTHS);
+        row(doc, 'Contract Term / مدة العقد', `${OWNER_INITIAL_CONTRACT_TERM_MONTHS} months (${OWNER_COMPLIMENTARY_MONTHS} complimentary + ${OWNER_SERVICE_TERM_MONTHS} paid): ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / ${OWNER_INITIAL_CONTRACT_TERM_MONTHS} شهراً (${OWNER_COMPLIMENTARY_MONTHS} شهر مجاني + ${OWNER_SERVICE_TERM_MONTHS} شهراً مدفوعاً)`);
 
         section(doc, '2. Property and Submitted Details', 'بيانات العقار والمستندات المقدمة');
-        row(doc, 'Property Name / اسم العقار', textValue(data.propertyName || data.propertyTitle || data.address));
+        const primaryProperty = asPlainRecord(data.properties?.[0] || data.commercialSchedule?.propertyDetails?.[0] || data);
+        row(doc, 'Property Name / اسم العقار', textValue(data.propertyName || data.propertyTitle || data.address || primaryProperty.propertyName));
         row(doc, 'Property Type / نوع العقار', propertyType);
-        row(doc, 'Emirate / الإمارة', textValue(data.emirate));
-        row(doc, 'Address / العنوان', textValue(data.address || data.location || data.formattedAddress));
-        row(doc, 'Title Deed / سند الملكية', textValue(data.titleDeedReference || data.titleDeedNo || data.deedNumber));
+        row(doc, 'Emirate / الإمارة', textValue(data.emirate || primaryProperty.emirate));
+        row(doc, 'Area / community / المنطقة / المجتمع', textValue(data.area || primaryProperty.area || data.city || primaryProperty.city));
+        row(doc, 'Pricing zone / منطقة التسعير', textValue(data.zone || primaryProperty.zone || data.commercialSchedule?.zone));
+        row(doc, 'Address / العنوان', textValue(data.address || data.location || data.formattedAddress || primaryProperty.fullAddress || primaryProperty.address));
+        row(doc, 'Title Deed / سند الملكية', textValue(data.titleDeedReference || data.titleDeedNo || data.deedNumber || primaryProperty.titleDeedNo));
         row(doc, 'GPS / إحداثيات الموقع', textValue(data.gpsCoordinates || data.coordinates || (data.lat && data.lng ? `${data.lat}, ${data.lng}` : '---')));
-        row(doc, 'Units / الوحدات', textValue(data.units || data.totalUnits || data.unitCount));
-        row(doc, 'Floors / الطوابق', textValue(data.floors || data.floorCount));
+        row(doc, 'Measured area / المساحة المقاسة', textValue(data.sqft || primaryProperty.sqft || primaryProperty.areaSqft, '---'));
+        row(doc, 'Units / الوحدات', textValue(data.units || data.totalUnits || data.unitCount || primaryProperty.units || primaryProperty.unitCount));
+        row(doc, 'Beds / الأسرة', textValue(data.beds || primaryProperty.beds || primaryProperty.bedCount, '---'));
+        row(doc, 'Bedrooms / غرف النوم', textValue(data.bedrooms || primaryProperty.bedrooms, '---'));
+        row(doc, 'Floors / الطوابق', textValue(data.floors || data.floorCount || primaryProperty.floors || primaryProperty.floorCount));
+        row(doc, 'Lifts / المصاعد', textValue(data.lifts || primaryProperty.lifts || primaryProperty.liftCount, '---'));
+        row(doc, 'SLA / مستوى الخدمة', textValue(data.slaTier || primaryProperty.slaTier || data.commercialSchedule?.slaTier));
         row(doc, 'Tenants / المستأجرون', safeArray(data.tenants || data.tenantSummary));
         row(doc, 'Authorized Reporters / المبلغون المعتمدون', safeArray(data.authorizedReporters || data.reporters));
+        const assetDetailRows = collectAssetDetailRows(data);
+        if (assetDetailRows.length) {
+            para(doc,
+                'Type-specific details submitted by the Owner:\n' + assetDetailRows.map((item) => `• ${item.label}: ${item.value}`).join('\n'),
+                'التفاصيل الخاصة بنوع العقار كما قدمها المالك:\n' + assetDetailRows.map((item) => `• ${item.label}: ${item.value}`).join('\n')
+            );
+        }
 
         section(doc, '3. Commercial Terms', 'الشروط التجارية');
         row(doc, 'Package / الباقة', textValue(data.servicePackage || data.planName || data.contractType));
-        row(doc, 'Annual Value / القيمة السنوية', money(data.annualValue || data.totalAnnualValue || data.estimatedAnnualValue));
-        row(doc, 'Mobilization / Activation / التفعيل', money(data.mobilizationFee || data.mobilizationAmount || data.upfrontAmount));
-        row(doc, 'Payment Plan / خطة السداد', textValue(data.paymentPlan || data.billingFrequency));
+        row(doc, 'Annual Value / القيمة السنوية', money(data.annualValue || data.totalAnnualValue || data.estimatedAnnualValue || data.annualContractValue || data.commercialSchedule?.annualContractValue));
+        row(doc, 'Mobilization / Activation / التفعيل', money(data.mobilizationFee || data.mobilizationAmount || data.upfrontAmount || data.commercialSchedule?.mobilizationAmount));
+        row(doc, 'Payment Plan / خطة السداد', textValue(data.paymentPlan || data.billingFrequency || data.commercialSchedule?.paymentPlan));
         row(doc, 'VAT / ضريبة القيمة المضافة', textValue(data.vatTreatment || 'VAT applies where legally required'));
+        row(doc, 'Complimentary first month / الشهر الأول المجاني', 'AED 0 recurring service fee / رسوم خدمة متكررة 0 درهم');
+        const cancellationFee = formatOwnerInitialCancellationFee(data.cancellationFeeAed ?? data.commercialSchedule?.cancellationFeeAed);
+        row(doc, '30-day cancellation fee / رسوم الإلغاء خلال 30 يوماً', `${cancellationFee.displayEn} / ${cancellationFee.displayAr}`);
+        renderQuoteLineItems(doc, data);
 
         section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');
         const details = getScopeDetails(contractMode);
@@ -456,10 +622,12 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         }
 
         const startForWindow = start || new Date();
-        const firstMonthEnds = addMonthsPreservingTime(startForWindow, 1);
+        const firstMonthEnds = addDaysPreservingTime(startForWindow, OWNER_INITIAL_CANCELLATION_WINDOW_DAYS);
+        const complimentaryEnds = addMonthsPreservingTime(startForWindow, OWNER_COMPLIMENTARY_MONTHS);
+        para(doc, ownerComplimentaryMonthCopy(false), ownerComplimentaryMonthCopy(true));
         para(doc,
-            `Cancellation / Upgrade Window: During the first month from the digital signature timestamp (until ${firstMonthEnds.toLocaleDateString('en-AE')}), the Owner may request cancellation or upgrade. Cancellation or upgrade requires BIN GROUP admin review of onboarding, payment, inspection, and consumed services.`,
-            `فترة الإلغاء أو الترقية: خلال الشهر الأول من تاريخ التوقيع الرقمي (حتى ${firstMonthEnds.toLocaleDateString('en-AE')})، يجوز للمالك تقديم طلب إلغاء العقد أو ترقية الباقة. ويتطلب إلغاء العقد أو الترقية مراجعة إدارية من مجموعة بن لبيانات البدء، والدفعات، والفحوصات، والخدمات المستهلكة.`
+            `${ownerCancellationWindowCopy(false)} The request window ends on ${firstMonthEnds.toLocaleDateString('en-AE')}. The complimentary service month ends on ${complimentaryEnds.toLocaleDateString('en-AE')}. Whether the 15% mobilisation payment is refundable on a cancellation inside this window is to be confirmed and is marked for legal review.`,
+            `${ownerCancellationWindowCopy(true)} وتنتهي مهلة الطلب في ${firstMonthEnds.toLocaleDateString('en-AE')}. وينتهي الشهر المجاني في ${complimentaryEnds.toLocaleDateString('en-AE')}. وما إذا كانت دفعة التفعيل 15٪ قابلة للاسترداد عند الإلغاء خلال هذه المهلة أمر يُؤكد لاحقاً وهو مُعلَّم للمراجعة القانونية.`
         );
 
         section(doc, '5. Institutional and Non-Tenant Property Logic', 'منطق العقارات المؤسسية وغير القائمة على المستأجرين');
@@ -478,13 +646,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             `الخدمات المشمولة بموجب ${details.titleAr}:\n` + inclusionsAr.map(item => `• ${item}`).join('\n')
         );
 
-        const selectedAddOns = asArray(data.selectedAddOns || data.commercialSchedule?.selectedAddOns || data.paymentSchedule?.selectedAddOns || data.serviceDetails?.selectedAddOns || data.addOns || data.addons);
-        if (selectedAddOns.length) {
-            para(doc,
-                'Selected Add-ons:\n' + selectedAddOns.map((item: string) => `• ${item}`).join('\n'),
-                'الإضافات المختارة:\n' + selectedAddOns.map((item: string) => `• ${item}`).join('\n')
-            );
-        }
+        renderPricedAddOns(doc, data);
 
         section(doc, '7. Owner Obligations', 'التزامات المالك');
         para(doc,
@@ -538,11 +700,33 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
 
         section(doc, '14. Governing Law, Jurisdiction, and Language', 'القانون الحاكم والاختصاص واللغة');
         para(doc,
-            'This Agreement is governed by the laws of the United Arab Emirates as applicable in the Emirate of Abu Dhabi, unless another jurisdiction is expressly agreed in writing. Subject to mandatory law, Abu Dhabi Courts shall have jurisdiction. This Agreement is prepared in English and Arabic. If there is any conflict, the Arabic text shall prevail before UAE mainland courts unless the Parties agree otherwise in a signed addendum.',
-            'تخضع هذه الاتفاقية لقوانين دولة الإمارات العربية المتحدة كما هي مطبقة في إمارة أبوظبي، ما لم يتم الاتفاق صراحةً كتابةً على اختصاص آخر. ومع مراعاة القوانين الإلزامية، تختص محاكم أبوظبي بالنظر في النزاعات. تم إعداد هذه الاتفاقية باللغتين الإنجليزية والعربية، وفي حال وجود أي تعارض يسود النص العربي أمام محاكم دولة الإمارات البرية ما لم يتفق الطرفان على خلاف ذلك في ملحق موقع.'
+            'This Agreement is governed by the laws of the United Arab Emirates as applicable in the Emirate of Abu Dhabi, unless another jurisdiction is expressly agreed in writing. Subject to mandatory law, Abu Dhabi Courts shall have jurisdiction. This Agreement is prepared in English and Arabic. If there is any conflict, the Arabic text shall prevail before UAE mainland courts unless the Parties agree otherwise in a signed addendum. DRAFT FOR LEGAL REVIEW: a UAE lawyer must confirm whether the forum should follow the property\'s emirate (for example Dubai Courts / RERA for a Dubai asset) or remain Abu Dhabi Courts, and whether any free-zone court or arbitration seat should be used instead.',
+            'تخضع هذه الاتفاقية لقوانين دولة الإمارات العربية المتحدة كما هي مطبقة في إمارة أبوظبي، ما لم يتم الاتفاق صراحةً كتابةً على اختصاص آخر. ومع مراعاة القوانين الإلزامية، تختص محاكم أبوظبي بالنظر في النزاعات. تم إعداد هذه الاتفاقية باللغتين الإنجليزية والعربية، وفي حال وجود أي تعارض يسود النص العربي أمام محاكم دولة الإمارات البرية ما لم يتفق الطرفان على خلاف ذلك في ملحق موقع. مسودة للمراجعة القانونية: يجب أن يؤكد محامٍ إماراتي ما إذا كان الاختصاص يجب أن يتبع إمارة العقار (مثل محاكم دبي / ريرا لعقار في دبي) أو يبقى لمحاكم أبوظبي، وما إذا كان ينبغي استخدام محكمة منطقة حرة أو مقر تحكيم بدلاً من ذلك.'
         );
 
-        section(doc, '15. Digital Acceptance and Signatures', 'القبول الرقمي والتوقيعات');
+        section(doc, '15. Draft clauses for legal review (not a compliance certificate)', '١٥. بنود مسودة للمراجعة القانونية (ليست شهادة امتثال)');
+        para(doc,
+            'The following clauses are drafts for review by a qualified UAE lawyer. They do not make this Agreement legally certified, lawsuit-proof, or compliant by themselves. BIN GROUP does not claim that this document satisfies every mandatory requirement without that sign-off.',
+            'البنود التالية مسودات لمراجعتها من محامٍ مؤهل في دولة الإمارات. وهي لا تجعل هذه الاتفاقية معتمدة قانونياً أو حصينة من الدعاوى أو مستوفية للمتطلبات بمجرد إدراجها. ولا تدّعي BIN GROUP أن هذه الوثيقة تستوفي كل المتطلبات الإلزامية دون ذلك الاعتماد.'
+        );
+        para(doc,
+            'Draft — Consumer Protection (Federal Law No. 15 of 2020): BIN GROUP must describe the services, prices, payment methods, and material conditions clearly and must not make misleading quality, savings, or official-status claims. The Owner is entitled to clear information about the service, a way to raise a complaint, and the cancellation and fee terms stated in this Agreement. Any advertised price in the app must match the line items and annual total in this contract. This paragraph is a disclosure draft only.',
+            'مسودة — حماية المستهلك (القانون الاتحادي رقم 15 لسنة 2020): تلتزم BIN GROUP بوصف الخدمات والأسعار وطرق الدفع والشروط الجوهرية بوضوح وألا تقدّم ادعاءات مضللة عن الجودة أو التوفير أو الصفة الرسمية. ويحق للمالك الحصول على معلومات واضحة عن الخدمة، ووسيلة لتقديم شكوى، وشروط الإلغاء والرسوم المبينة في هذه الاتفاقية. وأي سعر معروض في التطبيق يجب أن يطابق بنود هذا العقد وإجماله السنوي. وهذا الفقرة مسودة إفصاح فقط.'
+        );
+        para(doc,
+            'Draft — PDPL (Federal Decree-Law No. 45 of 2021): BIN GROUP processes owner, property, tenant, payment, identification, and service-evidence data as needed to perform this Agreement, meet legal obligations, and operate the platform. Data is retained only as long as needed for those purposes or as required by law. The Owner may request access, correction, or deletion through the in-app privacy request, subject to legal retention duties. Cross-border transfers, if any, must follow PDPL conditions. A UAE lawyer must complete the lawful-basis, retention, processor, and transfer wording before relying on this clause.',
+            'مسودة — حماية البيانات الشخصية (المرسوم بقانون اتحادي رقم 45 لسنة 2021): تعالج BIN GROUP بيانات المالك والعقار والمستأجر والدفع والهوية وإثباتات الخدمة حسب الحاجة لتنفيذ هذه الاتفاقية والوفاء بالالتزامات القانونية وتشغيل المنصة. وتُحفظ البيانات فقط للمدة اللازمة لتلك الأغراض أو كما يقتضي القانون. ويجوز للمالك طلب الاطلاع أو التصحيح أو الحذف عبر طلب الخصوصية في التطبيق، مع مراعاة واجبات الحفظ القانونية. وأي نقل عبر الحدود، إن وُجد، يجب أن يتبع شروط القانون. ويجب أن يُكمل محامٍ إماراتي صياغة الأساس القانوني والحفظ والمعالجة والنقل قبل الاعتماد على هذا البند.'
+        );
+        para(doc,
+            `Draft — Property-management licence reference: the licensed entity named in this Agreement will insert its RERA / DLD or relevant emirate property-management licence reference here: ${formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF).displayEn}. This is a placeholder, not an invented licence number, and is marked for legal review.`,
+            `مسودة — مرجع ترخيص إدارة العقارات: تُدرج المنشأة المرخصة المذكورة في هذه الاتفاقية رقم ترخيص ريرا / دائرة الأراضي أو الترخيص المعتمد في الإمارة هنا: ${formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF).displayAr}. وهذا حقل مؤقت وليس رقم ترخيص مخترعاً، وهو مُعلَّم للمراجعة القانونية.`
+        );
+        para(doc,
+            'Draft — Refunds on 30-day cancellation: recurring service fees are not charged for the complimentary first month. The cancellation fee, once a confirmed AED amount is set by founder / Finance Admin decision, is payable if the Owner cancels within the 30-day window. Whether mobilisation is refundable, and how any other prepaid unused service fees are treated, must be confirmed in legal review. Until then those refund points stay "to be confirmed".',
+            'مسودة — الاسترداد عند الإلغاء خلال 30 يوماً: لا تُفوتر رسوم الخدمة المتكررة عن الشهر الأول المجاني. وتُستحق رسوم الإلغاء، بعد تحديد مبلغ بالدرهم بقرار من المؤسس / إدارة المالية، إذا ألغى المالك خلال مهلة الثلاثين يوماً. أما قابلية استرداد دفعة التفعيل وكيفية التعامل مع أي رسوم خدمة مدفوعة مقدماً وغير مستخدمة فيجب تأكيدها في المراجعة القانونية. وحتى ذلك الحين تبقى نقاط الاسترداد هذه "يُؤكد لاحقاً".'
+        );
+
+        section(doc, '16. Digital Acceptance and Signatures', '١٦. القبول الرقمي والتوقيعات');
         para(doc,
             'By typing the legal name, accepting the checkbox, paying the activation amount, or approving through the BIN GROUP platform, the Owner confirms that the Owner has read, understood, and accepted this full bilingual Owner Service Agreement. The generated PDF is the locked executed copy for Owner, Company, Property, Property Passport, and audit records.',
             'بكتابة الاسم القانوني أو قبول خانة الموافقة أو سداد مبلغ التفعيل أو الاعتماد عبر منصة مجموعة بن، يؤكد المالك أنه قرأ وفهم ووافق على هذه الاتفاقية الكاملة ثنائية اللغة لخدمات المالك. ويُعد ملف PDF الناتج النسخة المنفذة والمقفلة لسجلات المالك والشركة والعقار وجواز العقار والتدقيق.'

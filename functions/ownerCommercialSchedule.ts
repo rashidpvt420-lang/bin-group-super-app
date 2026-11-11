@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { OWNER_CONTRACT_TERM_MONTHS } from "./ownerContractTerm";
+import { formatOwnerInitialCancellationFee, ownerCancellationWindowCopy, ownerComplimentaryMonthCopy, OWNER_INITIAL_CANCELLATION_WINDOW_DAYS, OWNER_COMPLIMENTARY_MONTHS } from "./ownerInitialContractPolicy";
 
 const MOBILIZATION_PERCENT = 15;
 const DEFAULT_CURRENCY = "AED";
@@ -191,6 +192,14 @@ function buildPropertyDetails(contractData: AnyRecord, intakeData: AnyRecord, pa
       unitCount: firstPositiveNumber(property?.unitCount, property?.units, property?.totalUnits, contractData.unitCount, contractData.totalUnits),
       floorCount: firstPositiveNumber(property?.floorCount, property?.floors, contractData.floorCount, contractData.floors),
       liftCount: firstPositiveNumber(property?.liftCount, property?.lifts, contractData.liftCount, contractData.lifts),
+      sqft: firstPositiveNumber(property?.sqft, property?.areaSqft, contractData.sqft),
+      beds: firstPositiveNumber(property?.beds, property?.bedCount, contractData.beds),
+      bedrooms: firstPositiveNumber(property?.bedrooms, contractData.bedrooms),
+      zone: firstText(property?.zone, contractData.zone),
+      slaTier: firstText(property?.slaTier, contractData.slaTier),
+      paymentPlan: firstText(property?.paymentPlan, contractData.paymentPlan, payment.paymentPlan),
+      selectedAddOns: cleanPlainValue(property?.selectedAddOns || property?.addOns || []),
+      assetDetails: cleanPlainValue(property?.assetDetails || {}),
       gps: property?.gps || property?.geo || property?.location || property?.coordinates || null,
     }));
   }
@@ -204,6 +213,14 @@ function buildPropertyDetails(contractData: AnyRecord, intakeData: AnyRecord, pa
     unitCount: firstPositiveNumber(contractData.unitCount, contractData.totalUnits),
     floorCount: firstPositiveNumber(contractData.floorCount, contractData.floors),
     liftCount: firstPositiveNumber(contractData.liftCount, contractData.lifts),
+    sqft: firstPositiveNumber(contractData.sqft),
+    beds: firstPositiveNumber(contractData.beds),
+    bedrooms: firstPositiveNumber(contractData.bedrooms),
+    zone: firstText(contractData.zone),
+    slaTier: firstText(contractData.slaTier),
+    paymentPlan: firstText(contractData.paymentPlan, payment.paymentPlan),
+    selectedAddOns: cleanPlainValue(contractData.selectedAddOns || contractData.addOns || []),
+    assetDetails: cleanPlainValue(contractData.assetDetails || {}),
     gps: contractData.gps || contractData.geo || null,
   })];
 }
@@ -265,6 +282,19 @@ export function buildOwnerCommercialApprovalPatch(rawInput: AnyRecord): Approval
     paymentReferenceId: input.paymentReferenceId,
     currency: DEFAULT_CURRENCY,
     legalExclusionClause: { en: LEGAL_EXCLUSION_EN, ar: LEGAL_EXCLUSION_AR },
+    complimentaryMonth: {
+      months: OWNER_COMPLIMENTARY_MONTHS,
+      recurringServiceFeeAed: 0,
+      mobilisationStillDue: true,
+      noteEn: ownerComplimentaryMonthCopy(false),
+      noteAr: ownerComplimentaryMonthCopy(true),
+    },
+    cancellationFee: formatOwnerInitialCancellationFee(),
+    cancellationWindowDays: OWNER_INITIAL_CANCELLATION_WINDOW_DAYS,
+    cancellationNoteEn: ownerCancellationWindowCopy(false),
+    cancellationNoteAr: ownerCancellationWindowCopy(true),
+    lineItems: cleanPlainValue(input.contractData.commercialSchedule?.lineItems || input.contractData.quoteSnapshot?.commercialLines || input.intakeData.commercialLines || []),
+    addOnLines: cleanPlainValue(input.contractData.commercialSchedule?.addOnLines || input.intakeData.addOnLines || []),
     lockedAt: input.approvedAt,
     lockedBy: input.adminUid,
     commercialScheduleLocked: true,
@@ -282,6 +312,10 @@ export function buildOwnerCommercialApprovalPatch(rawInput: AnyRecord): Approval
     paymentPlan: input.paymentPlan,
     paymentReferenceId: input.paymentReferenceId,
     currency: DEFAULT_CURRENCY,
+    complimentaryFirstMonthRecurringFeeAed: 0,
+    cancellationFee: formatOwnerInitialCancellationFee(),
+    noteEn: ownerComplimentaryMonthCopy(false),
+    noteAr: ownerComplimentaryMonthCopy(true),
     lockedAt: input.approvedAt,
     lockedBy: input.adminUid,
   });

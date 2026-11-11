@@ -5,6 +5,7 @@
  * hardLaunchClaim is always false from this module.
  */
 import { createHash } from 'node:crypto';
+import { evaluateOwnerInitialCancellationFeeHonesty, OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE } from './owner-initial-contract-policy.mjs';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -13,6 +14,13 @@ export const APPROVED_ARTIFACTS_DIR = 'launch_package/artifacts';
 export const DEPLOYMENT_METADATA_RELATIVE = 'launch_package/production-deployment.json';
 
 export const HARD_LAUNCH_CLAIM = false;
+export { evaluateOwnerInitialCancellationFeeHonesty, OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE };
+
+export function launchHonestyCancellationFeeErrors(fee) {
+  const result = evaluateOwnerInitialCancellationFeeHonesty(fee);
+  if (result.ok) return [];
+  return [result.message];
+}
 
 export const PRODUCTION = {
   projectId: 'bin-group-57c60',

@@ -4,6 +4,7 @@ import {
   calculateUaeQuote2026,
   resolveAssetClassIdForPropertyType,
   OWNER_WARNING_PREFIXES,
+  buildOwnerQuoteCommercialBreakdown,
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
@@ -332,6 +333,7 @@ export function calculateOwnerOnboardingQuote(
   }
   const contractMode = contractModes[0];
 
+  const commercialLines: any[] = [];
   const propertyQuotes = normalizedProperties.map((cleanProperty: PropertyInput, index: number) => {
     rejectNegativeNumericInputs(cleanProperty, index);
     if (!text(cleanProperty.emirate) || !text(cleanProperty.propertyType)) {
@@ -354,8 +356,29 @@ export function calculateOwnerOnboardingQuote(
       throw new Error(`Property ${index + 1} (${cleanProperty.propertyType}) could not be priced: ${reasons}.`);
     }
 
+    const propertyId = text(cleanProperty.id || cleanProperty.propertyId || `property_${index + 1}`);
+    const breakdown = buildOwnerQuoteCommercialBreakdown(input, quote);
+    commercialLines.push({
+      propertyId,
+      propertyType: text(cleanProperty.propertyType),
+      propertyName: text((cleanProperty as any).propertyName || (cleanProperty as any).name || (cleanProperty as any).address),
+      assetDetails: (cleanProperty as any).assetDetails || {},
+      area: text((cleanProperty as any).area || input.area),
+      emirate: text(cleanProperty.emirate || input.emirate),
+      zone: breakdown.zone,
+      slaTier: breakdown.slaTier,
+      paymentPlan: breakdown.paymentPlan,
+      lines: breakdown.lines,
+      addOnLines: breakdown.addOnLines,
+      annualTotal: breakdown.annualTotal,
+      mobilizationFee: breakdown.mobilizationFee,
+      managementFee: breakdown.managementFee,
+      pricingExplanation: breakdown.pricingExplanation,
+      riskFlags: breakdown.riskFlags,
+    });
+
     return {
-      propertyId: text(cleanProperty.id || cleanProperty.propertyId || `property_${index + 1}`),
+      propertyId,
       contractMode,
       pricingClass: assetClassId,
       pricingDriver,
@@ -390,5 +413,6 @@ export function calculateOwnerOnboardingQuote(
     expiresAtMs,
   };
   const quoteHash = createHash("sha256").update(JSON.stringify(unsignedQuote)).digest("hex");
-  return { ...unsignedQuote, quoteHash };
+  // commercialLines sit outside the signed hash so existing in-flight quotes keep verifying.
+  return { ...unsignedQuote, quoteHash, commercialLines };
 }

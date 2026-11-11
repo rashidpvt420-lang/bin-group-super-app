@@ -9,6 +9,7 @@ import { getToken as getAppCheckToken } from 'firebase/app-check';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
+import { formatOwnerInitialCancellationFee, ownerCancellationWindowCopy, ownerComplimentaryMonthCopy } from '../../utils/ownerInitialContractPolicy';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { appCheck, auth, functions, httpsCallable } from '../../lib/firebase';
 import { isValidLatLng } from '../../utils/geoAnchor';
@@ -339,6 +340,10 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Selected Schedule')}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(installmentValue || 0)}` : '—'}</Typography></Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2 }}><Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{lang === 'ar' ? '15٪ مستحقة فقط بعد زيارة العقار' : '15% Due Only After Property Visit'}</Typography><Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(serverQuote?.activationDeposit || 0)}` : '—'}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{lang === 'ar' ? 'الشهر الأول المجاني (رسوم الخدمة المتكررة)' : 'Complimentary first month (recurring service fee)'}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">AED 0</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{lang === 'ar' ? 'رسوم الإلغاء خلال 30 يوماً' : '30-day cancellation fee'}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">{lang === 'ar' ? formatOwnerInitialCancellationFee().displayAr : formatOwnerInitialCancellationFee().displayEn}</Typography></Box>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.6 }}>{ownerComplimentaryMonthCopy(lang === 'ar')}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.6 }}>{ownerCancellationWindowCopy(lang === 'ar')}</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
