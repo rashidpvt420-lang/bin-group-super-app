@@ -15,8 +15,8 @@ import {
   ListItemAvatar,
   Alert,
 } from '@mui/material';
-import { collection, onSnapshot } from 'firebase/firestore';
 import { db, functions, httpsCallable } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 
 interface SOSEvent {
   sosId: string;
@@ -76,32 +76,23 @@ function sosFromDoc(id: string, data: any): SOSEvent {
 }
 
 export default function SOSFeedPage() {
-  const [sosEvents, setSOSEvents] = useState<SOSEvent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
+  const ticketsPage = usePagedCollection({
+    db,
+    collectionName: 'maintenanceTickets',
+    orderByField: 'createdAt',
+    orderDirection: 'desc',
+    resetKey: 'sos-feed',
+  });
+  const sosEvents = ticketsPage.rows.filter((row) => isSOSLike(row)).map((row) => sosFromDoc(row.id, row));
+  const loading = ticketsPage.loading;
   useEffect(() => {
     if (!autoRefresh) return undefined;
-
-    const unsubscribe = onSnapshot(collection(db, 'maintenanceTickets'), (snapshot) => {
-      const events = snapshot.docs
-        .map((item) => ({ id: item.id, data: item.data() }))
-        .filter(({ data }) => isSOSLike(data))
-        .map(({ id, data }) => sosFromDoc(id, data))
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      setSOSEvents(events);
-      setLoading(false);
-    }, (error) => {
-      console.error('[ADMIN-SOS] Firestore SOS sync failed:', error);
-      setActionError(`SOS feed sync failed: ${error.message || error.code || 'unknown error'}`);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [autoRefresh]);
+    const timer = window.setInterval(() => { void ticketsPage.refresh(); }, 30000);
+    return () => window.clearInterval(timer);
+  }, [autoRefresh, ticketsPage.refresh]);
 
   const handleRespond = async (sosId: string) => {
     try {
@@ -171,6 +162,8 @@ export default function SOSFeedPage() {
         </Button>
       </Box>
 
+      {ticketsPage.error && <Alert severity="error" sx={{ mb: 2 }}>{ticketsPage.error}</Alert>}
+      {ticketsPage.hasMore && <Button onClick={() => void ticketsPage.loadMore()} disabled={ticketsPage.loadingMore} sx={{ mb: 2 }}>Load more tickets{ticketsPage.total != null ? ` (scanned ${ticketsPage.rows.length} of ${ticketsPage.total})` : ''}</Button>}
       {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
       {actionSuccess && <Alert severity="success" sx={{ mb: 3 }}>{actionSuccess}</Alert>}
 

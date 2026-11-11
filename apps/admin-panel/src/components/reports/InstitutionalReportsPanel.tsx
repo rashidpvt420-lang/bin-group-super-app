@@ -9,7 +9,7 @@ import {
   FileText, TrendingUp, AlertTriangle 
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getCountFromServer, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { humanizeEnum } from '../../utils/humanizeEnum';
 
 /**
@@ -32,54 +32,47 @@ const InstitutionalReportsPanel: React.FC = () => {
   });
 
   useEffect(() => {
-    // 🏢 1. Active Units & Asset Distribution
-    const unsubProperties = onSnapshot(collection(db, 'properties'), (snapshot) => {
-      const rows = snapshot.docs.map((d) => d.data() as any);
-      const healthValues = rows.map((row) => Number(row.healthScore ?? row.bpi ?? 0)).filter((value) => value > 0 && Number.isFinite(value));
-      const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
-      const typeCounts = new Map<string, number>();
-      rows.forEach((row) => {
-        const type = humanizeEnum(row.propertyType || row.type || 'Property');
-        typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
-      });
+    let cancelled = false;
+    const toDate = (value: any): Date | null => {
+      if (typeof value?.toDate === 'function') return value.toDate();
+      if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
+      const parsed = value ? new Date(value) : null;
+      return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    };
 
-      setPortfolioData((prev: any) => ({
-        ...prev,
-        unitsActive: snapshot.size,
-        healthScore,
-        assetDistribution: [...typeCounts.entries()].map(([name, count]) => ({ name, count, health: healthScore }))
-      }));
-      setLoadError('');
-      setLoading(false);
-    }, (error: any) => {
-      console.error('[InstitutionalReports] properties listener failed:', error);
-      setLoadError(error?.message || 'Unable to load portfolio records.');
-      setLoading(false);
-    });
-
-    // 💰 2. Savings & Compliance (Derived from Contracts/Tickets)
-    const unsubTickets = onSnapshot(collection(db, 'maintenanceTickets'), (snapshot) => {
-        const rows = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        const completed = rows.filter((row) => ['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(row.status || ''))).length;
-        const compliance = snapshot.size ? Math.round((completed / snapshot.size) * 100) : 0;
-        const totalSavingsAED = rows.reduce((sum, row) => sum + Number(row.costSavedAED || row.savingsAED || 0), 0);
-
-        const monthMap = new Map<string, number>();
-        const toDate = (value: any): Date | null => {
-          if (typeof value?.toDate === 'function') return value.toDate();
-          if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
-          const parsed = value ? new Date(value) : null;
-          return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
-        };
-        rows.forEach((row) => {
-          const date = toDate(row.completedAt || row.updatedAt || row.createdAt);
-          if (!date) return;
-          const month = date.toLocaleString('en-AE', { month: 'short', year: '2-digit' });
-          monthMap.set(month, (monthMap.get(month) || 0) + Number(row.costSavedAED || row.savingsAED || 0));
+    const load = async () => {
+      try {
+        setLoading(true);
+        const propertyCol = collection(db, 'properties');
+        const ticketCol = collection(db, 'maintenanceTickets');
+        const [propertyCount, ticketCount, completedCount, propertyPage, ticketPage] = await Promise.all([
+          getCountFromServer(query(propertyCol)),
+          getCountFromServer(query(ticketCol)),
+          getCountFromServer(query(ticketCol, where('status', 'in', ['COMPLETED', 'CLOSED', 'completed', 'closed']))),
+          getDocs(query(propertyCol, orderBy('__name__'), limit(40))),
+          getDocs(query(ticketCol, orderBy('createdAt', 'desc'), limit(40))),
+        ]);
+        if (cancelled) return;
+        const propertyRows = propertyPage.docs.map((item) => item.data() as any);
+        const healthValues = propertyRows.map((row) => Number(row.healthScore ?? row.bpi ?? 0)).filter((value) => value > 0 && Number.isFinite(value));
+        const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
+        const typeCounts = new Map<string, number>();
+        propertyRows.forEach((row) => {
+          const type = humanizeEnum(row.propertyType || row.type || 'Property');
+          typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
         });
-        const monthlyTrends = [...monthMap.entries()].map(([month, savings]) => ({ month, savings }));
-
-        const riskRows = rows
+        const ticketRows = ticketPage.docs.map((item) => ({ id: item.id, ...(item.data() as any) }));
+        const monthlyTrends = (() => {
+          const monthMap = new Map<string, number>();
+          ticketRows.forEach((row) => {
+            const date = toDate(row.completedAt || row.updatedAt || row.createdAt);
+            if (!date) return;
+            const month = date.toLocaleString('en-AE', { month: 'short', year: '2-digit' });
+            monthMap.set(month, (monthMap.get(month) || 0) + Number(row.costSavedAED || row.savingsAED || 0));
+          });
+          return [...monthMap.entries()].map(([month, savings]) => ({ month, savings }));
+        })();
+        const riskRows = ticketRows
           .filter((row) => {
             const status = String(row.status || '').toUpperCase();
             const priority = String(row.priority || row.slaPriority || '').toUpperCase();
@@ -94,25 +87,32 @@ const InstitutionalReportsPanel: React.FC = () => {
             action: row.status || row.trackingStatus || 'OPEN',
             savings: Number(row.costSavedAED || row.savingsAED || 0),
           }));
-
+        const totalTickets = ticketCount.data().count;
+        const completed = completedCount.data().count;
         setPortfolioData((prev: any) => ({
-            ...prev,
-            slaCompliance: compliance,
-            totalSavingsAED,
-            ticketCount: snapshot.size,
-            monthlyTrends,
-            riskRows
+          ...prev,
+          unitsActive: propertyCount.data().count,
+          healthScore,
+          assetDistribution: [...typeCounts.entries()].map(([name, count]) => ({ name, count, health: healthScore })),
+          slaCompliance: totalTickets ? Math.round((completed / totalTickets) * 100) : 0,
+          totalSavingsAED: null,
+          ticketCount: totalTickets,
+          monthlyTrends,
+          riskRows,
+          sampledProperties: propertyRows.length,
+          sampledTickets: ticketRows.length,
         }));
         setLoadError('');
-    }, (error: any) => {
-        console.error('[InstitutionalReports] tickets listener failed:', error);
-        setLoadError(error?.message || 'Unable to load maintenance reporting data.');
-    });
-
-    return () => {
-        unsubProperties();
-        unsubTickets();
+      } catch (error: any) {
+        console.error('[InstitutionalReports] paged load failed:', error);
+        setLoadError(error?.message || 'Unable to load portfolio records.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
+
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
   if (loading) return (
@@ -164,8 +164,8 @@ const InstitutionalReportsPanel: React.FC = () => {
         <KPIBox 
           icon={<BadgePercent className="text-emerald-400" />} 
           label="Total Savings (AED)" 
-          value={portfolioData.totalSavingsAED.toLocaleString()} 
-          trend="LIVE LEDGER"
+          value={portfolioData.totalSavingsAED == null ? 'Not available' : portfolioData.totalSavingsAED.toLocaleString()} 
+          trend={portfolioData.totalSavingsAED == null ? "USE SERVER REPORT" : "SAMPLED"}
         />
         <KPIBox 
           icon={<Activity className="text-blue-400" />} 

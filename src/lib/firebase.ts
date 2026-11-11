@@ -604,3 +604,5 @@ export { fetchPage, LIST_PAGE_SIZE } from './pagedQuery';
 export type { Page } from './pagedQuery';
 
 export default app;
+
+export { usePagedCollection, ADMIN_LIST_PAGE_SIZE } from './usePagedCollection';

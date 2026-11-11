@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { runTransactionWithRetry } from "./runTransactionWithRetry";
+import { withCriticalScale } from "./functionScaleOptions";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { resolveUnitlessDispatchScope, ticketHasUnit, UNIT_REQUIRED_MESSAGE, unitRecordsQuery } from "./ticketUnitScope";
@@ -64,7 +66,7 @@ function isApprovedTechnician(
 }
 
 export const adminAssignTechnician = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  withCriticalScale({ cors: true, region: "europe-west3", enforceAppCheck: true }),
   async (request) => {
     requireDispatcher(request.auth);
     await requirePrivilegedMfaSession(request.auth);
@@ -82,7 +84,7 @@ export const adminAssignTechnician = onCall(
     const now = FieldValue.serverTimestamp();
     let idempotent = false;
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
       const [ticketSnap, userSnap, technicianSnap] = await Promise.all([
         transaction.get(ticketRef),
         transaction.get(userRef),
@@ -168,12 +170,13 @@ export const adminAssignTechnician = onCall(
         updatedAt: now,
       }, { merge: true });
       transaction.set(userSnap.exists ? userRef : technicianRef, {
-        currentJobCount: currentJobCount + 1,
+        currentJobCount: FieldValue.increment(1),
         updatedAt: now,
       }, { merge: true });
       if (previousUserRef && previousUserSnap?.exists) {
+        const previousCount = Number(previousUserSnap.data()?.currentJobCount || 0);
         transaction.set(previousUserRef, {
-          currentJobCount: Math.max(0, Number(previousUserSnap.data()?.currentJobCount || 0) - 1),
+          currentJobCount: previousCount > 0 ? FieldValue.increment(-1) : 0,
           updatedAt: now,
         }, { merge: true });
       }
@@ -243,7 +246,7 @@ export const adminResolveTicketDispute = onCall(
     const now = FieldValue.serverTimestamp();
     let idempotent = false;
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
       const [ticketSnap, revisitSnap, creditSnap] = await Promise.all([
         transaction.get(ticketRef),
         transaction.get(revisitRef),
@@ -376,7 +379,7 @@ export const adminUpdateEmergencyTicket = onCall(
     const now = FieldValue.serverTimestamp();
     let idempotent = false;
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
       const ticketSnap = await transaction.get(ticketRef);
       if (!ticketSnap.exists) throw new HttpsError("not-found", "Emergency ticket not found.");
       const ticket = ticketSnap.data() || {};
@@ -457,7 +460,7 @@ export const adminProcessWhatsAppIntake = onCall(
     const now = FieldValue.serverTimestamp();
     let idempotent = false;
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
       const intakeSnap = await transaction.get(intakeRef);
       if (!intakeSnap.exists) throw new HttpsError("not-found", "WhatsApp intake not found.");
       const intake = intakeSnap.data() || {};

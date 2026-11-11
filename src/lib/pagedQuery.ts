@@ -12,6 +12,9 @@ import {
 /** Default page size for heavy owner/admin list screens. */
 export const LIST_PAGE_SIZE = 100;
 
+/** Page size for the admin and owner-reporting lists that used to load whole collections. */
+export const ADMIN_LIST_PAGE_SIZE = 40;
+
 export type Page<T = unknown> = {
   docs: QueryDocumentSnapshot<T>[];
   cursor: QueryDocumentSnapshot<T> | null;

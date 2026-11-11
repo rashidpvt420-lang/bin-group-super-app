@@ -85,12 +85,17 @@ test('Phase 21 Step 48 repair covers all remaining live-route accessibility fail
 
 test('Phase 21 Step 48 round-two repair keeps Owner analytics UID-scoped', () => {
   const reporting = read('src/pages/ReportingDashboard.tsx');
-  assert.match(reporting, /where\('ownerId', '==', user\.uid\)/);
-  assert.match(reporting, /where\('ownerUid', '==', user\.uid\)/);
-  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'properties'\)\)/);
-  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'maintenanceTickets'\)\)/);
-  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'contracts'\)\)/);
-  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'units'\)\)/);
+  const loader = read('src/lib/loadReportingCollections.ts');
+  assert.match(reporting, /const ownerUid = isOwnerView \? user\.uid : undefined/);
+  assert.match(reporting, /loadReportingCollection\(db, 'properties', ownerUid\)/);
+  assert.match(loader, /where\('ownerId', '==', ownerUid\)/);
+  assert.match(loader, /where\('ownerUid', '==', ownerUid\)/);
+  for (const source of [reporting, loader]) {
+    assert.doesNotMatch(source, /getDocs\(collection\(db, 'properties'\)\)/);
+    assert.doesNotMatch(source, /getDocs\(collection\(db, 'maintenanceTickets'\)\)/);
+    assert.doesNotMatch(source, /getDocs\(collection\(db, 'contracts'\)\)/);
+    assert.doesNotMatch(source, /getDocs\(collection\(db, 'units'\)\)/);
+  }
 });
 
 test('Phase 21 Step 48 round-two repair avoids the Tenant RTL Stylis placeholder crash', () => {

@@ -5,7 +5,7 @@ import 'jspdf-autotable';
 import { 
     Box, Container, Typography, Grid, Paper, Stack, alpha, 
     CircularProgress, Divider, Card, CardContent, Button, Chip,
-    LinearProgress
+    LinearProgress, Alert
 } from '@mui/material';
 import { 
     TrendingUp, Zap, ShieldCheck, Building2, Globe, 
@@ -14,7 +14,8 @@ import {
     History, ShieldAlert, Key, Landmark
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { db, collection, getDocs, query, where, orderBy, limit } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { loadReportingCollection } from '../lib/loadReportingCollections';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 
@@ -27,57 +28,74 @@ const ReportingDashboard: React.FC = () => {
     useEffect(() => {
         const fetchAggregates = async () => {
             try {
-                const propsSnap = await getDocs(collection(db, 'properties'));
-                const allProps = propsSnap.docs.map(d => d.data());
-                
-                const filteredProps = selectedEmirate === 'ALL' 
-                    ? allProps 
-                    : allProps.filter(p => p.emirate?.toUpperCase() === selectedEmirate);
-
-                const ticketsSnap = await getDocs(collection(db, 'maintenanceTickets'));
-                const allTickets = ticketsSnap.docs.map(d => d.data());
-                const tickets = selectedEmirate === 'ALL' 
-                    ? allTickets 
-                    : allTickets.filter(t => filteredProps.some(p => p.id === t.propertyId));
-
-                const completed = tickets.filter(t => t.status === 'COMPLETED');
-                const avgResponseTime = completed.length > 0 ? "42.5 mins" : "N/A";
-
-                const contractsSnap = await getDocs(collection(db, 'contracts'));
-                const allContracts = contractsSnap.docs.map(d => d.data());
+                if (!user?.uid) {
+                    setLoading(false);
+                    return;
+                }
+                const [propertiesResult, ticketsResult, contractsResult, unitsResult] = await Promise.all([
+                    loadReportingCollection(db, 'properties', user.uid),
+                    loadReportingCollection(db, 'maintenanceTickets', user.uid),
+                    loadReportingCollection(db, 'contracts', user.uid),
+                    loadReportingCollection(db, 'units', user.uid),
+                ]);
+                const allProps = propertiesResult.rows;
+                const filteredProps = selectedEmirate === 'ALL'
+                    ? allProps
+                    : allProps.filter((row) => String(row.emirate || '').toUpperCase() === selectedEmirate);
+                const allTickets = ticketsResult.rows;
+                const tickets = selectedEmirate === 'ALL'
+                    ? allTickets
+                    : allTickets.filter((row) => filteredProps.some((property) => property.id === row.propertyId));
+                const completed = tickets.filter((row) => String(row.status || '').toUpperCase() === 'COMPLETED');
+                const timed = completed.filter((row) => row.createdAt && (row.completedAt || row.resolvedAt));
+                const toMs = (value: any) => {
+                    if (typeof value?.toDate === 'function') return value.toDate().getTime();
+                    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+                    const parsed = value ? new Date(value).getTime() : NaN;
+                    return Number.isFinite(parsed) ? parsed : NaN;
+                };
+                const avgMinutes = timed.length
+                    ? Math.round(timed.reduce((sum, row) => {
+                        const start = toMs(row.createdAt);
+                        const end = toMs(row.completedAt || row.resolvedAt);
+                        return Number.isFinite(start) && Number.isFinite(end) && end >= start ? sum + ((end - start) / 60000) : sum;
+                    }, 0) / timed.length)
+                    : null;
+                const allContracts = contractsResult.rows;
                 const totalSettled = allContracts
-                    .filter(c => selectedEmirate === 'ALL' || filteredProps.some(p => p.id === c.propertyId))
-                    .reduce((sum, c) => sum + (c.amountReceived || 0), 0);
-
-                const unitsSnap = await getDocs(collection(db, 'units'));
-                const allUnits = unitsSnap.docs.map(d => d.data());
-                const units = selectedEmirate === 'ALL' 
-                    ? allUnits 
-                    : allUnits.filter(u => filteredProps.some(p => p.id === u.propertyId));
-
-                const occupiedCount = units.filter(u => u.tenantId).length;
-                const totalUnits = units.length || occupiedCount + 5;
-
-                const emirates = Array.from(new Set(allProps.map(p => p.emirate?.toUpperCase()))).filter(Boolean);
-
+                    .filter((row) => selectedEmirate === 'ALL' || filteredProps.some((property) => property.id === row.propertyId))
+                    .reduce((sum, row) => sum + Number(row.amountReceived || 0), 0);
+                const units = selectedEmirate === 'ALL'
+                    ? unitsResult.rows
+                    : unitsResult.rows.filter((row) => filteredProps.some((property) => property.id === row.propertyId));
+                const occupiedCount = units.filter((row) => row.tenantId).length;
+                const totalUnits = units.length;
+                const emirates = Array.from(new Set(allProps.map((row) => String(row.emirate || '').toUpperCase()))).filter(Boolean);
+                const categoryCounts = new Map<string, number>();
+                tickets.forEach((row) => {
+                    const category = String(row.category || row.type || 'Other');
+                    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+                });
                 setStats({
-                    velocity: avgResponseTime,
+                    velocity: avgMinutes == null ? 'N/A' : `${avgMinutes} mins`,
                     totalSettled,
-                    assetDensity: Math.round((occupiedCount / totalUnits) * 100) || 85,
-                    activeMissions: tickets.filter(t => t.status !== 'COMPLETED').length,
+                    assetDensity: totalUnits ? Math.round((occupiedCount / totalUnits) * 100) : null,
+                    activeMissions: tickets.filter((row) => !['COMPLETED', 'CLOSED', 'RESOLVED', 'CANCELLED'].includes(String(row.status || '').toUpperCase())).length,
                     emiratesList: ['ALL', ...emirates],
-                    regionalStats: emirates.map(e => ({
-                        emirate: e,
-                        count: allProps.filter(p => p.emirate?.toUpperCase() === e).length,
-                        uptime: 100
+                    regionalStats: emirates.map((emirate) => ({
+                        emirate,
+                        count: allProps.filter((row) => String(row.emirate || '').toUpperCase() === emirate).length,
                     })),
-                    faultTrend: [
-                        { category: 'HVAC', count: 12, trend: '+15%' },
-                        { category: 'Electrical', count: 8, trend: '-5%' },
-                        { category: 'Plumbing', count: 5, trend: 'Stable' }
-                    ],
-                    emergencyTrend: [4, 2, 5, 1, 0, 3],
-                    renewalRisk: 12
+                    faultTrend: [...categoryCounts.entries()].map(([category, count]) => ({ category, count, trend: 'From loaded tickets' })),
+                    emergencyTrend: [],
+                    renewalRisk: null,
+                    truncated: [propertiesResult, ticketsResult, contractsResult, unitsResult].some((item) => item.truncated),
+                    totals: {
+                        properties: propertiesResult.total,
+                        tickets: ticketsResult.total,
+                        contracts: contractsResult.total,
+                        units: unitsResult.total,
+                    },
                 });
             } catch (err) {
                 console.error("Aggregation Failed:", err);
@@ -87,7 +105,7 @@ const ReportingDashboard: React.FC = () => {
         };
 
         fetchAggregates();
-    }, [selectedEmirate]);
+    }, [selectedEmirate, user?.uid]);
 
     const exportToPdf = () => {
         if (!stats) return;

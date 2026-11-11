@@ -1,5 +1,5 @@
 // admin-panel/src/pages/tenants/TenantsManagementPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Container, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, TextField, Typography, Button, Dialog,
@@ -7,11 +7,11 @@ import {
   FormControl, InputLabel, Select, MenuItem, CircularProgress, Alert
 } from '@mui/material';
 import { db, auth, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, getDocs, limit, orderBy, startAfter } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy, startAfter } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Edit as EditIcon, Search as SearchIcon, History as HistoryIcon, CloudUpload as BulkIcon, Send as SendIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import BulkTenantImportDialog from '../../components/tenants/BulkTenantImportDialog';
-import { subscribeTenantLookups } from './tenantLookupSubscriptions';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 
 interface Unit {
@@ -48,9 +48,17 @@ export default function TenantsManagementPage() {
   const [importHistory, setImportHistory] = useState<any[]>([]);
   const [openBulk, setOpenBulk] = useState(false);
   
-  // Strict Relationship Data
-  const [owners, setOwners] = useState<any[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
+  // Strict Relationship Data (paged lookups; totals come from count())
+  const ownerLookupConstraints = useMemo(() => [where('role', 'in', ['owner', 'OWNER'])], []);
+  const ownersPage = usePagedCollection({
+    db,
+    collectionName: 'users',
+    constraints: ownerLookupConstraints,
+    resetKey: 'tenant-owners',
+  });
+  const propertiesPage = usePagedCollection({ db, collectionName: 'properties', resetKey: 'tenant-properties' });
+  const owners = ownersPage.rows;
+  const properties = propertiesPage.rows;
   const [units, setUnits] = useState<Unit[]>([]);
 
   // Selected Context for Intake
@@ -71,22 +79,26 @@ export default function TenantsManagementPage() {
     emiratesID: '',
   });
 
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 40;
+
+  useEffect(() => {
+    const lookupError = ownersPage.error || propertiesPage.error;
+    if (lookupError) {
+      setError(`Owner/property lists could not be loaded (${lookupError}). Owner/property pickers may be incomplete — refresh to retry.`);
+    }
+  }, [ownersPage.error, propertiesPage.error]);
+
+  useEffect(() => {
+    if (!ownersPage.loading && !ownersPage.loadingMore && ownersPage.rows.length < 200 && ownersPage.hasMore) void ownersPage.loadMore();
+  }, [ownersPage.loading, ownersPage.loadingMore, ownersPage.rows.length, ownersPage.hasMore, ownersPage.loadMore]);
+  useEffect(() => {
+    if (!propertiesPage.loading && !propertiesPage.loadingMore && propertiesPage.rows.length < 200 && propertiesPage.hasMore) void propertiesPage.loadMore();
+  }, [propertiesPage.loading, propertiesPage.loadingMore, propertiesPage.rows.length, propertiesPage.hasMore, propertiesPage.loadMore]);
+
 
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => subscribeTenantLookups({
-    owners: (next, fail) => onSnapshot(query(collection(db, 'users'), where('role', 'in', ['owner', 'OWNER']), limit(500)), next, fail),
-    properties: (next, fail) => onSnapshot(query(collection(db, 'properties')), next, fail),
-  }, {
-    onOwners: (rows) => setOwners(rows),
-    onProperties: (rows) => setProperties(rows),
-    onError: (source, lookupError: any) => {
-      console.error(`[tenants] ${source} lookup listener failed`, lookupError);
-      setError(`${source === 'owners' ? 'Owner' : 'Property'} list could not be loaded (${lookupError?.code || 'error'}). Owner/property pickers may be incomplete — refresh to retry.`);
-    },
-  }), []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -806,6 +818,10 @@ export default function TenantsManagementPage() {
             </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+          <Stack direction="row" spacing={2} sx={{ mt: 2, mb: 2 }}>
+        {ownersPage.hasMore && <Button onClick={() => void ownersPage.loadMore()} disabled={ownersPage.loadingMore}>Load more owners{ownersPage.total != null ? ` (${owners.length}/${ownersPage.total})` : ''}</Button>}
+        {propertiesPage.hasMore && <Button onClick={() => void propertiesPage.loadMore()} disabled={propertiesPage.loadingMore}>Load more properties{propertiesPage.total != null ? ` (${properties.length}/${propertiesPage.total})` : ''}</Button>}
+      </Stack>
+</Container>
   );
 }

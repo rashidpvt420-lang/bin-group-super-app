@@ -38,7 +38,8 @@ import {
     Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { Clock, FileCheck2, WalletCards } from 'lucide-react';
-import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { db, functions, httpsCallable, where } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 import { useLanguage } from '@bin/shared';
 import { useAuth } from '../../context/AuthContext';
 import { maskIban } from '../../lib/maskIban';
@@ -194,10 +195,23 @@ export default function BrokerManagementPage() {
     const { isRTL } = useLanguage();
     const { user, mfaVerified } = useAuth();
     const canApprovePayout = canSettleLike(user, mfaVerified);
-    const [brokers, setBrokers] = useState<Broker[]>([]);
-    const [commissions, setCommissions] = useState<Array<Record<string, unknown>>>([]);
-    const [documents, setDocuments] = useState<Record<string, BrokerDocument[]>>({});
-    const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+    const brokerConstraints = useMemo(() => [where('role', 'in', ['broker', 'BROKER'])], []);
+    const brokersPage = usePagedCollection({ db, collectionName: 'users', constraints: brokerConstraints, resetKey: 'brokers' });
+    const documentsPage = usePagedCollection({ db, collectionName: 'brokerDocuments', resetKey: 'broker-docs' });
+    const payoutsPage = usePagedCollection({ db, collectionName: 'broker_payout_requests', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'broker-payouts' });
+    const commissionsPage = usePagedCollection({ db, collectionName: 'broker_commissions', resetKey: 'broker-commissions' });
+    const brokers = brokersPage.rows as Broker[];
+    const commissions = commissionsPage.rows as Array<Record<string, unknown>>;
+    const payoutRequests = payoutsPage.rows as PayoutRequest[];
+    const documents = useMemo(() => {
+        const grouped: Record<string, BrokerDocument[]> = {};
+        documentsPage.rows.forEach((item) => {
+            const docItem = item as BrokerDocument;
+            const brokerId = docItem.brokerId || 'unassigned';
+            grouped[brokerId] = [...(grouped[brokerId] || []), docItem];
+        });
+        return grouped;
+    }, [documentsPage.rows]);
     const [kycReviewSummaries, setKycReviewSummaries] = useState<Record<string, BrokerKycReviewSummary>>({});
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
     const [reviewBroker, setReviewBroker] = useState<Broker | null>(null);
@@ -205,53 +219,18 @@ export default function BrokerManagementPage() {
     const [reviewReason, setReviewReason] = useState('');
     const [busy, setBusy] = useState('');
     const [notice, setNotice] = useState('');
-    const [loading, setLoading] = useState(true);
+    const loading = brokersPage.loading;
 
-    useEffect(() => {
-        const brokerQuery = query(collection(db, 'users'), where('role', 'in', ['broker', 'BROKER']), limit(500));
-        const unsubscribe = onSnapshot(brokerQuery, (snapshot) => {
-            const fetched = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as Broker[];
-            setBrokers(fetched.sort((a, b) => statusText(a.status).localeCompare(statusText(b.status))));
-            setLoading(false);
-        }, (error) => {
-            console.error('[BROKER_ADMIN] broker listener failed', error);
-            setNotice(error?.message || 'Broker profiles could not be loaded.');
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
 
-    useEffect(() => {
-        const unsubscribe = onSnapshot(collection(db, 'brokerDocuments'), (snapshot) => {
-            const grouped: Record<string, BrokerDocument[]> = {};
-            snapshot.docs.forEach((docSnap) => {
-                const item = { id: docSnap.id, ...docSnap.data() } as BrokerDocument;
-                const brokerId = item.brokerId || 'unassigned';
-                grouped[brokerId] = [...(grouped[brokerId] || []), item];
-            });
-            setDocuments(grouped);
-        }, (error) => console.warn('[BROKER_ADMIN] broker documents listener failed', error));
-        return () => unsubscribe();
-    }, []);
 
-    useEffect(() => {
-        const payoutQuery = query(collection(db, 'broker_payout_requests'), orderBy('createdAt', 'desc'), limit(100));
-        const unsubscribe = onSnapshot(payoutQuery, (snapshot) => {
-            setPayoutRequests(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as PayoutRequest[]);
-        }, (error) => console.warn('[BROKER_ADMIN] payout request listener failed', error));
-        return () => unsubscribe();
-    }, []);
 
-    useEffect(() => {
-        const commissionsQuery = query(collection(db, 'broker_commissions'), limit(500));
-        const unsubscribe = onSnapshot(commissionsQuery, (snapshot) => {
-            setCommissions(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
-        }, (error) => console.warn('[BROKER_ADMIN] commissions listener failed', error));
-        return () => unsubscribe();
-    }, []);
+
+
+
+
 
     const stats = useMemo(() => ({
-        total: brokers.length,
+        total: brokersPage.total ?? brokers.length,
         pending: brokers.filter(brokerNeedsReview).length,
         approved: brokers.filter((broker) => statusText(broker.status || broker.approvalStatus) === 'APPROVED').length,
         payoutPending: payoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
@@ -581,6 +560,12 @@ export default function BrokerManagementPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+                    <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }}>
+                {brokersPage.hasMore && <Button onClick={() => void brokersPage.loadMore()} disabled={brokersPage.loadingMore}>Load more brokers{brokersPage.total != null ? ` (${brokers.length}/${brokersPage.total})` : ''}</Button>}
+                {documentsPage.hasMore && <Button onClick={() => void documentsPage.loadMore()} disabled={documentsPage.loadingMore}>Load more documents{documentsPage.total != null ? ` (${documentsPage.rows.length}/${documentsPage.total})` : ''}</Button>}
+                {payoutsPage.hasMore && <Button onClick={() => void payoutsPage.loadMore()} disabled={payoutsPage.loadingMore}>Load more payouts{payoutsPage.total != null ? ` (${payoutRequests.length}/${payoutsPage.total})` : ''}</Button>}
+                {commissionsPage.hasMore && <Button onClick={() => void commissionsPage.loadMore()} disabled={commissionsPage.loadingMore}>Load more commissions{commissionsPage.total != null ? ` (${commissions.length}/${commissionsPage.total})` : ''}</Button>}
+            </Stack>
+</Box>
     );
 }

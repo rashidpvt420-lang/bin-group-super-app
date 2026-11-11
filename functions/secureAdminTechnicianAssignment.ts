@@ -1,6 +1,8 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { runTransactionWithRetry } from "./runTransactionWithRetry";
+import { withCriticalScale } from "./functionScaleOptions";
 import { resolveUnitlessDispatchScope, ticketHasUnit, UNIT_REQUIRED_MESSAGE, unitRecordsQuery } from "./ticketUnitScope";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -82,7 +84,7 @@ export function approvedAndReadyTechnician(user: FirebaseFirestore.DocumentData,
 }
 
 export const adminAssignTechnician = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  withCriticalScale({ cors: true, region: "europe-west3", enforceAppCheck: true }),
   async (request) => {
     requireDispatcher(request.auth);
     await requirePrivilegedMfaSession(request.auth);
@@ -98,7 +100,7 @@ export const adminAssignTechnician = onCall(
     const now = FieldValue.serverTimestamp();
     let idempotent = false;
 
-    await db.runTransaction(async (transaction) => {
+    await runTransactionWithRetry(db, async (transaction) => {
       const [ticketSnap, userSnap, technicianSnap] = await Promise.all([
         transaction.get(ticketRef),
         transaction.get(userRef),
@@ -169,8 +171,11 @@ export const adminAssignTechnician = onCall(
           : null,
         updatedAt: now,
       }, { merge: true });
-      transaction.set(userSnap.exists ? userRef : technicianRef, { currentJobCount: currentJobCount + 1, updatedAt: now }, { merge: true });
-      if (previousUserRef && previousUserSnap?.exists) transaction.set(previousUserRef, { currentJobCount: Math.max(0, Number(previousUserSnap.data()?.currentJobCount || 0) - 1), updatedAt: now }, { merge: true });
+      transaction.set(userSnap.exists ? userRef : technicianRef, { currentJobCount: FieldValue.increment(1), updatedAt: now }, { merge: true });
+      if (previousUserRef && previousUserSnap?.exists) {
+        const previousCount = Number(previousUserSnap.data()?.currentJobCount || 0);
+        transaction.set(previousUserRef, { currentJobCount: previousCount > 0 ? FieldValue.increment(-1) : 0, updatedAt: now }, { merge: true });
+      }
       transaction.set(auditRef, {
         action: isReassignment ? "ADMIN_REASSIGN_READY_TECHNICIAN" : "ADMIN_ASSIGN_READY_TECHNICIAN",
         actorId: request.auth!.uid,

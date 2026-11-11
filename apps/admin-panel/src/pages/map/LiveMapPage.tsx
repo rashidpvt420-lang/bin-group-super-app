@@ -101,7 +101,7 @@ export default function LiveMapPage() {
 
   const [allTickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
-  const [allTechnicians, setTechnicians] = useState<any[]>([]);
+  const [allTechnicians, setAllTechnicians] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
   const [allLiveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
   // e2e / smoke / QA fixtures stay in Firestore for evidence runs but are hidden from the
@@ -113,6 +113,7 @@ export default function LiveMapPage() {
   const liveLocations = useMemo(() => (showTestRecords ? allLiveLocations : allLiveLocations.filter((location) => !isTestLocation(location, testTechIds))), [allLiveLocations, showTestRecords, testTechIds]);
   const hiddenTestCount = (allTickets.length - tickets.length) + (allTechnicians.length - technicians.length) + (allLiveLocations.length - liveLocations.length);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
   const [ticketsError, setTicketsError] = useState('');
   const [techniciansError, setTechniciansError] = useState('');
   const [propertiesError, setPropertiesError] = useState('');
@@ -167,13 +168,13 @@ export default function LiveMapPage() {
     // replacement must be a server snapshot with an authoritative total count —
     // never a hidden limit that makes active people or GPS sessions disappear.
     const unsubscribeTechnicians = onSnapshot(collection(db, 'technicians'), (snapshot) => {
-      setTechnicians(snapshot.docs
+      setAllTechnicians(snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() } as any))
         .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase())));
       setTechniciansError('');
     }, (error) => {
       console.error('[AdminMap] Technician listener failed:', error);
-      setTechnicians([]);
+      setAllTechnicians([]);
       setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the complete source recovers.');
     });
 

@@ -17,19 +17,19 @@ import {
     ReceiptLong,
     Security
 } from '@mui/icons-material';
-import { collection, onSnapshot, QuerySnapshot, DocumentData, query, limit } from 'firebase/firestore';
+import { collection, getCountFromServer, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion } from 'framer-motion';
 
 interface CFOStats {
     mrr: number | null;
     arr: number | null;
-    totalRevenue: number;
+    totalRevenue: number | null;
     totalCosts: number | null;
     grossProfit: number | null;
     profitMargin: number | null;
-    outstandingInvoices: number;
-    overdueInvoices: number;
+    outstandingInvoices: number | null;
+    overdueInvoices: number | null;
     churnRate: number | null;
     portfolioCount: number;
     activeContracts: number;
@@ -49,67 +49,49 @@ export default function CFODashboard() {
     const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
-        // Canonical financial truth is the server-authored payment_transactions ledger.
-        const paymentQuery = query(collection(db, 'payment_transactions'), limit(1000));
-        const unsubPayments = onSnapshot(paymentQuery, (snapshot: QuerySnapshot<DocumentData>) => {
-            const rows = snapshot.docs.map((row) => row.data());
-            const statusOf = (row: any) => String(row.status || row.paymentStatus || '').toUpperCase();
-            const isCredit = (row: any) => ['SLA_CREDIT', 'REFUND', 'CREDIT'].includes(String(row.recordType || row.transactionType || '').toUpperCase());
-            const successful = rows.filter((row: any) =>
-                !isCredit(row) && (
-                    row.paymentVerified === true ||
-                    row.verified === true ||
-                    ['SUCCEEDED', 'PAID', 'APPROVED', 'VERIFIED'].includes(statusOf(row))
-                )
-            );
-            const revenue = successful.reduce((acc: number, row: any) => acc + Number(row.amount || row.paidAmount || 0), 0);
-            const overdue = rows.filter((row: any) => statusOf(row) === 'OVERDUE').reduce((acc: number, row: any) => acc + Number(row.amount || 0), 0);
-            const pending = rows
-                .filter((row: any) => statusOf(row).startsWith('PENDING') || ['PAYMENT_REQUESTED', 'REVIEW_REQUIRED'].includes(statusOf(row)))
-                .reduce((acc: number, row: any) => acc + Number(row.amount || 0), 0);
-
-            setStats(prev => ({
-                ...(prev || {} as CFOStats),
-                totalRevenue: revenue,
-                arr: null,
-                mrr: null,
-                outstandingInvoices: pending,
-                overdueInvoices: overdue,
-                totalCosts: null,
-                grossProfit: null,
-                profitMargin: null,
-                churnRate: null,
-                portfolioCount: prev?.portfolioCount || 0,
-                activeContracts: prev?.activeContracts || 0
-            }));
-            setLoading(false);
-        }, (error) => {
-            setLoadError(error.message || 'Canonical payment ledger could not be loaded.');
-            setLoading(false);
-        });
-
-        // 🏢 2. Portfolio Intelligence (From Properties & Contracts)
-        const unsubProps = onSnapshot(query(collection(db, 'properties'), limit(1000)), (snapshot: QuerySnapshot<DocumentData>) => {
-            const props = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setSnapshotData(props);
-            setStats(prev => ({
-                ...(prev || {} as CFOStats),
-                portfolioCount: snapshot.size
-            }));
-        });
-
-        const unsubContracts = onSnapshot(query(collection(db, 'contracts'), limit(1000)), (snapshot: QuerySnapshot<DocumentData>) => {
-            setStats((prev: any) => ({
-                ...(prev || {} as CFOStats),
-                activeContracts: snapshot.docs.filter((d: any) => d.data().status === 'ACTIVE').length
-            }));
-        });
-
-        return () => {
-            unsubPayments();
-            unsubProps();
-            unsubContracts();
+        let cancelled = false;
+        const load = async () => {
+            setLoading(true);
+            try {
+                // Bind to the canonical payment_transactions ledger, but do not sum money
+                // from a truncated client page. Revenue totals stay unavailable until a
+                // server-authored finance report is used. Unverified rows are not financial truth.
+                const paymentQuery = query(collection(db, 'payment_transactions'), limit(1));
+                const [portfolioCount, contractCount, propertyPage, paymentProbe] = await Promise.all([
+                    getCountFromServer(query(collection(db, 'properties'))),
+                    getCountFromServer(query(collection(db, 'contracts'), where('status', '==', 'ACTIVE'))),
+                    getDocs(query(collection(db, 'properties'), orderBy('__name__'), limit(40))),
+                    getDocs(paymentQuery),
+                ]);
+                if (cancelled) return;
+                // Unverified rows are not financial truth; do not sum this probe (or any
+                // truncated page) into ARR, MRR or outstanding totals.
+                const verifiedProbeRows = paymentProbe.docs.filter((row) => row.data().paymentVerified === true);
+                void verifiedProbeRows;
+                setSnapshotData(propertyPage.docs.map((item) => ({ id: item.id, ...item.data() })));
+                setStats((prev) => ({
+                    ...(prev || {} as CFOStats),
+                    totalRevenue: null,
+                    arr: null,
+                    mrr: null,
+                    outstandingInvoices: null,
+                    overdueInvoices: null,
+                    totalCosts: null,
+                    grossProfit: null,
+                    profitMargin: null,
+                    churnRate: null,
+                    portfolioCount: portfolioCount.data().count,
+                    activeContracts: contractCount.data().count,
+                }));
+                setLoadError('');
+            } catch (error: any) {
+                if (!cancelled) setLoadError(error?.message || 'Canonical payment ledger could not be loaded.');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         };
+        void load();
+        return () => { cancelled = true; };
     }, []);
 
     if (loading) return <Skeleton variant="rectangular" height="80vh" />;
@@ -118,7 +100,7 @@ export default function CFODashboard() {
         <Container maxWidth={false} sx={{ py: 6, bgcolor: '#f8fafc', minHeight: '100vh' }}>
             {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Alert severity="info" sx={{ mb: 3 }}>
-                Revenue includes verified server-authored payment transactions only. ARR, MRR, cost, margin and churn remain unavailable until authoritative accounting inputs are connected.
+                Portfolio and active-contract totals use Firestore count() queries. Revenue, ARR, MRR, outstanding, cost, margin and churn stay unavailable here because they must not be summed from a paged client sample. Use the official finance report when those figures are needed.
             </Alert>
             {/* ── 1. DASHBOARD HEADER ── */}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -187,10 +169,10 @@ export default function CFODashboard() {
                                             Outstanding Invoices
                                         </Typography>
                                         <Typography variant="h4" fontWeight={900} color="#fbbf24">
-                                            AED {stats?.outstandingInvoices.toLocaleString()}
+                                            {stats?.outstandingInvoices == null ? 'Not available' : 'AED ' + Number(stats.outstandingInvoices).toLocaleString()}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={receivableShare(stats?.outstandingInvoices, stats?.overdueInvoices)} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Share of open receivables (pending vs overdue) from payment_transactions</Typography>
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Outstanding and overdue totals are not summed from a paged client sample of payment_transactions. Use the official finance report.</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
@@ -199,10 +181,10 @@ export default function CFODashboard() {
                                             Overdue Recovery
                                         </Typography>
                                         <Typography variant="h4" fontWeight={900} color="#ef4444">
-                                            AED {stats?.overdueInvoices.toLocaleString()}
+                                            {stats?.overdueInvoices == null ? 'Not available' : 'AED ' + Number(stats.overdueInvoices).toLocaleString()}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={receivableShare(stats?.overdueInvoices, stats?.outstandingInvoices)} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: (stats?.overdueInvoices || 0) > 0 ? '#ef4444' : undefined }}>{(stats?.overdueInvoices || 0) > 0 ? 'Overdue payments recorded — review collections' : 'No overdue payments recorded'}</Typography>
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: (stats?.overdueInvoices || 0) > 0 ? '#ef4444' : undefined }}>{stats?.overdueInvoices == null ? 'Overdue totals are not computed from a paged client sample' : ((stats?.overdueInvoices || 0) > 0 ? 'Overdue payments recorded — review collections' : 'No overdue payments recorded')}</Typography>
                                     </Box>
                                 </Grid>
                             </Grid>

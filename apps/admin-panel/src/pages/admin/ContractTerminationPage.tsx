@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { collection, db, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { usePagedCollection } from '../../lib/usePagedCollection';
 
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const closedStates = ['CLOSED', 'CANCELLED', 'EXPIRED'];
@@ -8,33 +9,16 @@ const isOpen = (row: any) => !closedStates.some((state) => normalize(row.contrac
 const money = (value: unknown) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 
 export default function ContractTerminationPage() {
-  const [rows, setRows] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
   const [reason, setReason] = React.useState('OWNER_REQUEST');
   const [note, setNote] = React.useState('');
   const [message, setMessage] = React.useState('');
   const [closingId, setClosingId] = React.useState('');
-  const [renewals, setRenewals] = React.useState<any[]>([]);
   const [rebuildLoading, setRebuildLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'contracts'), (snapshot) => {
-      setRows(snapshot.docs.map((item: any) => ({ id: item.id, ...(item.data() || {}) })));
-      setLoading(false);
-    }, () => {
-      setMessage('Could not load contracts. Check admin Firestore access.');
-      setLoading(false);
-    });
-    
-    const unsubscribeRenewals = onSnapshot(collection(db, 'contract_renewal_watch'), (snapshot) => {
-      setRenewals(snapshot.docs.map((item: any) => ({ id: item.id, ...(item.data() || {}) })));
-    });
-
-    return () => {
-      unsubscribe();
-      unsubscribeRenewals();
-    };
-  }, []);
+  const contractsPage = usePagedCollection({ db, collectionName: 'contracts' });
+  const renewalsPage = usePagedCollection({ db, collectionName: 'contract_renewal_watch' });
+  const rows = contractsPage.rows;
+  const renewals = renewalsPage.rows;
+  const loading = contractsPage.loading;
 
   const openContracts = rows.filter(isOpen);
 
@@ -146,6 +130,11 @@ export default function ContractTerminationPage() {
             </Table>
           </Box>
         </Paper>
+        {(contractsPage.error || renewalsPage.error) && <Typography color="error">{contractsPage.error || renewalsPage.error}</Typography>}
+        <Stack direction="row" spacing={2}>
+          {contractsPage.hasMore && <Button onClick={() => void contractsPage.loadMore()} disabled={contractsPage.loadingMore}>Load more contracts{contractsPage.total != null ? ` (showing ${rows.length} of ${contractsPage.total})` : ''}</Button>}
+          {renewalsPage.hasMore && <Button onClick={() => void renewalsPage.loadMore()} disabled={renewalsPage.loadingMore}>Load more renewals{renewalsPage.total != null ? ` (showing ${renewals.length} of ${renewalsPage.total})` : ''}</Button>}
+        </Stack>
       </Stack>
     </Box>
   );

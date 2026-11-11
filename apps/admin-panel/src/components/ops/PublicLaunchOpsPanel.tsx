@@ -11,7 +11,7 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import TrafficIcon from '@mui/icons-material/Traffic';
 
 // Import Firestore from sovereign shared lib
-import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, orderBy, limit, getCountFromServer, getDocs } from '../../lib/firebase';
 
 export default function PublicLaunchOpsPanel() {
     const [metrics, setMetrics] = useState({
@@ -27,58 +27,43 @@ export default function PublicLaunchOpsPanel() {
     const [streamError, setStreamError] = useState('');
 
     useEffect(() => {
-        // 1. Live Snapshot of Security Registry
+        let cancelled = false;
         const qSecurity = query(collection(db, 'security_audit_logs'), orderBy('createdAt', 'desc'), limit(5));
         const unsubSecurity = onSnapshot(qSecurity, (snapshot) => {
             const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAlerts(logs);
-            
-            // Calculate abuse attempts from logs
             const abuse = logs.filter((l: any) => ['BOT_DETECTION', 'OTP_THROTTLE', 'QUOTE_LIMIT'].includes(String(l.type || ''))).length;
             setMetrics(prev => ({ ...prev, abuseAttempts: abuse }));
         }, (error) => setStreamError(error.message || 'Security telemetry stream unavailable.'));
 
-        // 2. Quote Velocity (Last 1 hour)
-        const hourAgo = new Date(Date.now() - 3600000);
-        const qQuotes = query(collection(db, 'quotes'), where('createdAt', '>=', hourAgo), limit(500));
-        const unsubQuotes = onSnapshot(qQuotes, (snapshot) => {
-            setMetrics(prev => ({ ...prev, quotesPerHour: snapshot.size }));
-        }, (error) => setStreamError(error.message || 'Quote telemetry stream unavailable.'));
-
-        // 3. Payment Integrity (Failures)
-        const qPayments = query(collection(db, 'payment_transactions'), where('status', 'in', ['FAILED', 'REJECTED', 'REVIEW_REQUIRED']), limit(500));
-        const unsubPayments = onSnapshot(qPayments, (snapshot) => {
-            setMetrics(prev => ({ ...prev, paymentFailures: snapshot.size }));
-        }, (error) => setStreamError(error.message || 'Payment integrity stream unavailable.'));
-
-        // 4. Overall Conversion Logic (bounded operational sample).
-        let sampledQuoteCount = 0;
-        let sampledVerifiedPayments = 0;
-        const updateConversion = () => {
-            const totalQ = sampledQuoteCount || 1;
-            const cv = (sampledVerifiedPayments / totalQ) * 100;
-            setMetrics(prev => ({ ...prev, conversionRate: parseFloat(cv.toFixed(2)) }));
+        const loadCounts = async () => {
+            try {
+                const hourAgo = new Date(Date.now() - 3600000);
+                const [quotesHour, paymentFailures, quoteTotal, paidPayments] = await Promise.all([
+                    getCountFromServer(query(collection(db, 'quotes'), where('createdAt', '>=', hourAgo))),
+                    getCountFromServer(query(collection(db, 'payment_transactions'), where('status', 'in', ['FAILED', 'REJECTED', 'REVIEW_REQUIRED']))),
+                    getCountFromServer(query(collection(db, 'quotes'))),
+                    getCountFromServer(query(collection(db, 'payment_transactions'), where('status', 'in', ['PAID', 'APPROVED', 'VERIFIED', 'SUCCEEDED']))),
+                ]);
+                if (cancelled) return;
+                const totalQ = quoteTotal.data().count || 1;
+                setMetrics(prev => ({
+                    ...prev,
+                    quotesPerHour: quotesHour.data().count,
+                    paymentFailures: paymentFailures.data().count,
+                    conversionRate: parseFloat(((paidPayments.data().count / totalQ) * 100).toFixed(2)),
+                }));
+                setStreamError('');
+            } catch (error: any) {
+                if (!cancelled) setStreamError(error?.message || 'Launch ops counts could not be loaded.');
+            }
         };
-        const unsubAllQuotes = onSnapshot(query(collection(db, 'quotes'), limit(1000)), (qSnap) => {
-            sampledQuoteCount = qSnap.size;
-            updateConversion();
-        }, (error) => setStreamError(error.message || 'Quote conversion stream unavailable.'));
-        const unsubAllPayments = onSnapshot(query(collection(db, 'payment_transactions'), limit(1000)), (pSnap) => {
-            sampledVerifiedPayments = pSnap.docs.filter((row) => {
-                const data = row.data();
-                const status = String(data.status || data.paymentStatus || '').toUpperCase();
-                const isCredit = ['SLA_CREDIT', 'REFUND', 'CREDIT'].includes(String(data.recordType || data.transactionType || '').toUpperCase());
-                return !isCredit && (data.paymentVerified === true || data.verified === true || ['PAID', 'APPROVED', 'VERIFIED', 'SUCCEEDED'].includes(status));
-            }).length;
-            updateConversion();
-        }, (error) => setStreamError(error.message || 'Payment conversion stream unavailable.'));
-
+        void loadCounts();
+        const timer = window.setInterval(() => { void loadCounts(); }, 30000);
         return () => {
+            cancelled = true;
+            window.clearInterval(timer);
             unsubSecurity();
-            unsubQuotes();
-            unsubPayments();
-            unsubAllQuotes();
-            unsubAllPayments();
         };
     }, []);
 

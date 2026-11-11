@@ -15,15 +15,22 @@ import {
     History, ShieldAlert, Key, Landmark
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { db, collection, getDocs, query, where, orderBy, limit } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { loadReportingCollection } from '../lib/loadReportingCollections';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 import { computeReportingStats, formatOccupancy, formatResolutionTime, NOT_AVAILABLE, type ReportingStats } from './reportingDashboardStats';
+
+type ReportingView = ReportingStats & {
+  _truncated?: boolean;
+  _totals?: { properties: number; tickets: number; contracts: number; units: number };
+};
+
 import Bi from '../components/Bi';
 
 const ReportingDashboard: React.FC = () => {
     const { user, role } = useRole();
-    const [stats, setStats] = useState<ReportingStats | null>(null);
+    const [stats, setStats] = useState<ReportingView | null>(null);
     const [selectedEmirate, setSelectedEmirate] = useState('ALL');
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -41,34 +48,31 @@ const ReportingDashboard: React.FC = () => {
                 setLoadError('');
 
                 const isOwnerView = String(role || '').toLowerCase() === 'owner';
-                const readCollection = async (collectionName: string) => {
-                    if (!isOwnerView) {
-                        const snapshot = await getDocs(collection(db, collectionName));
-                        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    }
-
-                    // Owner analytics must be query-bound to immutable UID fields so
-                    // Firestore can prove ownership before returning any row. Never
-                    // widen rules or read an entire production collection in-browser.
-                    const [byOwnerId, byOwnerUid] = await Promise.all([
-                        getDocs(query(collection(db, collectionName), where('ownerId', '==', user.uid), limit(250))),
-                        getDocs(query(collection(db, collectionName), where('ownerUid', '==', user.uid), limit(250))),
-                    ]);
-                    const merged = new globalThis.Map<string, any>();
-                    for (const snapshot of [byOwnerId, byOwnerUid]) {
-                        for (const item of snapshot.docs) merged.set(item.id, { id: item.id, ...item.data() });
-                    }
-                    return [...merged.values()];
-                };
-
-                const [properties, tickets, contracts, units] = await Promise.all([
-                    readCollection('properties'),
-                    readCollection('maintenanceTickets'),
-                    readCollection('contracts'),
-                    readCollection('units'),
+                const ownerUid = isOwnerView ? user.uid : undefined;
+                const [propertiesResult, ticketsResult, contractsResult, unitsResult] = await Promise.all([
+                    loadReportingCollection(db, 'properties', ownerUid),
+                    loadReportingCollection(db, 'maintenanceTickets', ownerUid),
+                    loadReportingCollection(db, 'contracts', ownerUid),
+                    loadReportingCollection(db, 'units', ownerUid),
                 ]);
+                const truncated = [propertiesResult, ticketsResult, contractsResult, unitsResult].some((item) => item.truncated);
                 // N-10: every KPI is computed from these records; missing data yields null → "Not available".
-                setStats(computeReportingStats({ properties, tickets, contracts, units, selectedEmirate }));
+                setStats({
+                    ...computeReportingStats({
+                        properties: propertiesResult.rows,
+                        tickets: ticketsResult.rows,
+                        contracts: contractsResult.rows,
+                        units: unitsResult.rows,
+                        selectedEmirate,
+                    }),
+                    _truncated: truncated,
+                    _totals: {
+                        properties: propertiesResult.total,
+                        tickets: ticketsResult.total,
+                        contracts: contractsResult.total,
+                        units: unitsResult.total,
+                    },
+                });
             } catch (err: any) {
                 console.error("Aggregation Failed:", err);
                 setLoadError(err?.message || "Reporting data could not be loaded.");
@@ -120,10 +124,12 @@ const ReportingDashboard: React.FC = () => {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: '#7A5C12' }} /></Box>;
     if (loadError) return <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}><Alert severity="error">{loadError}</Alert></Container>;
     if (!stats) return null;
+    const truncated = Boolean(stats._truncated);
     const emergencyMax = Math.max(1, ...stats.emergencyByMonth.map((m) => m.count));
 
     return (
         <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}>
+            {truncated && <Alert severity="info" sx={{ mb: 3 }}>KPIs are computed from a paged sample of up to 300 rows per collection. Collection totals use count() and may be higher than the sample.</Alert>}
             <Box sx={{ mb: 6 }}>
                 <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900, letterSpacing: 4, mb: 1, display: 'block' }}>INSTITUTIONAL AUDIT</Typography>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-end">

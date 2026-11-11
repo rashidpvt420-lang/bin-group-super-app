@@ -1,5 +1,5 @@
 // admin-panel/src/pages/admin/OrphanWarRoomPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Container, Box, Typography, Paper, Grid, Stack, Button, Chip,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -10,7 +10,8 @@ import {
     ShieldAlert, Link as LinkIcon, 
     Search, Wrench, CheckCircle2
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, auth, functions, httpsCallable, limit } from '../../lib/firebase';
+import { db, auth, functions, httpsCallable, where } from '../../lib/firebase';
+import { usePagedCollection, type PagedRow } from '../../lib/usePagedCollection';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
@@ -36,11 +37,37 @@ type RepairReport = {
 export default function OrphanWarRoomPage() {
     const { setPageContext } = useAI();
     const activeProjectId = 'bin-group-57c60';
-    const [orphans, setOrphans] = useState<any[]>([]);
-    const [properties, setProperties] = useState<any[]>([]);
-    const [geoRepairItems, setGeoRepairItems] = useState<any[]>([]);
-    const [units, setUnits] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const ticketOrphanConstraints = useMemo(() => [where('propertyId', '==', 'UNASSOCIATED')], []);
+    const tenantOrphanConstraints = useMemo(() => [where('role', '==', 'tenant'), where('propertyId', '==', 'UNASSOCIATED')], []);
+    const ticketOrphansPage = usePagedCollection({ db, collectionName: 'maintenanceTickets', constraints: ticketOrphanConstraints, resetKey: 'orphan-tickets' });
+    const tenantOrphansPage = usePagedCollection({ db, collectionName: 'users', constraints: tenantOrphanConstraints, resetKey: 'orphan-tenants' });
+    const propertiesPage = usePagedCollection({ db, collectionName: 'properties' });
+    const unitsPage = usePagedCollection({ db, collectionName: 'units' });
+    const properties = propertiesPage.rows;
+    const units = unitsPage.rows;
+    const geoRepairItems = properties.filter((property) => !property.geo?.lat || !property.geo?.lng || !property.geo?.geohash);
+    type OrphanRecord = PagedRow & {
+        type: 'TICKET' | 'TENANT';
+        description?: string;
+        tenantName?: string;
+        tenantEmail?: string;
+        displayName?: string;
+        email?: string;
+        createdAt?: { toDate?: () => Date };
+    };
+    const orphans: OrphanRecord[] = [
+        ...ticketOrphansPage.rows.map((row) => ({
+            ...row,
+            type: 'TICKET' as const,
+            description: String(row.description || row.title || row.issue || row.id),
+        })),
+        ...tenantOrphansPage.rows.map((row) => ({
+            ...row,
+            type: 'TENANT' as const,
+            description: `Tenant: ${row.displayName || row.email}`,
+        })),
+    ];
+    const loading = ticketOrphansPage.loading || tenantOrphansPage.loading || propertiesPage.loading;
     const [fixing, setFixing] = useState<string | null>(null);
     const [repairRunning, setRepairRunning] = useState<'dryRun' | 'commit' | null>(null);
     const [repairReport, setRepairReport] = useState<RepairReport | null>(null);
@@ -59,6 +86,13 @@ export default function OrphanWarRoomPage() {
     const [selectedOrphan, setSelectedOrphan] = useState<any>(null);
     const [targetPropId, setTargetPropId] = useState('');
     const [targetUnitId, setTargetUnitId] = useState('');
+
+    useEffect(() => {
+        if (!propertiesPage.loading && !propertiesPage.loadingMore && propertiesPage.rows.length < 200 && propertiesPage.hasMore) void propertiesPage.loadMore();
+    }, [propertiesPage.loading, propertiesPage.loadingMore, propertiesPage.rows.length, propertiesPage.hasMore, propertiesPage.loadMore]);
+    useEffect(() => {
+        if (!unitsPage.loading && !unitsPage.loadingMore && unitsPage.rows.length < 200 && unitsPage.hasMore) void unitsPage.loadMore();
+    }, [unitsPage.loading, unitsPage.loadingMore, unitsPage.rows.length, unitsPage.hasMore, unitsPage.loadMore]);
 
     const runInstitutionalRepair = async (dryRun: boolean) => {
         if (!auth.currentUser) {
@@ -101,36 +135,6 @@ export default function OrphanWarRoomPage() {
         }
     };
 
-    useEffect(() => {
-        // 1. Listen for orphans (Tickets or Tenants missing linkage)
-        const unsubTickets = onSnapshot(query(collection(db, 'maintenanceTickets'), where('propertyId', '==', 'UNASSOCIATED'), limit(500)), (snap) => {
-            setOrphans(prev => {
-                const filtered = prev.filter(p => p.type !== 'TICKET');
-                return [...filtered, ...snap.docs.map(d => ({ id: d.id, type: 'TICKET', ...d.data() }))];
-            });
-            setLoading(false);
-        });
-
-        const unsubTenants = onSnapshot(query(collection(db, 'users'), where('role', '==', 'tenant'), where('propertyId', '==', 'UNASSOCIATED')), (snap) => {
-            setOrphans(prev => {
-                const filtered = prev.filter(p => p.type !== 'TENANT');
-                return [...filtered, ...snap.docs.map(d => ({ id: d.id, type: 'TENANT', description: `Tenant: ${d.data().displayName || d.data().email}`, ...d.data() }))];
-            });
-        });
-
-        // 2. Load potential link targets
-        const unsubProps = onSnapshot(collection(db, 'properties'), (snap) => {
-            const fetched: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setProperties(fetched);
-            setGeoRepairItems(fetched.filter((property) => !property.geo?.lat || !property.geo?.lng || !property.geo?.geohash));
-        });
-
-        const unsubUnits = onSnapshot(collection(db, 'units'), (snap) => {
-            setUnits(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        return () => { unsubTickets(); unsubTenants(); unsubProps(); unsubUnits(); };
-    }, []);
 
     const handleRepair = async () => {
         if (!selectedOrphan || !targetPropId || !targetUnitId) return;
@@ -437,6 +441,12 @@ export default function OrphanWarRoomPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Container>
+                    <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }}>
+                {ticketOrphansPage.hasMore && <Button onClick={() => void ticketOrphansPage.loadMore()} disabled={ticketOrphansPage.loadingMore}>Load more ticket orphans{ticketOrphansPage.total != null ? ` (${ticketOrphansPage.rows.length}/${ticketOrphansPage.total})` : ''}</Button>}
+                {tenantOrphansPage.hasMore && <Button onClick={() => void tenantOrphansPage.loadMore()} disabled={tenantOrphansPage.loadingMore}>Load more tenant orphans{tenantOrphansPage.total != null ? ` (${tenantOrphansPage.rows.length}/${tenantOrphansPage.total})` : ''}</Button>}
+                {propertiesPage.hasMore && <Button onClick={() => void propertiesPage.loadMore()} disabled={propertiesPage.loadingMore}>Load more properties{propertiesPage.total != null ? ` (${properties.length}/${propertiesPage.total})` : ''}</Button>}
+                {unitsPage.hasMore && <Button onClick={() => void unitsPage.loadMore()} disabled={unitsPage.loadingMore}>Load more units{unitsPage.total != null ? ` (${units.length}/${unitsPage.total})` : ''}</Button>}
+            </Stack>
+</Container>
     );
 }
