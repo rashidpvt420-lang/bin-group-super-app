@@ -10,6 +10,20 @@ import { formatAED } from '../../utils/formatters';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { functions, httpsCallable } from '../../lib/firebase';
+import {
+  ownerAgencyNoGuaranteeCopy,
+  ownerAmlCashThresholdCopy,
+  ownerCancellationFeePreSignNoticeCopy,
+  ownerComplimentaryMonthCopy,
+  ownerDecennialAndMollakCopy,
+  ownerEmergencyRepairCopy,
+  ownerGoverningLawJurisdictionCopy,
+  ownerLanguagePrecedenceCopy,
+  ownerMobilisationRefundCopy,
+  ownerPdplCopy,
+  ownerReturnedChequeCopy,
+  ownerVatTreatmentCopy,
+} from '../../utils/ownerInitialContractPolicy';
 
 interface ContractSignatureStepProps { onNext: () => void; onBack: () => void }
 type LockedQuote = { quoteHash: string; annualContractValue: number; activationDeposit: number; currency?: string; quotedAtMs?: number; expiresAtMs?: number; version?: string };
@@ -166,9 +180,23 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
 
           <AgreementSection title="6. Digital Evidence, AI Disclaimer, Law" ar="الإثبات الرقمي وإخلاء مسؤولية الذكاء الاصطناعي والقانون">
             <Clause en="BIN GROUP may timestamp, hash and retain applications, quotations, invoices, property passports, tickets, photos, approvals, signatures, GPS and audit logs. AI outputs are decision-support only and do not replace legal, engineering, tax, accounting, insurance or authority advice." ar="يجوز لـ BIN GROUP ختم الطلبات وعروض الأسعار والفواتير وجوازات العقار والتذاكر والصور والموافقات والتوقيعات وسجلات GPS والتدقيق زمنياً وتجزئتها وحفظها. مخرجات الذكاء الاصطناعي أدوات مساعدة للقرار ولا تستبدل الاستشارات القانونية أو الهندسية أو الضريبية أو المحاسبية أو التأمينية أو استشارات الجهات." />
-            <Clause en="This Agreement is governed by UAE law as applicable in Abu Dhabi. Abu Dhabi Courts have jurisdiction subject to mandatory law. If the English and Arabic texts conflict before UAE mainland courts, Arabic prevails unless a signed addendum states otherwise." ar="تخضع هذه الاتفاقية لقوانين دولة الإمارات المطبقة في أبوظبي. تختص محاكم أبوظبي مع مراعاة القوانين الإلزامية. وفي حال تعارض النصين الإنجليزي والعربي أمام محاكم الدولة البرية، يسود النص العربي ما لم ينص ملحق موقع على خلاف ذلك." />
+            <Clause en={ownerComplimentaryMonthCopy(false)} ar={ownerComplimentaryMonthCopy(true)} />
+            <Clause en={ownerGoverningLawJurisdictionCopy(false)} ar={ownerGoverningLawJurisdictionCopy(true)} />
+            <Clause en={ownerLanguagePrecedenceCopy(false)} ar={ownerLanguagePrecedenceCopy(true)} />
+            <Clause en={ownerPdplCopy(false)} ar={ownerPdplCopy(true)} />
+            <Clause en={ownerDecennialAndMollakCopy(false)} ar={ownerDecennialAndMollakCopy(true)} />
+            <Clause en={ownerMobilisationRefundCopy(false)} ar={ownerMobilisationRefundCopy(true)} />
+            <Clause en={ownerVatTreatmentCopy(false)} ar={ownerVatTreatmentCopy(true)} />
+            <Clause en={ownerAmlCashThresholdCopy(false)} ar={ownerAmlCashThresholdCopy(true)} />
+            <Clause en={ownerReturnedChequeCopy(false)} ar={ownerReturnedChequeCopy(true)} />
+            <Clause en={ownerAgencyNoGuaranteeCopy(false)} ar={ownerAgencyNoGuaranteeCopy(true)} />
+            <Clause en={ownerEmergencyRepairCopy(false)} ar={ownerEmergencyRepairCopy(true)} />
           </AgreementSection>
         </Box>
+
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2" fontWeight={800}>{ownerCancellationFeePreSignNoticeCopy(lang === 'ar')}</Typography>
+        </Alert>
 
         <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 2, border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
           <Stack direction={'row'} spacing={1} alignItems="center" mb={2}><FileSignature size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography></Stack>

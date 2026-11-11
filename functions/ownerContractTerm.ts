@@ -1,4 +1,18 @@
 import * as admin from "firebase-admin";
+import {
+  OWNER_COMPLIMENTARY_MONTHS,
+  OWNER_INITIAL_CANCELLATION_WINDOW_DAYS,
+  formatOwnerInitialCancellationFee,
+  ownerCancellationWindowCopy,
+  ownerComplimentaryMonthCopy,
+  ownerMobilisationRefundCopy,
+  ownerCancellationFeePreSignNoticeCopy,
+  OWNER_CONTRACT_AUTO_RENEWAL,
+  OWNER_CONTRACT_RENEWAL_REQUIRES_EXPLICIT_CONSENT,
+  OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
+  OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR,
+  OWNER_INITIAL_MOBILISATION_REFUND_POLICY,
+} from "./ownerInitialContractPolicy";
 
 export const OWNER_INITIAL_CONTRACT_TERM_MONTHS = 13;
 export const OWNER_RENEWAL_CONTRACT_TERM_MONTHS = 12;
@@ -17,6 +31,12 @@ export interface OwnerContractTermOptions {
 export function addMonthsPreservingTime(date: Date, months: number): Date {
   const copy = new Date(date.getTime());
   copy.setMonth(copy.getMonth() + months);
+  return copy;
+}
+
+export function addDaysPreservingTime(date: Date, days: number): Date {
+  const copy = new Date(date.getTime());
+  copy.setDate(copy.getDate() + days);
   return copy;
 }
 
@@ -45,8 +65,9 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
   const termMonths = isInitial ? OWNER_INITIAL_CONTRACT_TERM_MONTHS : OWNER_RENEWAL_CONTRACT_TERM_MONTHS;
   const approvalWindowStart = options.approvalDate || start;
   const finish = addMonthsPreservingTime(start, termMonths);
-  const firstMonthEnds = addMonthsPreservingTime(approvalWindowStart, OWNER_CONTRACT_CHANGE_WINDOW_MONTHS);
-  const servicePeriodEnds = isInitial ? addMonthsPreservingTime(start, OWNER_SERVICE_TERM_MONTHS) : finish;
+  const firstMonthEnds = addDaysPreservingTime(approvalWindowStart, OWNER_INITIAL_CANCELLATION_WINDOW_DAYS);
+  const complimentaryMonthEnds = addMonthsPreservingTime(start, OWNER_COMPLIMENTARY_MONTHS);
+  const servicePeriodEnds = isInitial ? addMonthsPreservingTime(complimentaryMonthEnds, OWNER_SERVICE_TERM_MONTHS) : finish;
 
   const startStamp = stampFromDate(start);
   const finishStamp = stampFromDate(finish);
@@ -56,7 +77,7 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
     contractCycle: cycle,
     contractTermMonths: termMonths,
     contractTermLabel: isInitial
-      ? `${termMonths} months initial term: ${OWNER_SERVICE_TERM_MONTHS} months service + ${OWNER_INITIAL_REVIEW_MONTHS} month real-time review window`
+      ? `${termMonths} months initial term: first month management fee waived + ${OWNER_SERVICE_TERM_MONTHS} months billed at the contract rate`
       : `${termMonths} months renewal term`,
     initialContractTermMonths: OWNER_INITIAL_CONTRACT_TERM_MONTHS,
     renewalContractTermMonths: OWNER_RENEWAL_CONTRACT_TERM_MONTHS,
@@ -73,24 +94,62 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
     firstMonthWindowEndsAt: firstMonthStamp,
     ownerCanRequestPlanChangeUntil: firstMonthStamp,
     ownerCanRequestCancelOrUpgradeUntil: firstMonthStamp,
+    complimentaryMonthStartsAt: startStamp,
+    complimentaryMonthEndsAt: stampFromDate(complimentaryMonthEnds),
+    complimentaryMonthPolicy: isInitial ? {
+      policyCode: "OWNER_INITIAL_COMPLIMENTARY_SERVICE_MONTH",
+      complimentaryMonths: OWNER_COMPLIMENTARY_MONTHS,
+      recurringServiceFeeAed: 0,
+      mobilisationStillDue: true,
+      appliesToRenewals: false,
+      startsAtIso: start.toISOString(),
+      endsAtIso: complimentaryMonthEnds.toISOString(),
+      noteEn: ownerComplimentaryMonthCopy(false),
+      noteAr: ownerComplimentaryMonthCopy(true),
+    } : {
+      policyCode: "OWNER_RENEWAL_NO_COMPLIMENTARY_MONTH",
+      complimentaryMonths: 0,
+      appliesToRenewals: false,
+    },
     renewalPolicy: {
       firstContractTermMonths: OWNER_INITIAL_CONTRACT_TERM_MONTHS,
       renewalTermMonths: OWNER_RENEWAL_CONTRACT_TERM_MONTHS,
       initialServiceMonths: OWNER_SERVICE_TERM_MONTHS,
       initialReviewMonths: OWNER_INITIAL_REVIEW_MONTHS,
-      note: "The first owner contract is 13 months. Renewals after the first term run for 12 months unless changed by written agreement.",
+      complimentaryMonths: isInitial ? OWNER_COMPLIMENTARY_MONTHS : 0,
+      note: "The first owner contract is 13 months: the first month's management fee is waived, and months 2 to 13 are billed at the contract rate. The contract does not auto-renew; any renewal requires the owner's explicit consent and then runs for 12 months unless changed by written agreement.",
+      autoRenewal: OWNER_CONTRACT_AUTO_RENEWAL,
+      renewalRequiresExplicitConsent: OWNER_CONTRACT_RENEWAL_REQUIRES_EXPLICIT_CONSENT,
     },
     renewalNoticePolicy: {
       enabled: true,
       noticeDaysBeforeExpiry: [60, 30, 7, 1],
     },
     cancellationUpgradePolicy: {
-      policyCode: "OWNER_FIRST_MONTH_CANCEL_OR_UPGRADE_WINDOW",
+      policyCode: "OWNER_INITIAL_30_DAY_CANCEL_OR_UPGRADE_WINDOW",
       allowedWindowMonths: OWNER_CONTRACT_CHANGE_WINDOW_MONTHS,
+      allowedWindowDays: OWNER_INITIAL_CANCELLATION_WINDOW_DAYS,
       ownerCanRequestCancelOrUpgrade: true,
       requestWindowStartsAtIso: approvalWindowStart.toISOString(),
       requestWindowEndsAtIso: firstMonthEnds.toISOString(),
-      note: "Owner may request cancellation, contract correction, or package upgrade within the first month from BIN GROUP approval/signature activation. Admin approval is required before any change takes effect.",
+      cancellationFeeAed: formatOwnerInitialCancellationFee().aed,
+      cancellationFeeStatus: formatOwnerInitialCancellationFee().status,
+      cancellationFeeDisplayEn: formatOwnerInitialCancellationFee().displayEn,
+      cancellationFeeDisplayAr: formatOwnerInitialCancellationFee().displayAr,
+      cancellationFeeNatureEn: OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
+      cancellationFeeNatureAr: OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR,
+      preSignNoticeEn: ownerCancellationFeePreSignNoticeCopy(false),
+      preSignNoticeAr: ownerCancellationFeePreSignNoticeCopy(true),
+      mobilisationRefundPolicy: OWNER_INITIAL_MOBILISATION_REFUND_POLICY,
+      mobilisationRefundNoteEn: ownerMobilisationRefundCopy(false),
+      mobilisationRefundNoteAr: ownerMobilisationRefundCopy(true),
+      autoApproveCancellation: false,
+      aiMayApproveMoneyOrContracts: false,
+      autoRenewal: OWNER_CONTRACT_AUTO_RENEWAL,
+      renewalRequiresExplicitConsent: OWNER_CONTRACT_RENEWAL_REQUIRES_EXPLICIT_CONSENT,
+      noteEn: ownerCancellationWindowCopy(false),
+      noteAr: ownerCancellationWindowCopy(true),
+      note: ownerCancellationWindowCopy(false),
     },
     termSummary: {
       cycle,
@@ -101,6 +160,8 @@ export function termFieldsFromStart(start: Date, options: OwnerContractTermOptio
       firstMonthWindowStartsAtIso: approvalWindowStart.toISOString(),
       firstMonthWindowEndsAtIso: firstMonthEnds.toISOString(),
       ownerCanRequestCancelOrUpgradeUntilIso: firstMonthEnds.toISOString(),
+      complimentaryMonthEndsAtIso: complimentaryMonthEnds.toISOString(),
+      cancellationWindowDays: isInitial ? OWNER_INITIAL_CANCELLATION_WINDOW_DAYS : 0,
       renewalTermMonths: OWNER_RENEWAL_CONTRACT_TERM_MONTHS,
     },
   };

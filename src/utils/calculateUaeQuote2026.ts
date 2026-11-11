@@ -45,7 +45,13 @@ export interface QuoteInput {
   ratesVerified?: boolean;
   verifiedMaintenanceRate?: number;
   verifiedManagementRate?: number;
+  /**
+   * Optional override for tests or a future founder-set rate.
+   * The live default is OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT, which stays unset.
+   */
+  officeHighRiseLogisticsUpliftPercent?: number | null;
 }
+
 
 export interface QuoteOutput {
   baseQuote: number;
@@ -221,6 +227,46 @@ export const SYSTEM_DRIVEN_ADDON_IDS: ReadonlySet<string> = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
 ]);
+
+/**
+ * High-rise office logistics uplift. Pending a founder decision and must stay null until set.
+ * Unverified market research cited a 15-25% range; that range is not applied.
+ * When a confirmed percent is set, it applies only to Office (off-sml) with 15 or more floors.
+ */
+export const OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT: number | null = null;
+export const OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_FLOOR_THRESHOLD = 15;
+
+export function resolveOfficeHighRiseLogisticsUpliftPercent(
+  percent: number | null | undefined = OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+): number | null {
+  return typeof percent === 'number' && Number.isFinite(percent) && percent > 0 ? percent : null;
+}
+
+export function shouldApplyOfficeHighRiseLogisticsUplift(
+  assetId: string,
+  input: Pick<QuoteInput, 'floors' | 'officeHighRiseLogisticsUpliftPercent'>,
+  percent: number | null | undefined = input.officeHighRiseLogisticsUpliftPercent ?? OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+): boolean {
+  if (assetId !== 'off-sml') return false;
+  if (resolveOfficeHighRiseLogisticsUpliftPercent(percent) == null) return false;
+  return (input.floors || 0) >= OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_FLOOR_THRESHOLD;
+}
+
+export function applyOfficeHighRiseLogisticsUplift(
+  baseQuote: number,
+  assetId: string,
+  input: Pick<QuoteInput, 'floors' | 'officeHighRiseLogisticsUpliftPercent'>,
+  pricingExplanation: string[],
+): number {
+  const percent = resolveOfficeHighRiseLogisticsUpliftPercent(
+    input.officeHighRiseLogisticsUpliftPercent ?? OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT,
+  );
+  if (percent == null || !shouldApplyOfficeHighRiseLogisticsUplift(assetId, input, percent)) return baseQuote;
+  const next = baseQuote * (1 + percent / 100);
+  pricingExplanation.push(`High-rise office logistics uplift ${percent}% applied to the Office base rate after a founder-set value; this is not an invented default.`);
+  return next;
+}
+
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
   standard_apartment: 'apt-std', apartment: 'apt-std', residential: 'apt-std', luxury_apartment: 'apt-lux',
@@ -443,6 +489,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     ratesVerified: raw.ratesVerified === true,
     verifiedMaintenanceRate: positiveNumber(raw.verifiedMaintenanceRate),
     verifiedManagementRate: positiveNumber(raw.verifiedManagementRate),
+    officeHighRiseLogisticsUpliftPercent: raw.officeHighRiseLogisticsUpliftPercent === undefined || raw.officeHighRiseLogisticsUpliftPercent === null
+      ? raw.officeHighRiseLogisticsUpliftPercent
+      : (Number.isFinite(Number(raw.officeHighRiseLogisticsUpliftPercent)) ? Number(raw.officeHighRiseLogisticsUpliftPercent) : null),
   };
 }
 
@@ -696,6 +745,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     baseQuote = assetClass.minimumAnnualContract;
     pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} applied.`);
   }
+  baseQuote = applyOfficeHighRiseLogisticsUplift(baseQuote, assetId, safeInput, pricingExplanation);
 
   const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
   const { emirateResolution, emirateMultiplier } = location;
@@ -761,5 +811,168 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     baseQuote, zoneAdjustedQuote, emirateAdjustedQuote, complexityPremium, compliancePremium: 0, addOnTotal,
     discount: 0, annualTotal, quarterlyPayment: annualTotal / 4, monthlyPayment: annualTotal / 12,
     mobilizationFee: annualTotal * 0.15, recommendedTier: safeInput.slaTier, pricingExplanation, riskFlags,
+  };
+}
+
+export interface OwnerQuoteCommercialLine {
+  id: string;
+  labelEn: string;
+  labelAr: string;
+  amountAed: number | null;
+  noteEn?: string;
+  noteAr?: string;
+  manualQuote?: boolean;
+}
+
+const ADD_ON_LABELS_AR: Record<string, string> = {
+  fire_safety: 'عقد سنوي لسلامة الحريق',
+  water_tank: 'تعقيم خزان المياه',
+  elevator_amc: 'عقد صيانة سنوي للمصاعد',
+  hvac_pm: 'صيانة وقائية للتكييف',
+  cleaning: 'فريق تنظيف / تنظيف عميق',
+  security: 'خدمات أمن / كاميرات',
+  pest_control: 'مكافحة الحشرات',
+  landscaping: 'تنسيق الحدائق والري',
+  move_in_out_inspection: 'فحص الدخول / الخروج',
+  inspection_move: 'فحص الدخول / الخروج',
+  mep_support: 'دعم الميكانيكا والكهرباء والسباكة',
+  waste_management: 'إدارة النفايات',
+  pool_care: 'العناية بالمسبح',
+  facade_access: 'خدمة مهد تنظيف الواجهة',
+  'façade_access': 'خدمة مهد تنظيف الواجهة',
+  sira_renewal: 'تجديد شهادة كاميرات الأمن',
+  pca_audit: 'تدقيق حالة العقار',
+  emergency_priority: 'استجابة طوارئ ذات أولوية',
+  dist_cooling: 'تحسين التبريد المركزي للمنطقة',
+  grease_trap: 'خدمة مصيدة الشحوم',
+  majlis_deep_care: 'العناية العميقة بالمجلس',
+  majlis_landscaping: 'تنسيق حدائق المجلس',
+  majlis_exterior_wash: 'غسيل الواجهة للمجلس',
+  majlis_standby: 'فني احتياط لفعاليات المجلس',
+  manpower: 'دعم القوى العاملة',
+  concierge: 'مكتب الاستقبال',
+  generator: 'صيانة المولدات',
+  cctv: 'عقد صيانة الكاميرات',
+  office_units: 'دعم الوحدات المكتبية',
+  retail_shops: 'دعم محلات التجزئة',
+  parking_management: 'إدارة المواقف',
+  fit_out_quotation: 'عرض سعر للتشطيب',
+  technician_standby: 'فني احتياط / دعم الفعاليات',
+  tech_standby: 'فني احتياط / دعم الفعاليات',
+  event_support: 'دعم الفعاليات',
+  cleaning_team: 'فريق التنظيف',
+  deep_cleaning: 'تنظيف عميق',
+  cctv_security: 'أنظمة المراقبة / الأمن',
+  gym_equipment_pm: 'صيانة وقائية لأجهزة اللياقة — نطاق منفصل',
+  gym_wet_area_care: 'عناية متخصصة بمناطق المياه — نطاق منفصل',
+  gym_pool_operations: 'تشغيل مسبح النادي — نطاق منفصل',
+};
+
+function money2(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function describeAddOnLine(id: string): OwnerQuoteCommercialLine {
+  const canonicalId = id === 'façade_access' ? 'facade_access' : id;
+  const catalogue = ADD_ON_PRICING[canonicalId];
+  const listed = SERVICE_ADDONS.find((item) => item.id === canonicalId || item.id === id);
+  const labelEn = catalogue?.label || listed?.label || canonicalId;
+  const labelAr = ADD_ON_LABELS_AR[canonicalId] || ADD_ON_LABELS_AR[id] || labelEn;
+  const annual = resolveAddOnAnnualPrice(canonicalId);
+  if (annual === null) {
+    return {
+      id: canonicalId,
+      labelEn,
+      labelAr,
+      amountAed: null,
+      manualQuote: true,
+      noteEn: listed ? `Priced ${listed.unit}; needs a manual quote and is not annualised automatically.` : 'Needs a manual quote; no automatic annual price.',
+      noteAr: 'يحتاج عرض سعر يدوي ولا يُحوَّل تلقائياً إلى مبلغ سنوي.',
+    };
+  }
+  const noteEn = listed && listed.unit !== 'annual' && annual > 0
+    ? `AED ${listed.price} ${listed.unit}, annualised.`
+    : undefined;
+  return {
+    id: canonicalId,
+    labelEn,
+    labelAr,
+    amountAed: annual,
+    ...(noteEn ? { noteEn, noteAr: 'تم تحويل السعر إلى مبلغ سنوي.' } : {}),
+  };
+}
+
+/**
+ * Structured commercial lines for the contract and UI, built from the same engine output
+ * the live quote already uses. Totals must match output.annualTotal.
+ */
+export function buildOwnerQuoteCommercialBreakdown(
+  input: Partial<QuoteInput> | null | undefined,
+  output?: QuoteOutput,
+): { lines: OwnerQuoteCommercialLine[]; addOnLines: OwnerQuoteCommercialLine[]; managementFee: number; annualTotal: number; mobilizationFee: number; zone: string; emirate: string | null; area: string; slaTier: string; paymentPlan: string; pricingExplanation: string[]; riskFlags: string[]; mergedAddOns: string[] } {
+  const safeInput = sanitizeQuoteInput(input);
+  const quote = output || calculateUaeQuote2026(safeInput);
+  const location = resolveLocationFactors(safeInput, [], []);
+  const ageFactor = resolveAgeFactor(safeInput.propertyAgeUnknown ? undefined : safeInput.propertyAge);
+  const appliedSla = slaMultiplier(safeInput.slaTier);
+  const surcharge = planSurcharge(safeInput.paymentPlan);
+  const assetId = normalizeAssetClassId(safeInput.assetClassId);
+  const ownerOptionalAddOns = (safeInput.addOns || []).filter((id) => !SYSTEM_DRIVEN_ADDON_IDS.has(id));
+  const mergedAddOns = Array.from(new Set([...ownerOptionalAddOns, ...resolveMandatoryAddOns(safeInput)]));
+  const addOnLines = mergedAddOns.map(describeAddOnLine);
+
+  const lines: OwnerQuoteCommercialLine[] = [
+    { id: 'base', labelEn: 'Base maintenance (pre-visit or verified rate)', labelAr: 'أساس الصيانة (قبل الزيارة أو السعر المُتحقق منه)', amountAed: money2(quote.baseQuote) },
+    { id: 'zone', labelEn: `Zone ${location.zone} factor ${location.zoneMultiplier}x`, labelAr: `معامل المنطقة ${location.zone} × ${location.zoneMultiplier}`, amountAed: money2(quote.zoneAdjustedQuote) },
+    { id: 'region', labelEn: `Regional factor ${location.emirateMultiplier}x (${location.emirateResolution.emirate || safeInput.emirate || 'pending'})`, labelAr: `المعامل الإقليمي × ${location.emirateMultiplier}`, amountAed: money2(quote.emirateAdjustedQuote) },
+    { id: 'complexity', labelEn: 'Technical complexity adjustment', labelAr: 'تعديل التعقيد الفني', amountAed: money2(quote.complexityPremium) },
+    { id: 'addons', labelEn: 'Add-ons annual subtotal', labelAr: 'إجمالي الإضافات السنوي', amountAed: money2(quote.addOnTotal) },
+  ];
+
+  let managementFee = 0;
+  if (assetId !== 'mosque_fm') {
+    const technical = ((quote.emirateAdjustedQuote * ageFactor * appliedSla) + quote.complexityPremium + quote.addOnTotal) * location.remoteMultiplier;
+    const subtotal = surcharge === 0 ? quote.annualTotal : quote.annualTotal / (1 + surcharge);
+    managementFee = money2(Math.max(0, subtotal - technical));
+    if (managementFee >= 1) {
+      lines.push({ id: 'pm_fee', labelEn: 'Property management annual fee', labelAr: 'الرسوم السنوية لإدارة العقار', amountAed: managementFee });
+    }
+  }
+  if (ageFactor !== 1) {
+    lines.push({ id: 'age', labelEn: `Asset-age factor ${ageFactor}x`, labelAr: `معامل عمر الأصل × ${ageFactor}`, amountAed: null, noteEn: 'Applied to the technical maintenance subtotal.', noteAr: 'يُطبَّق على إجمالي الصيانة الفنية.' });
+  }
+  if (appliedSla !== 1) {
+    lines.push({ id: 'sla', labelEn: `${safeInput.slaTier.toUpperCase()} SLA factor ${appliedSla}x`, labelAr: `معامل مستوى الخدمة × ${appliedSla}`, amountAed: null });
+  }
+  if (location.remoteMultiplier !== 1) {
+    lines.push({ id: 'remote', labelEn: `Remote-area surcharge ${location.remoteMultiplier}x`, labelAr: `زيادة المنطقة النائية × ${location.remoteMultiplier}`, amountAed: null });
+  }
+  if (surcharge) {
+    lines.push({ id: 'billing', labelEn: `${safeInput.paymentPlan} billing facility ${surcharge * 100}%`, labelAr: `زيادة خطة السداد ${surcharge * 100}%`, amountAed: null });
+  }
+  lines.push({ id: 'annual_total', labelEn: 'Annual contract value', labelAr: 'القيمة السنوية للعقد', amountAed: money2(quote.annualTotal) });
+  lines.push({ id: 'mobilization', labelEn: '15% mobilisation (due after the verified re-quote and signature)', labelAr: 'دفعة التفعيل 15٪ (تُستحق بعد إعادة التسعير المُتحقق منه والتوقيع)', amountAed: money2(quote.mobilizationFee) });
+  lines.push({ id: 'complimentary_month', labelEn: "First month's management fee waived", labelAr: 'رسوم الإدارة للشهر الأول مُعفاة', amountAed: 0, noteEn: 'Applies to the initial 13-month contract only. The 30-day administrative disbursement fee still applies if the Owner cancels within that window.', noteAr: 'يسري على العقد الأولي لمدة 13 شهراً فقط. ويبقى رسم المصروفات الإدارية خلال 30 يوماً مستحقاً إذا ألغى المالك خلال تلك المهلة.' });
+
+  const derivedTotal = money2(quote.annualTotal);
+  const lineTotal = lines.find((line) => line.id === 'annual_total');
+  if (lineTotal && money2(lineTotal.amountAed || 0) !== derivedTotal) {
+    lineTotal.noteEn = 'Shown annual total is the engine total.';
+  }
+
+  return {
+    lines,
+    addOnLines,
+    managementFee,
+    annualTotal: money2(quote.annualTotal),
+    mobilizationFee: money2(quote.mobilizationFee),
+    zone: location.zone,
+    emirate: location.emirateResolution.emirate,
+    area: safeInput.area || '',
+    slaTier: safeInput.slaTier,
+    paymentPlan: safeInput.paymentPlan,
+    pricingExplanation: quote.pricingExplanation,
+    riskFlags: quote.riskFlags,
+    mergedAddOns,
   };
 }

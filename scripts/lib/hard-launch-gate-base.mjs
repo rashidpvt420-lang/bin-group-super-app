@@ -9,6 +9,7 @@ import {
   evaluatePilotEligibility,
   readJsonSafe,
   sha256File,
+  launchHonestyCancellationFeeErrors,
 } from './launch-honesty.mjs';
 import { getAuthorizedApprovers } from './authorized-approvers.mjs';
 
@@ -384,6 +385,7 @@ export function evaluateHardLaunchEligibility({
   errors.push(...validateOperationalReadinessReport(resolvedOperationalReport, commitSha, { now, env }));
   errors.push(...validatePilotIncidentReport(incidentReport, commitSha, { now, env }));
   errors.push(...validateHardLaunchApprovalDocument(approvalDoc, commitSha, { root, now, env }));
+  errors.push(...launchHonestyCancellationFeeErrors());
   const hardLaunchEligible = pilot.pilotEligible && errors.length === 0;
   return {
     hardLaunchEligible,

@@ -108,6 +108,14 @@ const AssetTypeDetailsPanel: React.FC<Props> = ({ propertyType, property, arabic
           'إدخال مزيد من التفاصيل لا ينشئ سعراً جديداً. إجابات المصاعد والحريق والتبريد وما شابهها قد تملأ خطوة الأنظمة مسبقاً وقد تستخدم عوامل الإضافات أو التعقيد الحالية في محرك التسعير.',
         )}
       </Alert>
+      {propertyType === 'Office' && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {label(
+            'Office is priced as the Office class (pre-visit AED 10/sq ft, minimum AED 5,000), not as Commercial Building / Tower (same pre-visit rate, minimum AED 50,000). Entered floors can use the existing complexity factors, but no separate office-tower uplift exists until a founder decision sets one. A high-rise office logistics uplift config exists and is unset, so current pricing is unchanged. Unverified market research cited a 15-25% range; that range is not applied. Rashid must decide the rate. This is not a new invented rate.',
+            'يُسعَّر المكتب حسب فئة المكتب (10 دراهم/قدم مربع قبل الزيارة، بحد أدنى 5,000 درهم)، وليس كمبنى / برج تجاري (نفس سعر ما قبل الزيارة، بحد أدنى 50,000 درهم). ويمكن أن تستخدم الطوابق المدخلة عوامل التعقيد الحالية، لكن لا توجد زيادة منفصلة لبرج مكتبي حتى يقرر المؤسس ذلك. توجد قيمة إعداد لزيادة لوجستية للمكتب في برج مرتفع وهي غير محددة، لذا يبقى التسعير الحالي دون تغيير. وقد أشار بحث سوقي غير محقَّق إلى نطاق 15-25٪، ولا يُطبَّق ذلك النطاق. ويجب أن يقرر رشيد النسبة. هذا ليس سعراً مخترعاً جديداً.',
+          )}
+        </Alert>
+      )}
       {groups.map((group: AssetDetailGroup) => (
         <Grid container spacing={2} key={group.id} sx={{ mb: 2 }}>
           <Grid item xs={12}>

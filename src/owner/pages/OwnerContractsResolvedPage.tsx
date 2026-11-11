@@ -22,6 +22,7 @@ import ContractSignatureOtpControl from '../components/ContractSignatureOtpContr
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import Bi from '../../components/Bi';
+import { formatOwnerInitialCancellationFee, ownerCancellationFeePreSignNoticeCopy } from '../../utils/ownerInitialContractPolicy';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -476,7 +477,10 @@ export default function OwnerContractsResolvedPage() {
                     <Grid item xs={12} md={3}>
                       <Stack spacing={0.75}>
                         <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}><Bi en={"Cancel/upgrade request window: until"} ar={"فترة طلب الإلغاء/الترقية: حتى"} /> {formatDateTime(term.firstMonthEnd)}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}><Bi en={"30-day cancellation / upgrade request window: until"} ar={"مهلة طلب الإلغاء / الترقية خلال 30 يوماً: حتى"} /> {formatDateTime(term.firstMonthEnd)}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}><Bi en={"First month's management fee waived: AED 0"} ar={"رسوم الإدارة للشهر الأول مُعفاة: 0 درهم"} /></Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}><Bi en={`30-day administrative disbursement fee (applies within 30 days, including during the waived first month): ${formatOwnerInitialCancellationFee().displayEn}`} ar={`رسم المصروفات الإدارية خلال 30 يوماً (يسري خلال المهلة بما في ذلك فترة الإعفاء): ${formatOwnerInitialCancellationFee().displayAr}`} /></Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>{ownerCancellationFeePreSignNoticeCopy(false)}</Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>{signatureSummaryText(contract)}</Typography>
                         <Typography variant="caption" sx={{ color: alpha(binThemeTokens.gold, 0.85), fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
                       </Stack>
