@@ -13,7 +13,7 @@ function exportedBlock(name) {
 
 test('technician ticket acceptance writes business mutation and audit in one transaction', () => {
   const block = exportedBlock('acceptTechnicianTicket');
-  assert.match(block, /await db\.runTransaction/);
+  assert.match(block, /await (db\.runTransaction|runTransactionWithRetry\(db)/);
   assert.match(block, /transaction\.update\(ticketRef/);
   assert.match(block, /transaction\.set\(db\.collection\("audit_logs"\)\.doc\(\)/);
   assert.doesNotMatch(block, /await logAudit\(/);
@@ -21,7 +21,7 @@ test('technician ticket acceptance writes business mutation and audit in one tra
 
 test('owner ticket completion review writes business mutation and audit in one transaction', () => {
   const block = exportedBlock('ownerReviewTicketCompletion');
-  assert.match(block, /await db\.runTransaction/);
+  assert.match(block, /await (db\.runTransaction|runTransactionWithRetry\(db)/);
   assert.match(block, /transaction\.update\(ticketRef, baseUpdate\)/);
   assert.match(block, /transaction\.set\(db\.collection\("audit_logs"\)\.doc\(\)/);
   assert.doesNotMatch(block, /await logAudit\(/);

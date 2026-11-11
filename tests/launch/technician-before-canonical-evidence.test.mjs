@@ -47,6 +47,7 @@ async function submit({ ticket = {}, objectExists = true, evidenceType = 'techni
       arrayUnion: (value) => ({ arrayUnion: value }), serverTimestamp: () => 'SERVER_TIMESTAMP',
     } };
     if (name === 'firebase-functions/v2/https') return { HttpsError, onCall: (_options, handler) => handler };
+    if (name === './functionScaleOptions') return { withCriticalScale: (options) => options || {} };
     throw new Error(`Unexpected import: ${name}`);
   }, exports);
   let error;

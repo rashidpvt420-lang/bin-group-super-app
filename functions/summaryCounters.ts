@@ -6,6 +6,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 import {
+import type * as FirebaseFirestore from "firebase-admin/firestore";
   ADMIN_OPEN_TICKET_SHARD_COUNT,
   isOpenTicketStatus,
   openTicketDelta,

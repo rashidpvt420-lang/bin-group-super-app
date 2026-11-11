@@ -1,3 +1,5 @@
+import type * as FirebaseFirestore from "firebase-admin/firestore";
+
 /**
  * Retries Firestore transactions that fail due to contention, with exponential backoff.
  * Does not retry validation, permission, or failed-precondition errors.

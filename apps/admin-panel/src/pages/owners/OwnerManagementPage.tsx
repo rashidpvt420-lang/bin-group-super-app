@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -21,6 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import { db, functions, httpsCallable } from '../../lib/firebase';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { usePagedCollection } from '../../lib/usePagedCollection';
 import { useLanguage } from '@bin/shared';
 
@@ -67,10 +68,9 @@ export default function OwnerManagementPage() {
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState('');
 
-  const propertiesPage = usePagedCollection({ db, collectionName: 'properties' });
+  const [properties, setProperties] = useState<PropertyRecord[]>([]);
+  const [loadingProperties, setLoadingProperties] = useState(true);
   const ownersPage = usePagedCollection({ db, collectionName: 'owners' });
-  const properties = propertiesPage.rows as PropertyRecord[];
-  const loadingProperties = propertiesPage.loading;
   const owners: Owner[] = ownersPage.rows.map((row) => ({
     ownerId: row.id,
     name: row.name || row.displayName || row.fullName || 'Owner',
@@ -92,6 +92,25 @@ export default function OwnerManagementPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [reviewingPropertyId, setReviewingPropertyId] = useState('');
+
+  useEffect(() => {
+    const propertiesQuery = query(collection(db, 'properties'));
+    const unsubscribe = onSnapshot(
+      propertiesQuery,
+      (snapshot) => {
+        setProperties(snapshot.docs.map((propertyDocument) => ({
+          id: propertyDocument.id,
+          ...propertyDocument.data(),
+        })) as PropertyRecord[]);
+        setLoadingProperties(false);
+      },
+      (error) => {
+        console.error('Failed to fetch properties:', error);
+        setLoadingProperties(false);
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   const fetchOwners = async () => {
     await ownersPage.refresh();
@@ -233,7 +252,6 @@ export default function OwnerManagementPage() {
       </TableContainer>
       <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
         {ownersPage.hasMore && <Button onClick={() => void ownersPage.loadMore()} disabled={ownersPage.loadingMore}>Load more owners{ownersPage.total != null ? ` (${owners.length}/${ownersPage.total})` : ''}</Button>}
-        {propertiesPage.hasMore && <Button onClick={() => void propertiesPage.loadMore()} disabled={propertiesPage.loadingMore}>Load more properties{propertiesPage.total != null ? ` (${properties.length}/${propertiesPage.total})` : ''}</Button>}
       </Stack>
 
 

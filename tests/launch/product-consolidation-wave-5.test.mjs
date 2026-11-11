@@ -117,7 +117,7 @@ test('Wave 5 preserves Property Contacts as a separate non-employee directory', 
     /Property Contacts Directory/,
     /does not create Firebase Auth users, HR profiles, payroll identities or Technician accounts/,
     /runAdminOperationalMutation\('CREATE_PROPERTY_CONTACT'/,
-    /collection\(db, 'staffDirectory'\)/,
+    /collection\(db, 'staffDirectory'\)|collectionName:\s*['"]staffDirectory['"]/,
   ], 'Property Contacts boundary');
   assert.match(backend, /directoryType: "PROPERTY_CONTACT"/);
 
