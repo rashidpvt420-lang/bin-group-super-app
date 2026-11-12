@@ -14,14 +14,17 @@ export default function BottomNav({ role }: { role: NavRole }) {
   const { pathname } = useLocation();
   const { lang } = useLanguage();
   const active = activeTabKey(role, pathname);
+  // Broker desktop tabs start at `lg`; keep the shared phone nav visible until then
+  // so tablet widths are not left without chrome. Other roles switch at `md`.
+  const hideFrom = role === 'broker' ? 'lg' : 'md';
   return (
     <>
-      <Box aria-hidden sx={{ display: { xs: 'block', md: 'none' }, height: `calc(${ui.bottomNavHeight + 16}px + env(safe-area-inset-bottom))` }} />
-      <Box component="nav" aria-label={lang === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'} data-testid="role-bottom-nav" sx={{ display: { xs: 'flex', md: 'none' }, position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1400, bgcolor: ui.card, borderTop: `1px solid #E5E7EB`, pb: 'env(safe-area-inset-bottom)', justifyContent: 'space-around' }}>
+      <Box aria-hidden sx={{ display: { xs: 'block', [hideFrom]: 'none' }, height: `calc(${ui.bottomNavHeight + 16}px + env(safe-area-inset-bottom))` }} />
+      <Box component="nav" aria-label={lang === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'} data-testid="role-bottom-nav" sx={{ display: { xs: 'flex', [hideFrom]: 'none' }, position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1400, bgcolor: ui.card, borderTop: `1px solid #E5E7EB`, pb: 'env(safe-area-inset-bottom)', justifyContent: 'space-around' }}>
         {ROLE_TABS[role].map((tab) => {
           const on = tab.key === active;
           return (
-            <ButtonBase key={tab.key} onClick={() => navigate(tab.path)} aria-current={on ? 'page' : undefined} sx={{ flex: 1, minHeight: ui.bottomNavHeight, display: 'flex', flexDirection: 'column', gap: 0.25, color: on ? ui.goldText : ui.muted, '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
+            <ButtonBase id={`${role}-mobile-nav-${tab.key}`} key={tab.key} onClick={() => navigate(tab.path)} aria-current={on ? 'page' : undefined} sx={{ flex: 1, minHeight: ui.bottomNavHeight, display: 'flex', flexDirection: 'column', gap: 0.25, color: on ? ui.goldText : ui.muted, '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
               <SafeIcon icon={ICONS[tab.icon]} size={22} />
               <Typography component="span" sx={{ fontSize: 12, fontWeight: on ? 800 : 500, color: 'inherit' }}>{lang === 'ar' ? tab.ar : tab.en}</Typography>
               {role === 'technician' && tab.key === 'home' && <Typography component="span" sx={{ fontSize: 10, fontWeight: 800, color: 'inherit', lineHeight: 1 }}>{lang === 'ar' ? 'الساعة' : 'Paid clock'}</Typography>}

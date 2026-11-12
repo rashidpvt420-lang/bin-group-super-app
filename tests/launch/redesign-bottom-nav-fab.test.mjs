@@ -56,3 +56,13 @@ test('bottom nav reserves space and meets touch-target size', async () => {
   assert.match(b, /minHeight: ui\.bottomNavHeight/);
   assert.match(b, /aria-current/);
 });
+
+test('broker uses the shared role bottom nav only, through lg', async () => {
+  const brokerApp = await readFile(apps.broker, 'utf8');
+  const bottomNav = await readFile('src/components/ui/BottomNav.tsx', 'utf8');
+  assert.doesNotMatch(brokerApp, /broker-mobile-nav-\$\{/);
+  assert.doesNotMatch(brokerApp, /position:\s*'fixed',\s*bottom:\s*0/);
+  assert.match(bottomNav, /role === 'broker' \? 'lg' : 'md'/);
+  assert.match(bottomNav, /id=\{\`\$\{role\}-mobile-nav-\$\{tab\.key\}\`\}/);
+  assert.match(bottomNav, /data-testid="role-bottom-nav"/);
+});

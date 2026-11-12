@@ -36,8 +36,13 @@ async function waitForResolvedBrokerShell(page: Page, context: string) {
   await expect(authSpinner, `${context}: broker identity must resolve before shell assertions`).toBeHidden({ timeout: 20_000 });
   const moduleLoader = page.getByText(/Loading BIN GROUP module/i).first();
   await expect(moduleLoader, `${context}: broker module must finish loading before shell assertions`).toBeHidden({ timeout: 30_000 });
+  // Do not use .first() on a union that includes hidden desktop chrome.
+  // On a phone viewport the desktop #broker-nav-dashboard button stays in the
+  // DOM with display:none, so DOM-order .first() is hidden even when the
+  // shared role-bottom-nav is on screen.
+  const shellChrome = page.locator('#broker-nav-dashboard, #broker-mobile-nav-home, [data-testid="broker-language-toggle"], [data-testid="role-bottom-nav"]');
   await expect(
-    page.locator('#broker-nav-dashboard, #broker-mobile-nav-dashboard, [data-testid="broker-language-toggle"]').first(),
+    shellChrome.locator('visible=true').first(),
     `${context}: broker shell chrome must render`,
   ).toBeVisible({ timeout: 20_000 });
 }
@@ -178,11 +183,9 @@ test.describe('Broker launch audit', () => {
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await assertHealthy(page, 'broker/dashboard (mobile)');
 
-    const mobileNav = page.locator('#broker-mobile-nav-dashboard, [id^="broker-mobile-nav-"]').first();
-    const hasMobileNav = await mobileNav.isVisible({ timeout: 8_000 }).catch(() => false);
-    if (!hasMobileNav) {
-      const body = await page.locator('body').innerText();
-      expect(body, 'Mobile broker layout must not crash').not.toMatch(CRASH_PATTERN);
-    }
+    const mobileNav = page.getByTestId('role-bottom-nav');
+    await expect(mobileNav, 'Mobile broker bottom nav must be visible').toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('#broker-mobile-nav-home'), 'Broker Home tab must be present in the shared mobile nav').toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('#broker-nav-dashboard'), 'Desktop broker tab bar must stay hidden on the phone viewport').toBeHidden();
   });
 });
