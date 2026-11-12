@@ -1,7 +1,7 @@
 import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Avatar, Box, Button, CircularProgress, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
+import { AppBar, Avatar, Box, Button, CircularProgress, Container, IconButton, Stack, Toolbar, Typography, alpha } from '@mui/material';
 import { ArrowLeft, Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
@@ -121,17 +121,6 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography><MadeInUaeInline />
       </Box>
-      <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
-        {menuItems.map((item) => {
-          const active = location.pathname.startsWith(item.path);
-          return (
-            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? '#B8932F' : '#667085', flexDirection: 'column', gap: 0.4 }}>
-              <SafeIcon icon={item.icon} size={18} />
-              <Typography variant="caption" sx={{ fontSize: '0.58rem', fontWeight: 900 }}>{item.label}</Typography>
-            </IconButton>
-          );
-        })}
-      </Paper>
     </Box>
   );
 };

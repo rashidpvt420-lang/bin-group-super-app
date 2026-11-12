@@ -138,6 +138,13 @@ test('Phase 3 control repairs label icon-only controls and keep owner activation
   assert.match(brokerAudit, /waitForResolvedBrokerShell/);
   assert.match(brokerAudit, /Authenticating BIN-Groups Identity/);
   assert.match(brokerAudit, /Loading BIN GROUP module/);
+  assert.match(brokerAudit, /role-bottom-nav/);
+  assert.match(brokerAudit, /locator\('visible=true'\)/);
+  assert.doesNotMatch(
+    brokerAudit,
+    /#broker-nav-dashboard, #broker-mobile-nav-dashboard, \[data-testid="broker-language-toggle"\]'\)\.first\(\)/,
+    'broker shell wait must not treat a hidden desktop nav button as visible chrome',
+  );
 });
 
 test('portal language proofs bind to explicit controls instead of substring selectors', () => {
