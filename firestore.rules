@@ -1040,6 +1040,12 @@ service cloud.firestore {
           'pdplCompliance',
           'gpsConsent',
           'legalAcceptedVersion',
+          'legalConsentVersion',
+          'legalProcessingConsent',
+          'legalRetentionConsent',
+          'legalCrossBorderAiConsent',
+          'technicianGpsActiveDutyConsent',
+          'technicianGpsActiveDutyConsentAt',
           'termsAcceptedAt',
           'termsVersion',
           'privacyAcceptedAt',
@@ -2672,6 +2678,16 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
     }
+    match /contract_acceptance_audit/{auditId} {
+      allow read: if hasAdminClaim() || (signedIn() && resource.data.get('uid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /technician_gps_consents/{consentId} {
+      allow read: if hasAdminClaim() || (signedIn() && resource.data.get('uid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /{collection}/{document=**} {
       allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'design_generation_prompts']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2711,6 +2727,8 @@ service cloud.firestore {
           'stripe_webhook_events',
           'contract_signature_otps',
           'contract_signature_otp_audit',
+          'contract_acceptance_audit',
+          'technician_gps_consents',
           'notification_dispatch_claims',
           'public_rate_limits',
           'technician_credential_renewals',
@@ -2843,6 +2861,8 @@ service cloud.firestore {
           'stripe_webhook_events',
           'contract_signature_otps',
           'contract_signature_otp_audit',
+          'contract_acceptance_audit',
+          'technician_gps_consents',
           'notification_dispatch_claims',
           'public_rate_limits',
           'technician_credential_renewals',

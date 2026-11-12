@@ -61,7 +61,7 @@ const copy = {
     companyTitle: 'BIN GROUP company profile, all in one operating system',
     companyDesc: 'BIN GROUP is a UAE property-care and operations company built for owners, tenants, technicians, brokers, admin teams, and HR. One profile holds the company identity, property onboarding, contract path, maintenance dispatch, tenant support, technician proof, broker attribution, workforce control, financial approvals, reports, and permanent property history.',
     companyFacts: [
-      ['Legal company', 'BIN GROUP / All Kind Building Projects Contracting LLC S.P.C'],
+      ['Legal company', 'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C'],
       ['Base', 'Al Ain, Abu Dhabi, United Arab Emirates'],
       ['Coverage', 'UAE property care across villas, apartments, buildings, towers, staff accommodation, retail, hospitality, healthcare, offices, malls, majlis, warehouses, and mixed-use assets'],
       ['Access', 'Owner, tenant, technician, broker, admin, finance, operations, and HR workflows in one system'],
@@ -181,7 +181,7 @@ const copy = {
     companyTitle: 'ملف BIN GROUP الكامل في نظام تشغيل واحد',
     companyDesc: 'BIN GROUP هي شركة إماراتية للعناية بالعقارات وتشغيلها، مصممة للملاك والمستأجرين والفنيين والوسطاء وفرق الإدارة والموارد البشرية. ملف واحد يجمع هوية الشركة، تسجيل العقار، مسار العقد، إرسال الصيانة، دعم المستأجر، إثبات الفني، إسناد الوسيط، تشغيل الموظفين، الموافقات المالية، التقارير، وتاريخ العقار الدائم.',
     companyFacts: [
-      ['الشركة القانونية', 'BIN GROUP / All Kind Building Projects Contracting LLC S.P.C'],
+      ['الشركة القانونية', 'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C'],
       ['المقر', 'العين، أبوظبي، الإمارات العربية المتحدة'],
       ['التغطية', 'رعاية عقارات الإمارات للفلل والشقق والمباني والأبراج وسكن الموظفين والتجزئة والضيافة والرعاية الصحية والمكاتب والمولات والمجالس والمستودعات والأصول المختلطة'],
       ['الوصول', 'مسارات المالك والمستأجر والفني والوسيط والإدارة والمالية والتشغيل والموارد البشرية في نظام واحد'],

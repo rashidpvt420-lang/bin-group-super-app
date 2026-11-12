@@ -1,67 +1,112 @@
 /**
  * Initial owner contract commercial policy.
- * The 30-day cancellation fee is a founder / Finance Admin decision and must not be invented.
- * New legal wording in this file is a draft for UAE legal review. Pasted research is unverified and is not law.
+ * New legal wording in this file is a draft for UAE legal review. All legal citations are for counsel to confirm.
+ * Pasted research is unverified and is not law. Do not invent a TRN, RERA ORN, ADREC registration, or a
+ * separate property-management licence number.
+ *
+ * Legal entity wording is the founder-approved formula (answers A,B on 12 November 2026) and is flagged
+ * in the pull request for Rashid to confirm.
  */
 
 export const OWNER_INITIAL_CONTRACT_TERM_MONTHS = 13;
 export const OWNER_RENEWAL_CONTRACT_TERM_MONTHS = 12;
 export const OWNER_SERVICE_TERM_MONTHS = 12;
 export const OWNER_COMPLIMENTARY_MONTHS = 1;
-export const OWNER_INITIAL_CANCELLATION_WINDOW_DAYS = 30;
+export const OWNER_CANCELLATION_GRACE_DAYS = 7;
+/** @deprecated The flat 30-day window was withdrawn. Grace is 7 days; percentage bands run for the term. */
+export const OWNER_INITIAL_CANCELLATION_WINDOW_DAYS = OWNER_CANCELLATION_GRACE_DAYS;
 
-export const LEGAL_DRAFT_MARK_EN = 'Draft, for UAE legal review';
-export const LEGAL_DRAFT_MARK_AR = 'مسودة، للمراجعة القانونية في دولة الإمارات';
+/** Official legal name. Founder-supplied; flagged in the PR for Rashid to confirm. */
+export const BIN_GROUP_LEGAL_ENTITY_NAME =
+  'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C';
+export const BIN_GROUP_TRADE_NAME = 'BIN GROUP L.L.C - S.P.C';
+export const BIN_GROUP_TRADE_LICENCE_EMIRATE = 'Abu Dhabi';
+
+export const LEGAL_CONSENT_VERSION = 'legal-review-2026-11-12';
+export const SIGNED_CONTRACT_AUDIT_RETENTION_YEARS = 10;
+export const SIGNED_CONTRACT_AUDIT_COLLECTION = 'contract_acceptance_audit';
+export const TECHNICIAN_GPS_CONSENT_COLLECTION = 'technician_gps_consents';
+export const LEGAL_CITATION_DISCLAIMER_EN = 'for counsel to confirm';
+export const LEGAL_CITATION_DISCLAIMER_AR = 'للتأكيد من المستشار القانوني';
+
+
+export const LEGAL_DRAFT_MARK_EN = 'Draft, for UAE legal review; legal citations are for counsel to confirm';
+export const LEGAL_DRAFT_MARK_AR = 'مسودة، للمراجعة القانونية في دولة الإمارات؛ والاستشهادات القانونية للتأكيد من المستشار القانوني';
 export const UNVERIFIED_RESEARCH_CITATION_NOTE_EN =
-  'Citations named here come from unverified research a UAE lawyer must confirm; they are not presented as verified law.';
+  'Citations named here come from unverified research and are for counsel to confirm; they are not presented as verified law.';
 export const UNVERIFIED_RESEARCH_CITATION_NOTE_AR =
   'الاستشهادات المذكورة هنا مصدرها بحث غير محقَّق يجب أن يؤكدها محامٍ إماراتي، ولا تُعرض بوصفها قانوناً مثبتاً.';
 
 /**
- * Pending founder / Finance Admin decision.
- * Must stay null until a confirmed AED amount is set. Never invent a number.
+ * Flat AED cancellation fee stays unset on purpose. The live model is the founder-approved
+ * percentage-band schedule. Honesty checks must reject any invented flat AED amount.
  */
 export const OWNER_INITIAL_CANCELLATION_FEE_AED: number | null = null;
 
-export const OWNER_INITIAL_CANCELLATION_FEE_STATUS = 'PENDING_FOUNDER_DECISION' as const;
-export const OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_EN = 'to be confirmed';
-export const OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_AR = 'يُؤكد لاحقاً';
-export const OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE = 'OWNER_INITIAL_CANCELLATION_FEE_UNSET';
+export const OWNER_INITIAL_CANCELLATION_FEE_STATUS = 'PERCENTAGE_BANDS_CONFIGURED' as const;
+export const OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_EN =
+  'days 1–7: 0%; days 8–90: 4%; days 91–180: 6%; days 181–270: 8%; days 271+: 10% of total annual contract value excluding VAT';
+export const OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_AR =
+  'الأيام 1–7: 0٪؛ الأيام 8–90: 4٪؛ الأيام 91–180: 6٪؛ الأيام 181–270: 8٪؛ من اليوم 271 فما فوق: 10٪ من القيمة السنوية الإجمالية للعقد باستثناء ضريبة القيمة المضافة';
+export const OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE = 'OWNER_CANCELLATION_FEE_BANDS_INVALID';
 export const OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN =
-  'an administrative disbursement fee covering documented onboarding and property assessment costs';
+  'a cancellation fee calculated as a percentage of the total annual contract value excluding VAT';
 export const OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR =
-  'رسم مصروفات إدارية يغطي تكاليف بدء التعاقد وتقييم العقار الموثقة';
+  'رسم إلغاء يُحسب كنسبة من القيمة السنوية الإجمالية للعقد باستثناء ضريبة القيمة المضافة';
+
+export const OWNER_CANCELLATION_FEE_MODEL = 'PERCENTAGE_BANDS_OF_ANNUAL_CONTRACT_VALUE_EXCLUDING_VAT';
+export const OWNER_CANCELLATION_FEE_BASIS = 'TOTAL_ANNUAL_CONTRACT_VALUE_EXCLUDING_VAT';
+export const OWNER_CANCELLATION_GRACE_WAIVES_PENALTY_ONLY = true;
+export const OWNER_CANCELLATION_GRACE_DOES_NOT_WAIVE_MOBILISATION_WORK = true;
+
+export type OwnerCancellationFeeBand = {
+  fromDayInclusive: number;
+  toDayInclusive: number | null;
+  percent: number;
+};
+
+export const OWNER_CANCELLATION_FEE_BANDS: readonly OwnerCancellationFeeBand[] = Object.freeze([
+  Object.freeze({ fromDayInclusive: 1, toDayInclusive: 7, percent: 0 }),
+  Object.freeze({ fromDayInclusive: 8, toDayInclusive: 90, percent: 4 }),
+  Object.freeze({ fromDayInclusive: 91, toDayInclusive: 180, percent: 6 }),
+  Object.freeze({ fromDayInclusive: 181, toDayInclusive: 270, percent: 8 }),
+  Object.freeze({ fromDayInclusive: 271, toDayInclusive: null, percent: 10 }),
+]);
+export const REQUIRED_OWNER_CANCELLATION_FEE_BANDS: readonly OwnerCancellationFeeBand[] = OWNER_CANCELLATION_FEE_BANDS;
 
 /**
  * Unverified market research cited AED 1,500–3,000. That range is listed for founder awareness only.
- * It is not applied and must not be written into the live fee or the contract as a confirmed amount.
+ * It is not applied. The live fee is the founder-approved percentage-band schedule, not a flat AED amount.
  */
 export const OWNER_INITIAL_CANCELLATION_FEE_RESEARCH_RANGE_NOTE_EN =
-  'Unverified market research cited a range of AED 1,500 to AED 3,000. That range is not applied. Rashid must decide the amount.';
+  'Unverified market research cited a range of AED 1,500 to AED 3,000. That range is not applied. The founder-approved model is the percentage-band schedule of total annual contract value excluding VAT.';
 export const OWNER_INITIAL_CANCELLATION_FEE_RESEARCH_RANGE_NOTE_AR =
-  'أشار بحث سوقي غير محقَّق إلى نطاق من 1,500 إلى 3,000 درهم. ولا يُطبَّق ذلك النطاق. ويجب أن يقرر رشيد المبلغ.';
+  'أشار بحث سوقي غير محقَّق إلى نطاق من 1,500 إلى 3,000 درهم. ولا يُطبَّق ذلك النطاق. والنموذج المعتمد من المؤسس هو جدول النسب من القيمة السنوية الإجمالية للعقد باستثناء ضريبة القيمة المضافة.';
 
 /**
- * Pending Rashid's decision: keep the administrative disbursement fee during the waived first month, or drop it.
- * Current disclosed design (until he decides otherwise) is that the fee still applies if the Owner cancels within 30 days.
- * Do not silently drop the fee.
+ * Founder decision: after the 7-day grace, the percentage cancellation fee applies even during the
+ * waived first management-fee month. Grace waives the percentage penalty only.
  */
-export const OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH: boolean | null = null;
-export const OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH_STATUS = 'PENDING_FOUNDER_DECISION' as const;
+export const OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH: boolean | null = true;
+export const OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH_STATUS = 'FOUNDER_DECISION_APPLIED' as const;
 
 /**
- * Pending legal insertion. Never invent a licence number.
+ * Trade / company licence is founder-supplied (CN-5914744, Abu Dhabi). Never invent a RERA ORN,
+ * ADREC registration, or a separate property-management licence number.
  */
 export const BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF: string | null = null;
-export const BIN_GROUP_TRADE_LICENCE_REF: string | null = null;
+export const BIN_GROUP_TRADE_LICENCE_REF: string | null = 'CN-5914744';
+export const BIN_GROUP_TRADE_LICENCE_STATUS = 'FOUNDER_SUPPLIED' as const;
 export const BIN_GROUP_RERA_ORN_REF: string | null = null;
 export const BIN_GROUP_ADREC_REG_REF: string | null = null;
+export const BIN_GROUP_ADREC_AUTHORISATION_REF: string | null = BIN_GROUP_ADREC_REG_REF;
 export const BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_DISPLAY_EN = 'to be inserted';
 export const BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_DISPLAY_AR = 'يُدرج لاحقاً';
 
 /**
- * Default design for mobilisation if the owner cancels within 30 days, flagged as Rashid's decision.
- * Retain only verifiable incurred expenses (itemised) and refund the rest.
+ * Default design for mobilisation if the owner cancels: retain only verifiable incurred expenses
+ * (itemised) and refund the rest. The 7-day cancellation-fee grace does not waive payment for
+ * verifiable mobilisation work already done.
  */
 export const OWNER_INITIAL_MOBILISATION_REFUND_POLICY =
   'RETAIN_VERIFIABLE_INCURRED_EXPENSES_REFUND_REMAINDER' as const;
@@ -97,19 +142,28 @@ export const OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_RESEARCH_RANGE_NOTE_AR =
 export const OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT = 5;
 export const OWNER_QUOTE_PRICES_ARE_VAT_EXCLUSIVE = true;
 export const OWNER_INVOICE_VAT_TREATMENT_UNTIL_TRN_VERIFIED = 'NOT_APPLIED' as const;
+export const OWNER_PRE_TRN_INVOICE_TITLE_EN = 'Commercial Invoice';
+export const OWNER_PRE_TRN_INVOICE_TITLE_AR = 'فاتورة تجارية';
+export const OWNER_TAX_INVOICE_TITLE_EN = 'Tax Invoice';
+export const OWNER_TAX_INVOICE_TITLE_AR = 'فاتورة ضريبية';
+export const UAE_VAT_ARTICLE_59_FULL_TAX_INVOICE_THRESHOLD_AED = 10000;
+export const UAE_VAT_TAX_INVOICE_ISSUANCE_DEADLINE_DAYS = 14;
+export const UAE_VAT_ARTICLE_59_CITATION_NOTE =
+  'UAE VAT Executive Regulation Article 59 tax-invoice requirements (simplified versus full for B2B supplies above AED 10,000, and issuance within 14 days) are implemented for when a TRN is verified, and are for counsel to confirm.';
 
 /**
- * Cash-acceptance threshold. Pending founder / Finance Admin decision.
- * Must stay null until a confirmed AED amount is set. Unverified research cited AED 55,000
- * goAML reporting; that figure is not applied as a live threshold. Payments stay PHASE1_CASH_CHEQUE_V1.
+ * Founder-set cash cap: AED 50,000 per property contract, including a single payment or
+ * linked/cumulative cash payments. Amounts above the cap must be paid by cheque or bank transfer.
+ * Unverified research cited AED 55,000 goAML reporting; That figure is not applied. Payments stay PHASE1_CASH_CHEQUE_V1.
  */
-export const OWNER_CASH_ACCEPTANCE_THRESHOLD_AED: number | null = null;
-export const OWNER_CASH_ACCEPTANCE_THRESHOLD_STATUS = 'PENDING_FOUNDER_DECISION' as const;
+export const OWNER_CASH_ACCEPTANCE_THRESHOLD_AED: number | null = 50000;
+export const OWNER_CASH_ACCEPTANCE_THRESHOLD_STATUS = 'SET' as const;
+export const OWNER_CASH_ACCEPTANCE_THRESHOLD_SCOPE = 'PER_PROPERTY_CONTRACT_SINGLE_OR_CUMULATIVE_LINKED';
 export const OWNER_PAYMENT_POLICY_VERSION = 'PHASE1_CASH_CHEQUE_V1' as const;
 export const OWNER_CASH_ACCEPTANCE_THRESHOLD_RESEARCH_NOTE_EN =
-  'Unverified research cited AED 55,000 reporting under the goAML rules. That figure is not applied as a live threshold. Rashid must decide the amount.';
+  'Founder-set cash cap: AED 50,000 per property contract, single or linked/cumulative cash payments. Amounts above the cap must be paid by cheque or bank transfer. Unverified research cited AED 55,000 reporting under the goAML rules; that figure is not applied.';
 export const OWNER_CASH_ACCEPTANCE_THRESHOLD_RESEARCH_NOTE_AR =
-  'أشار بحث غير محقَّق إلى إبلاغ عند 55,000 درهم بموجب قواعد goAML. ولا يُطبَّق ذلك الرقم كحد حي. ويجب أن يقرر رشيد المبلغ.';
+  'حد النقد المعتمد من المؤسس: 50,000 درهم لكل عقد عقار، للدفعات النقدية الواحدة أو المرتبطة أو التراكمية. وما يزيد على الحد يُسدد بشيك أو تحويل بنكي. وأشار بحث غير محقَّق إلى إبلاغ عند 55,000 درهم بموجب قواعد goAML، ولا يُطبَّق ذلك الرقم.';
 
 /**
  * Emergency HVAC / leak repair per-incident limit. Pending Rashid's decision on the amount and the human approver.
@@ -143,10 +197,45 @@ export function withLegalDraftMark(text: string, arabic = false): string {
   return `${mark}. ${trimmed}`;
 }
 
+function roundAed(value: number): number {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+export function ownerCancellationFeeBandsAreValid(
+  bands: readonly OwnerCancellationFeeBand[] = OWNER_CANCELLATION_FEE_BANDS,
+): boolean {
+  if (!Array.isArray(bands) || bands.length !== REQUIRED_OWNER_CANCELLATION_FEE_BANDS.length) return false;
+  return REQUIRED_OWNER_CANCELLATION_FEE_BANDS.every((required, index) => {
+    const band = bands[index];
+    return (
+      band != null
+      && band.fromDayInclusive === required.fromDayInclusive
+      && band.toDayInclusive === required.toDayInclusive
+      && band.percent === required.percent
+    );
+  });
+}
+
+export function isOwnerCancellationFeeModelConfigured(): boolean {
+  return (
+    OWNER_INITIAL_CANCELLATION_FEE_AED == null
+    && ownerCancellationFeeBandsAreValid()
+    && OWNER_CANCELLATION_FEE_BASIS === 'TOTAL_ANNUAL_CONTRACT_VALUE_EXCLUDING_VAT'
+    && OWNER_CANCELLATION_GRACE_WAIVES_PENALTY_ONLY === true
+    && OWNER_CANCELLATION_GRACE_DOES_NOT_WAIVE_MOBILISATION_WORK === true
+    && OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH === true
+  );
+}
+
+/**
+ * True only when the founder-approved percentage-band model is configured and no flat AED
+ * amount has been invented. Passing a numeric fee (the old flat-AED API) returns false.
+ */
 export function isOwnerInitialCancellationFeeSet(
   fee: number | null | undefined = OWNER_INITIAL_CANCELLATION_FEE_AED,
 ): boolean {
-  return typeof fee === 'number' && Number.isFinite(fee) && fee >= 0;
+  if (fee != null) return false;
+  return isOwnerCancellationFeeModelConfigured();
 }
 
 export function formatOwnerInitialCancellationFee(
@@ -156,42 +245,141 @@ export function formatOwnerInitialCancellationFee(
     return {
       set: false,
       aed: null as number | null,
-      status: OWNER_INITIAL_CANCELLATION_FEE_STATUS,
-      displayEn: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_EN,
-      displayAr: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_AR,
+      status: fee != null ? 'FLAT_AED_NOT_ALLOWED' as const : OWNER_INITIAL_CANCELLATION_FEE_STATUS,
+      displayEn: fee != null ? 'flat AED fee not allowed' : 'to be confirmed',
+      displayAr: fee != null ? 'لا يُسمح برسم إلغاء مقطوع بالدرهم' : 'يُؤكد لاحقاً',
       natureEn: OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
       natureAr: OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR,
     };
   }
-  const aed = Number(fee);
   return {
     set: true,
-    aed,
-    status: 'SET' as const,
-    displayEn: `AED ${aed.toLocaleString('en-AE')}`,
-    displayAr: `${aed.toLocaleString('ar-AE')} درهم`,
+    aed: null as number | null,
+    status: OWNER_INITIAL_CANCELLATION_FEE_STATUS,
+    displayEn: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_EN,
+    displayAr: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_AR,
     natureEn: OWNER_INITIAL_CANCELLATION_FEE_NATURE_EN,
     natureAr: OWNER_INITIAL_CANCELLATION_FEE_NATURE_AR,
+  };
+}
+
+export function cancellationFeeBandForDay(
+  daysSinceActivation: number,
+  bands: readonly OwnerCancellationFeeBand[] = OWNER_CANCELLATION_FEE_BANDS,
+): OwnerCancellationFeeBand | null {
+  const days = Math.floor(Number(daysSinceActivation));
+  if (!Number.isFinite(days) || days < 1) return null;
+  for (const band of bands) {
+    if (days < band.fromDayInclusive) continue;
+    if (band.toDayInclusive == null || days <= band.toDayInclusive) return band;
+  }
+  return bands[bands.length - 1] || null;
+}
+
+export function computeOwnerCancellationPenaltyPercent(daysSinceActivation: number): number {
+  const band = cancellationFeeBandForDay(daysSinceActivation);
+  return band ? band.percent : 0;
+}
+
+export type OwnerCancellationFeeComputation = {
+  daysSinceActivation: number;
+  percent: number;
+  feeAed: number;
+  annualContractValueExVatAed: number;
+  penaltyWaived: boolean;
+  mobilisationWorkRemainsPayable: boolean;
+  basis: typeof OWNER_CANCELLATION_FEE_BASIS;
+};
+
+export function computeOwnerCancellationFeeAed(
+  annualContractValueExVatAed: number,
+  daysSinceActivation: number,
+): OwnerCancellationFeeComputation {
+  const annual = roundAed(Number(annualContractValueExVatAed));
+  const days = Math.floor(Number(daysSinceActivation));
+  if (!Number.isFinite(annual) || annual < 0 || !Number.isFinite(days) || days < 1) {
+    throw new Error('Cancellation fee computation requires a non-negative annual contract value excluding VAT and a day count of 1 or more.');
+  }
+  const percent = computeOwnerCancellationPenaltyPercent(days);
+  const penaltyWaived = percent === 0 && days <= OWNER_CANCELLATION_GRACE_DAYS;
+  return {
+    daysSinceActivation: days,
+    percent,
+    feeAed: roundAed(annual * (percent / 100)),
+    annualContractValueExVatAed: annual,
+    penaltyWaived,
+    mobilisationWorkRemainsPayable: true,
+    basis: OWNER_CANCELLATION_FEE_BASIS,
   };
 }
 
 export function evaluateOwnerInitialCancellationFeeHonesty(
   fee: number | null | undefined = OWNER_INITIAL_CANCELLATION_FEE_AED,
 ) {
-  if (!isOwnerInitialCancellationFeeSet(fee)) {
+  if (fee != null) {
+    return {
+      ok: false,
+      code: 'OWNER_CANCELLATION_FEE_FLAT_AED_NOT_ALLOWED',
+      blocksHardPublicLaunch: true,
+      message:
+        'Hard launch is blocked because a flat Owner cancellation fee in AED is not the approved model. Configure the founder-approved percentage bands (0/4/6/8/10 of total annual contract value excluding VAT) and leave OWNER_INITIAL_CANCELLATION_FEE_AED unset. Do not invent a flat amount.',
+    };
+  }
+  if (!isOwnerCancellationFeeModelConfigured()) {
     return {
       ok: false,
       code: OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE,
       blocksHardPublicLaunch: true,
       message:
-        'Owner initial 30-day cancellation fee is pending a founder / Finance Admin decision and is unset. Hard public launch must stay NO-GO until a confirmed AED amount is set. Do not invent an amount.',
+        'Hard launch is blocked because the Owner cancellation-fee bands are missing or do not match the founder-approved schedule: days 1–7 0%; 8–90 4%; 91–180 6%; 181–270 8%; 271+ 10% of total annual contract value excluding VAT. The 7-day grace must waive the percentage penalty only, not payment for verifiable mobilisation work already done. Do not invent a flat AED amount.',
     };
   }
   return {
     ok: true,
-    code: 'OWNER_INITIAL_CANCELLATION_FEE_SET',
+    code: 'OWNER_CANCELLATION_FEE_BANDS_CONFIGURED',
     blocksHardPublicLaunch: false,
-    message: 'Owner initial 30-day cancellation fee has a confirmed AED amount.',
+    message: 'Owner cancellation fee uses the founder-approved percentage-band schedule of total annual contract value excluding VAT.',
+  };
+}
+
+export function cashPaymentWouldExceedCap(args: {
+  amountAed: number;
+  recordedCashAed?: number;
+  capAed?: number | null;
+}): boolean {
+  const cap = args.capAed ?? OWNER_CASH_ACCEPTANCE_THRESHOLD_AED;
+  const amount = Number(args.amountAed);
+  const recorded = Number(args.recordedCashAed || 0);
+  if (cap == null || !Number.isFinite(amount) || amount < 0 || !Number.isFinite(recorded) || recorded < 0) return true;
+  return roundAed(recorded + amount) > cap;
+}
+
+export function ownerCashCapRejectionMessage(capAed: number | null = OWNER_CASH_ACCEPTANCE_THRESHOLD_AED): string {
+  const cap = capAed == null ? 'the configured cash cap' : `AED ${Number(capAed).toLocaleString('en-AE')}`;
+  return `Cash is not accepted above ${cap} cumulative per property contract (a single payment or linked/cumulative cash payments). Use cheque or bank transfer.`;
+}
+
+export function invoiceDocumentTitle(vatApplied: boolean): string {
+  return vatApplied
+    ? `${OWNER_TAX_INVOICE_TITLE_EN} / ${OWNER_TAX_INVOICE_TITLE_AR}`
+    : `${OWNER_PRE_TRN_INVOICE_TITLE_EN} / ${OWNER_PRE_TRN_INVOICE_TITLE_AR}`;
+}
+
+export function requiresFullArticle59TaxInvoice(args: {
+  vatApplied: boolean;
+  isB2B: boolean;
+  taxableAmountAed: number;
+}): boolean {
+  return args.vatApplied === true && args.isB2B === true && Number(args.taxableAmountAed) > UAE_VAT_ARTICLE_59_FULL_TAX_INVOICE_THRESHOLD_AED;
+}
+
+export function taxInvoiceIssuanceDeadlineIso(supplyOrIssueDate: Date | string, now = new Date()) {
+  const start = new Date(supplyOrIssueDate);
+  const deadline = new Date(start.getTime() + UAE_VAT_TAX_INVOICE_ISSUANCE_DEADLINE_DAYS * 86400000);
+  return {
+    deadlineIso: deadline.toISOString(),
+    issuanceDays: UAE_VAT_TAX_INVOICE_ISSUANCE_DEADLINE_DAYS,
+    overdue: now.getTime() > deadline.getTime(),
   };
 }
 
@@ -222,6 +410,11 @@ export function formatOwnerLicenceBlock(options: {
   adrecReg?: string | null;
 } = {}) {
   const trade = formatUnsetLegalRef(options.tradeLicence ?? BIN_GROUP_TRADE_LICENCE_REF);
+  if (trade.set && trade.value === 'CN-5914744') {
+    const labelled = `${trade.value}, ${BIN_GROUP_TRADE_LICENCE_EMIRATE}`;
+    trade.displayEn = labelled;
+    trade.displayAr = labelled;
+  }
   const reraOrn = formatUnsetLegalRef(options.reraOrn ?? BIN_GROUP_RERA_ORN_REF);
   const adrec = formatUnsetLegalRef(options.adrecReg ?? BIN_GROUP_ADREC_REG_REF);
   return {
@@ -274,8 +467,8 @@ export function formatUnsetAedAmount(
       set: false,
       aed: null as number | null,
       status: 'PENDING_FOUNDER_DECISION' as const,
-      displayEn: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_EN,
-      displayAr: OWNER_INITIAL_CANCELLATION_FEE_DISPLAY_AR,
+      displayEn: 'to be confirmed',
+      displayAr: 'يُؤكد لاحقاً',
     };
   }
   const aed = Number(value);
@@ -322,25 +515,25 @@ export function ownerCancellationWindowCopy(arabic = false, fee = formatOwnerIni
   const nature = arabic ? fee.natureAr : fee.natureEn;
   return arabic
     ? withLegalDraftMark(
-      `يجوز للمالك طلب إلغاء العقد خلال ${OWNER_INITIAL_CANCELLATION_WINDOW_DAYS} يوماً من تفعيل العقد / اعتماد التوقيع. وإذا أُلغي العقد خلال هذه المهلة يُستحق ${nature} بمبلغ ${feeText}. ويسري هذا الرسم خلال مهلة الثلاثين يوماً حتى أثناء الفترة التي تُعفى فيها رسوم الإدارة للشهر الأول. ويجب الإفصاح عن ذلك للمالك قبل التوقيع. ولا يُعتمد الإلغاء ولا أي مبلغ مالي تلقائياً؛ يلزم اعتماد إداري من إدارة المالية أو الإدارة المختصة. لا تعتمد الذكاء الاصطناعي المبالغ أو العقود. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المادة 390 من قانون المعاملات المدنية، والمادة 21 من القانون الاتحادي رقم 15 لسنة 2020، وقرار مجلس الوزراء رقم 66 لسنة 2023.`,
+      `يجوز لأي طرف إنهاء هذه الاتفاقية بموجب إشعار كتابي. ويُستحق ${nature} وفق الجدول التالي: ${feeText}. وتعفي فترة السماح البالغة 7 أيام من غرامة الإلغاء فقط، ولا تعفي من سداد أعمال التعبئة الموثقة التي أُنجزت فعلاً. وبعد اليوم 7 تسري النسبة حتى خلال شهر الإعفاء من رسوم الإدارة. ويجب الإفصاح عن ذلك للمالك قبل التوقيع. ولا يُعتمد الإلغاء ولا أي مبلغ مالي تلقائياً؛ يلزم اعتماد إداري من إدارة المالية أو الإدارة المختصة. لا تعتمد الذكاء الاصطناعي المبالغ أو العقود. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المادة 390 من قانون المعاملات المدنية، والمادة 21 من القانون الاتحادي رقم 15 لسنة 2020، وقرار مجلس الوزراء رقم 66 لسنة 2023.`,
       true,
     )
     : withLegalDraftMark(
-      `The Owner may request cancellation within ${OWNER_INITIAL_CANCELLATION_WINDOW_DAYS} days of contract activation / signature approval. If the contract is cancelled within that window, ${nature} of ${feeText} shall apply. This fee applies within the 30-day window, including during the period when the first month's management fee is waived, and must be disclosed to the Owner before signing. Cancellation and any money amount are never auto-approved; Admin or Finance Admin approval is required. AI never approves money or contracts. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} Citations to confirm include Civil Code Article 390, Federal Law 15 of 2020 Article 21, and Cabinet Resolution 66 of 2023.`,
+      `Either party may end this Agreement by written notice. ${nature.charAt(0).toUpperCase()}${nature.slice(1)} shall apply as follows: ${feeText}. The 7-day grace period waives the cancellation penalty only; it does not waive payment for verifiable mobilisation work already done. After day 7 the percentage applies even during the waived first management-fee month, and must be disclosed to the Owner before signing. Cancellation and any money amount are never auto-approved; Admin or Finance Admin approval is required. AI never approves money or contracts. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} Citations to confirm include Civil Code Article 390, Federal Law 15 of 2020 Article 21, and Cabinet Resolution 66 of 2023.`,
       false,
     );
 }
 
-/** Short, prominent pre-signature notice that the 30-day fee still applies during the waived first month. */
+/** Short, prominent pre-signature notice of the percentage-band cancellation fee and grace rule. */
 export function ownerCancellationFeePreSignNoticeCopy(arabic = false, fee = formatOwnerInitialCancellationFee()): string {
   const feeText = arabic ? fee.displayAr : fee.displayEn;
   return arabic
     ? withLegalDraftMark(
-      `يُرجى العلم قبل التوقيع: مدة العقد 13 شهراً، وتُعفى رسوم الإدارة للشهر الأول. وإذا طلب المالك الإلغاء خلال ${OWNER_INITIAL_CANCELLATION_WINDOW_DAYS} يوماً، يُستحق رسم مصروفات إدارية يغطي تكاليف بدء التعاقد وتقييم العقار الموثقة بمبلغ ${feeText}. ويسري هذا الرسم خلال تلك المهلة حتى أثناء فترة الإعفاء.`,
+      `يُرجى العلم قبل التوقيع: مدة العقد 13 شهراً، وتُعفى رسوم الإدارة للشهر الأول. وجدول رسوم الإلغاء هو ${feeText}. وتعفي فترة السماح البالغة 7 أيام من الغرامة فقط، وليس من سداد أعمال التعبئة الموثقة المنجزة. وبعد اليوم 7 تسري النسبة حتى خلال شهر الإعفاء.`,
       true,
     )
     : withLegalDraftMark(
-      `Please note before signing: this Agreement is for a 13-month term, and the first month's management fee is waived. If the Owner requests cancellation within ${OWNER_INITIAL_CANCELLATION_WINDOW_DAYS} days, an administrative disbursement fee covering documented onboarding and property assessment costs of ${feeText} shall apply. That fee applies within the 30-day window, including during the waived first month.`,
+      `Please note before signing: this Agreement is for a 13-month term, and the first month's management fee is waived. The cancellation fee schedule is ${feeText}. The 7-day grace period waives the penalty only, not payment for verifiable mobilisation work already done. After day 7 the percentage applies even during the waived first month.`,
       false,
     );
 }
@@ -350,11 +543,11 @@ export function ownerMobilisationRefundCopy(arabic = false): string {
   const deliverablesAr = OWNER_MOBILISATION_DELIVERABLES_AR.join('، ');
   return arabic
     ? withLegalDraftMark(
-      `هذا هو التصميم الافتراضي بانتظار تأكيد رشيد. تغطي دفعة التفعيل البالغة 15٪ أعمال بدء التعاقد الأولية، وتشمل: ${deliverablesAr}. وإذا ألغى المالك خلال مهلة الثلاثين يوماً، تحتفظ BIN GROUP فقط بالجزء من دفعة التفعيل الذي يقابل مصروفات مكتسبة أو فعلية يمكن التحقق منها، وتُعرض بنداً بنداً، ويُرد الرصيد غير المكتسب. ويجب أن تعتمد الإدارة أو إدارة المالية أي مبلغ يُحتفظ به أو يُرد. ولا تعتمد الذكاء الاصطناعي المبالغ أو العقود.`,
+      `تغطي دفعة التفعيل البالغة 15٪ أعمال بدء التعاقد الأولية، وتشمل: ${deliverablesAr}. وإذا أُلغيت الاتفاقية قبل اكتمال أعمال التعبئة، تحتفظ BIN GROUP فقط بالجزء من دفعة التفعيل الذي يقابل مصروفات مكتسبة أو فعلية يمكن التحقق منها، وتُعرض بنداً بنداً، ويُرد الرصيد غير المكتسب. ولا تعفي فترة السماح البالغة 7 أيام من سداد أعمال التعبئة الموثقة المنجزة. ويجب أن تعتمد الإدارة أو إدارة المالية أي مبلغ يُحتفظ به أو يُرد. ولا تعتمد الذكاء الاصطناعي المبالغ أو العقود.`,
       true,
     )
     : withLegalDraftMark(
-      `This is the default design pending Rashid's confirmation. The 15% mobilisation fee covers initial onboarding deliverables, including: ${deliverablesEn}. If the Owner cancels within the 30-day window, BIN GROUP shall retain only the portion of mobilisation that corresponds to verifiable earned or incurred expenses, which will be itemised, and shall refund the unearned balance. Admin or Finance Admin must approve any retained or refunded amount. AI never approves money or contracts.`,
+      `The 15% mobilisation fee covers initial onboarding deliverables, including: ${deliverablesEn}. If this Agreement ends before mobilisation work is completed, BIN GROUP shall retain only the portion of mobilisation that corresponds to verifiable earned or incurred expenses, which will be itemised, and shall refund the unearned balance. The 7-day cancellation-fee grace does not waive payment for verifiable mobilisation work already done. Admin or Finance Admin must approve any retained or refunded amount. AI never approves money or contracts.`,
       false,
     );
 }
@@ -387,11 +580,11 @@ export function ownerLanguagePrecedenceCopy(arabic = false): string {
 export function ownerPdplCopy(arabic = false): string {
   return arabic
     ? withLegalDraftMark(
-      `تُعالج البيانات الشخصية، بما في ذلك صور العقار والمراسلات، فقط لتنفيذ هذه الاتفاقية. ولا تُستخدم للتسويق إلا بموافقة اشتراك منفصلة يمكن سحبها في أي وقت، وليست تلك الموافقة شرطاً للحصول على الخدمة المتعاقد عليها. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المرسوم بقانون اتحادي رقم 45 لسنة 2021 بشأن حماية البيانات الشخصية.`,
+      `تُعالج البيانات الشخصية، بما في ذلك صور العقار والمراسلات، فقط لتنفيذ هذه الاتفاقية، وتُحفظ وفق فترات الاحتفاظ المعلنة، بما في ذلك مسار تدقيق العقود الموقعة لمدة 10 سنوات. وقد تُنقل بعض البيانات عبر الحدود عبر معالجي ذكاء اصطناعي من أطراف ثالثة للوظائف التي يختارها المستخدم أو تتطلبها الخدمة، وذلك بموافقة صريحة. ولا تُستخدم للتسويق إلا بموافقة اشتراك منفصلة يمكن سحبها في أي وقت، وليست تلك الموافقة شرطاً للحصول على الخدمة المتعاقد عليها. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المرسوم بقانون اتحادي رقم 45 لسنة 2021 بشأن حماية البيانات الشخصية.`,
       true,
     )
     : withLegalDraftMark(
-      `Personal data, including property images and communications, is processed only to perform this Agreement. It shall not be used for marketing without a separate opt-in, which the Owner may withdraw at any time. Marketing consent is not a condition of receiving the contracted service. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} One citation to confirm is Federal Decree-Law 45 of 2021 (PDPL).`,
+      `Personal data, including property images and communications, is processed only to perform this Agreement and is retained in line with the published retention periods, including a 10-year signed-contract audit trail. Some data may be transferred across borders through third-party AI processors for features the user chooses or that the service requires, with explicit consent. It shall not be used for marketing without a separate opt-in, which the Owner may withdraw at any time. Marketing consent is not a condition of receiving the contracted service. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} One citation to confirm is Federal Decree-Law 45 of 2021 (PDPL).`,
       false,
     );
 }
@@ -419,11 +612,11 @@ export function ownerLicenceBlockCopy(
   const block = formatOwnerLicenceBlock(options);
   return arabic
     ? withLegalDraftMark(
-      `بيانات المدير: BIN GROUP. رقم الرخصة التجارية: ${block.tradeLicence.displayAr}. رقم تسجيل ريرا (ORN): ${block.reraOrn.displayAr}. رقم تسجيل مركز أبوظبي العقاري (ADREC): ${block.adrecReg.displayAr}. ويخضع هذا العقد للتسجيل عبر النظام البلدي المحلي (مثل إيجاري أو توثيق). وهذه حقول مؤقتة وليست أرقام تراخيص مخترعة إلى حين إدراج البيانات الفعلية.`,
+      `بيانات المدير: ${BIN_GROUP_LEGAL_ENTITY_NAME}. رقم الرخصة التجارية: ${block.tradeLicence.displayAr}. رقم تسجيل ريرا (ORN): ${block.reraOrn.displayAr}. رقم تسجيل مركز أبوظبي العقاري (ADREC): ${block.adrecReg.displayAr}. ويخضع هذا العقد للتسجيل عبر النظام البلدي المحلي (مثل إيجاري أو توثيق). والرخصة التجارية مقدمة من المؤسس. أما رقم ريرا وتسجيل ADREC وأي رخصة إدارة عقارات منفصلة فحقول مؤقتة وليست أرقاماً مخترعة إلى حين إدراجها.`,
       true,
     )
     : withLegalDraftMark(
-      `Manager details: BIN GROUP. Trade licence no.: ${block.tradeLicence.displayEn}. RERA ORN: ${block.reraOrn.displayEn}. ADREC registration no.: ${block.adrecReg.displayEn}. This contract is subject to registration via the local municipal system (for example Ejari or Tawtheeq). These are placeholders, not invented licence numbers, until the real particulars are inserted.`,
+      `Manager details: ${BIN_GROUP_LEGAL_ENTITY_NAME}. Trade licence no.: ${block.tradeLicence.displayEn}. RERA ORN: ${block.reraOrn.displayEn}. ADREC registration no.: ${block.adrecReg.displayEn}. This contract is subject to registration via the local municipal system (for example Ejari or Tawtheeq). The trade licence is founder-supplied. The RERA ORN, ADREC registration and any separate property-management licence remain placeholders, not invented numbers, until the real particulars are inserted.`,
       false,
     );
 }
@@ -432,11 +625,11 @@ export function ownerVatTreatmentCopy(arabic = false): string {
   const rate = OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT;
   return arabic
     ? withLegalDraftMark(
-      `رسوم الإدارة وسائر رسوم الخدمة المبينة في هذه الاتفاقية غير شاملة ضريبة القيمة المضافة في دولة الإمارات البالغة ${rate}٪. وحيثما يُلزم القانون بذلك، تُستحق ضريبة القيمة المضافة بنسبة ${rate}٪ إضافة إلى الرسوم المبيّنة، وذلك بعد التحقق من الرقم الضريبي للشركة. وإلى حين ذلك التحقق، تُصدر الفواتير بمعاملة ضريبية غير مطبقة، وتكون المبالغ المستحقة مساوية لصافي المبالغ المعروضة. ولم تُغيَّر الأسعار المعروضة لإدراج الضريبة. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المرسوم بقانون اتحادي رقم 8 لسنة 2017 بشأن ضريبة القيمة المضافة.`,
+      `رسوم الإدارة وسائر رسوم الخدمة المبينة في هذه الاتفاقية غير شاملة ضريبة القيمة المضافة في دولة الإمارات البالغة ${rate}٪، وهي خاضعة لضريبة القيمة المضافة بنسبة ${rate}٪ تُحصَّل عند إصدار رقم التسجيل الضريبي (TRN) والتحقق منه. وإلى حين ذلك التحقق، تُصدر الفواتير بعنوان "فاتورة تجارية" دون بند لضريبة القيمة المضافة، ولا يجوز تسميتها فاتورة ضريبية، وتكون المبالغ المستحقة مساوية لصافي المبالغ المعروضة. وبعد التحقق من الرقم تُصدر فواتير ضريبية وفقاً للمادة 59 (للتأكيد من المستشار القانوني)، مع حقول الفاتورة المبسطة أو الكاملة للمعاملات بين المنشآت التي تتجاوز 10,000 درهم، وخلال 14 يوماً. ولم تُغيَّر الأسعار المعروضة لإدراج الضريبة. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR} ومن ذلك المرسوم بقانون اتحادي رقم 8 لسنة 2017 بشأن ضريبة القيمة المضافة.`,
       true,
     )
     : withLegalDraftMark(
-      `The management fees and other service fees shown in this Agreement are exclusive of ${rate}% UAE VAT. Where legally required, ${rate}% UAE VAT is payable in addition to those quoted fees once the Company's VAT tax registration number is verified. Until that verification, invoices are issued with VAT not applied, and the amounts due equal the quoted net figures. Quoted prices have not been changed to include VAT. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} One citation to confirm is Federal Decree-Law 8 of 2017 (VAT).`,
+      `The management fees and other service fees shown in this Agreement are exclusive of ${rate}% UAE VAT and are subject to ${rate}% VAT, which will be collected once a Tax Registration Number (TRN) is issued and verified. Until that verification, invoices are titled “Commercial Invoice”, carry no VAT line, must not be titled “Tax Invoice”, and the amounts due equal the quoted net figures. Once a TRN is verified, tax invoices will be issued under Article 59 (for counsel to confirm), with simplified or full B2B fields above AED 10,000, within 14 days of the supply. Quoted prices have not been changed to include VAT. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN} One citation to confirm is Federal Decree-Law 8 of 2017 (VAT).`,
       false,
     );
 }
@@ -445,11 +638,11 @@ export function ownerAmlCashThresholdCopy(arabic = false, threshold = formatOwne
   const amount = arabic ? threshold.displayAr : threshold.displayEn;
   return arabic
     ? withLegalDraftMark(
-      `تبقى الدفعات مقبولة بالدرهم الإماراتي نقداً أو بشيك فقط (${OWNER_PAYMENT_POLICY_VERSION}). ولا يُقبل الدفع نقداً عند بلوغ حد قبول النقد أو تجاوزه، وهو ${amount} إلى حين تأكيد المبلغ. ولا يُعتمد أي حد نقدي تلقائياً، ولا تعتمد الذكاء الاصطناعي المبالغ. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR}`,
+      `تبقى الدفعات مقبولة بالدرهم الإماراتي نقداً أو بشيك فقط (${OWNER_PAYMENT_POLICY_VERSION}). وحد القبول النقدي هو ${amount} لكل عقد عقار، سواء دفعة واحدة أو دفعات نقدية مرتبطة أو تراكمية. وما يزيد على ذلك يُسدد بشيك أو تحويل بنكي فقط، ويُطبق النظام هذا الحد في تدفقات تسجيل النقد. ولا تعتمد الذكاء الاصطناعي المبالغ. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR}`,
       true,
     )
     : withLegalDraftMark(
-      `Payments remain accepted only in AED by cash or cheque (${OWNER_PAYMENT_POLICY_VERSION}). Cash at or above the cash-acceptance threshold, which is ${amount} until a confirmed amount is set, is not accepted. No cash threshold is auto-approved, and AI never approves money amounts. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN}`,
+      `Payments remain accepted only in AED by cash or cheque (${OWNER_PAYMENT_POLICY_VERSION}). The cash-acceptance cap is ${amount} per property contract, whether a single payment or linked/cumulative cash payments. Amounts above that cap must be paid by cheque or bank transfer only, and the cap is system-enforced in cash recording flows. AI never approves money amounts. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN}`,
       false,
     );
 }
@@ -484,11 +677,11 @@ export function ownerEmergencyRepairCopy(arabic = false, limit = formatOwnerEmer
   const approverAr = OWNER_EMERGENCY_REPAIR_APPROVER || 'يُؤكد لاحقاً';
   return arabic
     ? withLegalDraftMark(
-      `يجوز للمدير أن يوجه بإجراء إصلاحات طارئة لأجهزة التكييف أو لتسرب المياه في حدود مبلغ لكل حادثة قدره ${amount}، وذلك فقط بعد موافقة إنسان (${approverAr}) وفقاً لقواعد المال المعتمدة لدى BIN، وليس من الذكاء الاصطناعي أبداً. ولا يرفع هذا البند حدود الموافقة والإنفاق الطارئ التشغيلية المنصوص عليها في هذه الاتفاقية ولا يحل محلها. ولا تعتمد الذكاء الاصطناعي أي إنفاق. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR}`,
+      `يجوز للمدير أن يوجه بإجراء إصلاحات طارئة لأجهزة التكييف أو لتسرب المياه في حدود مبلغ لكل حادثة قدره ${amount}، وذلك فقط بعد موافقة إنسان (${approverAr}) وفقاً لقواعد المال المعتمدة لدى BIN، وليس من الذكاء الاصطناعي أبداً. ولا تُعلَّق أعمال الطوارئ أو تُوقف دون إشعار كتابي منفصل. ولا يرفع هذا البند حدود الموافقة والإنفاق الطارئ التشغيلية المنصوص عليها في هذه الاتفاقية ولا يحل محلها. ولا تعتمد الذكاء الاصطناعي أي إنفاق. ${UNVERIFIED_RESEARCH_CITATION_NOTE_AR}`,
       true,
     )
     : withLegalDraftMark(
-      `The Manager may instruct emergency HVAC or water-leak repairs up to a per-incident limit of ${amount}, and only after approval by a human (${approverEn}) in accordance with BIN money rules. AI systems may never approve any such spend. This clause does not raise or replace the operational approval and emergency spending limits already stated in this Agreement. AI never approves money. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN}`,
+      `The Manager may instruct emergency HVAC or water-leak repairs up to a per-incident limit of ${amount}, and only after approval by a human (${approverEn}) in accordance with BIN money rules. AI systems may never approve any such spend. Emergency works are never suspended without separate written notice. This clause does not raise or replace the operational approval and emergency spending limits already stated in this Agreement. AI never approves money. ${UNVERIFIED_RESEARCH_CITATION_NOTE_EN}`,
       false,
     );
 }

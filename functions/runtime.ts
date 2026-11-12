@@ -154,3 +154,4 @@ export * from "./turnoverQuoteOperations";
 export * from "./adminOwnerApplicationDecision";
 export * from "./paintingProjects";
 export * from "./preventiveMaintenancePlans";
+export * from "./technicianGpsConsent";

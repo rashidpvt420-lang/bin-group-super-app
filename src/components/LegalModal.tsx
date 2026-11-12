@@ -8,10 +8,13 @@ import {
   Typography, 
   Box,
   Divider,
-  CircularProgress
+  CircularProgress,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { LEGAL_CONSENT_VERSION, BIN_GROUP_LEGAL_ENTITY_NAME } from '../utils/ownerInitialContractPolicy';
 
 interface LegalModalProps {
   userId: string;
@@ -21,6 +24,10 @@ interface LegalModalProps {
 export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [processingConsent, setProcessingConsent] = useState(false);
+  const [retentionConsent, setRetentionConsent] = useState(false);
+  const [crossBorderAiConsent, setCrossBorderAiConsent] = useState(false);
+  const allConsents = processingConsent && retentionConsent && crossBorderAiConsent;
   const contentRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -29,7 +36,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
     // callback must not disable consent after the user already reached the end.
     setScrolledToBottom(true);
     try {
-      sessionStorage.setItem(`bin_legal_terms_reviewed_v7_1_${userId || 'guest'}`, 'true');
+      sessionStorage.setItem(`bin_legal_terms_reviewed_legal-review-2026-11-12_${userId || 'guest'}`, 'true');
     } catch {
       // Ignore storage errors in restricted environments.
     }
@@ -53,8 +60,8 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
 
   useEffect(() => {
     try {
-      const globalAccepted = localStorage.getItem('bin_legal_terms_accepted_v7_1');
-      const userAccepted = userId ? localStorage.getItem(`bin_legal_terms_accepted_v7_1_${userId}`) : null;
+      const globalAccepted = localStorage.getItem('bin_legal_terms_accepted_legal-review-2026-11-12');
+      const userAccepted = userId ? localStorage.getItem(`bin_legal_terms_accepted_legal-review-2026-11-12_${userId}`) : null;
       if (globalAccepted || userAccepted) {
         onAccepted();
       }
@@ -66,7 +73,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   useEffect(() => {
     let reviewed = false;
     try {
-      reviewed = sessionStorage.getItem(`bin_legal_terms_reviewed_v7_1_${userId || 'guest'}`) === 'true';
+      reviewed = sessionStorage.getItem(`bin_legal_terms_reviewed_legal-review-2026-11-12_${userId || 'guest'}`) === 'true';
     } catch {
       // Ignore storage errors in restricted environments.
     }
@@ -100,15 +107,17 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   }, [evaluateScrollReadiness, markAgreementReviewed]);
 
   const handleAgree = () => {
-    if (loading) return;
+    if (loading || !allConsents || !scrolledToBottom) return;
     setLoading(true);
     const acceptedAt = new Date().toISOString();
 
     try {
-      localStorage.setItem('bin_legal_terms_accepted_v7_1', acceptedAt);
-      localStorage.setItem(`bin_legal_terms_accepted_v7_1_${userId || 'guest'}`, acceptedAt);
+      localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', acceptedAt);
+      localStorage.setItem(`bin_legal_terms_accepted_legal-review-2026-11-12_${userId || 'guest'}`, acceptedAt);
       localStorage.setItem('bin_pdpl_consent', 'true');
-      localStorage.setItem('bin_gps_consent', 'true');
+      localStorage.setItem('bin_legal_processing_consent', 'true');
+      localStorage.setItem('bin_legal_retention_consent', 'true');
+      localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
     } catch (error) {
       console.warn('Local legal consent save failed:', error);
     }
@@ -117,8 +126,13 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
       setDoc(doc(db, 'users', userId), {
         legalAcceptedAt: serverTimestamp(),
         legalAcceptedAtClient: acceptedAt,
+        legalConsentVersion: LEGAL_CONSENT_VERSION,
+        legalAcceptedVersion: LEGAL_CONSENT_VERSION,
+        termsVersion: LEGAL_CONSENT_VERSION,
         pdplCompliance: true,
-        gpsConsent: true,
+        legalProcessingConsent: true,
+        legalRetentionConsent: true,
+        legalCrossBorderAiConsent: true,
         updatedAt: serverTimestamp()
       }, { merge: true }).catch((error) => {
         const isPermissionDenied = error?.code === 'permission-denied' || 
@@ -149,10 +163,13 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
     >
       <DialogTitle sx={{ borderBottom: '1px solid #333', py: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 900, color: '#D4AF37', letterSpacing: 1 }}>
-          SOVEREIGN INSTITUTIONAL AGREEMENT
+          Legal terms / الشروط القانونية
         </Typography>
-        <Typography variant="caption" sx={{ color: '#888' }}>
-          V7.1 COMPLIANCE: UAE FED. LAW NO. 45/2021 & PDPL
+        <Typography variant="caption" sx={{ color: '#888', display: 'block' }}>
+          {BIN_GROUP_LEGAL_ENTITY_NAME}. Version {LEGAL_CONSENT_VERSION}. Legal citations are for counsel to confirm.
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#888', display: 'block', direction: 'rtl', textAlign: 'right' }}>
+          الاستشهادات القانونية للتأكيد من المستشار القانوني. وإذا تعارض النصان يُعتد بالنص العربي.
         </Typography>
       </DialogTitle>
       
@@ -163,24 +180,26 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         tabIndex={0}
         sx={{ py: 4, maxHeight: '60vh' }}
       >
-        <Typography variant="body2" paragraph sx={{ mb: 4, color: '#D4AF37', fontWeight: 'bold' }}>
-          PLEASE READ THE FOLLOWING TERMS CAREFULLY. YOU MUST SCROLL TO THE END TO ACCEPT.
+        <Typography variant="body2" paragraph sx={{ mb: 2, color: '#D4AF37', fontWeight: 'bold' }}>
+          Please read these terms carefully and scroll to the end. You must give the three explicit consents below before you can accept. / يُرجى قراءة هذه الشروط والتمرير حتى النهاية. ويجب منح الموافقات الثلاث الصريحة أدناه قبل القبول.
+        </Typography>
+        <Typography variant="body2" paragraph sx={{ color: '#ccc' }}>
+          These terms are issued in English and Arabic. If there is any conflict, the Arabic text prevails (for counsel to confirm). The full public Terms of Service and Privacy Policy are at /terms-of-service.html and /privacy-policy.html. They replace the previous public Terms (including any 5–5.5% fee and two-strike SOS wording) and withdraw Master Agreement v1.
+        </Typography>
+        <Typography variant="body2" paragraph sx={{ color: '#ccc', direction: 'rtl', textAlign: 'right' }}>
+          تصدر هذه الشروط بالإنجليزية والعربية. وفي حال التعارض يُعتد بالنص العربي (للتأكيد من المستشار القانوني). والنص الكامل لشروط الخدمة وسياسة الخصوصية في الصفحات العلنية. وقد حلت محل الشروط السابقة (بما في ذلك أي رسم 5–5.5% أو إيقاف استغاثة من ضربتين) وسحبت الاتفاقية الإطارية الإصدار 1.
         </Typography>
 
-        <Section title="1. OVERVIEW" content="This Agreement governs your access to and use of the BIN GROUP Sovereign Asset Management platform. By accessing the platform, you represent that you are an authorized representative of an institutional entity or a registered resident of a BIN GROUP managed property." />
-        
-        <Section title="2. DATA PRIVACY & PDPL COMPLIANCE" content="In accordance with UAE Federal Decree-Law No. 45 of 2021 regarding the Protection of Personal Data (PDPL), BIN GROUP acts as the Data Controller. Your personal identity data, financial records, and maintenance history are encrypted and stored within the Sovereign UAE Cloud Infrastructure." />
-        
-        <Section title="3. REAL-TIME TELEMETRY & GPS" content="For Technicians and Field Agents: this platform uses foreground GPS points to support dispatch visibility and SLA compliance. For Tenants: location data is used during SOS dispatch events to provide a rough arrival estimate for emergency responders." />
-        
-        <Section title="4. INSTITUTIONAL SECURITY" content="Unauthorized access, reverse engineering, or attempts to bypass the Role-Based Access Control (RBAC) are strictly prohibited and will be reported to the UAE Cyber Security Council." />
+        <Section title="1. Overview / نظرة عامة" content="These terms govern access to the BIN GROUP platform operated by the legal entity named above. Owner commercial terms follow Owner Service Agreement v1.3: a 13-month term, month-1 management fee of AED 0, 15% mobilisation, cash or cheque in Phase 1 subject to an AED 50,000 cash cap per property contract, and emergency works never suspended without separate written notice." />
+        <Section title="2. Processing of personal data / معالجة البيانات الشخصية" content="BIN GROUP processes personal data to perform the contract and operate the platform. A citation to confirm is Federal Decree-Law 45 of 2021 (PDPL) (for counsel to confirm). Data is not used for marketing without a separate opt-in." />
+        <Section title="3. Retention / الاحتفاظ" content="Records are kept for the published periods. The signed-contract audit trail (IP address, device identifier, server timestamp, and SHA-256 hash of accepted terms) is retained for 10 years and is immutable. Retention periods are for counsel to confirm." />
+        <Section title="4. Cross-border transfer and third-party AI processors / النقل عبر الحدود ومعالجو الذكاء الاصطناعي" content="Some features use third-party AI processors and may transfer personal data outside the UAE. This happens only with your explicit consent below. Optional AI features can be declined. This description is for counsel to confirm." />
+        <Section title="5. Technician GPS / موقع الفني" content="Technician location is collected only during active duty, and only after a separate explicit technician consent in onboarding and the technician contract. Tracking stops at the end of the shift or active job." />
 
-        <Section title="5. FINANCIAL OBLIGATIONS" content="Owners and Corporate Entities acknowledge that all management fees are calculated based on the Fixed Rounding Protocol (2-decimal precision) and are payable upon issuance of the Institutional Manifest." />
-
-        <Box sx={{ mt: 4, p: 2, bgcolor: 'rgba(212, 175, 55, 0.1)', borderRadius: 2 }}>
-          <Typography variant="caption" sx={{ color: '#D4AF37' }}>
-            BY CLICKING 'I AGREE', YOU PROVIDE EXPLICIT CONSENT FOR DATA PROCESSING AND LOCATION TRACKING UNDER THE LAWS OF THE UNITED ARAB EMIRATES.
-          </Typography>
+        <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(212, 175, 55, 0.1)', borderRadius: 2 }}>
+          <FormControlLabel sx={{ alignItems: 'flex-start', color: '#fff', display: 'flex', mb: 1 }} control={<Checkbox data-testid="legal-consent-processing" checked={processingConsent} onChange={(e) => setProcessingConsent(e.target.checked)} sx={{ color: '#D4AF37' }} />} label={<Typography variant="caption">I explicitly consent to BIN GROUP processing my personal data to perform the service, as described in the Privacy Policy. / أوافق موافقة صريحة على معالجة BIN GROUP لبياناتي الشخصية لتنفيذ الخدمة وفق سياسة الخصوصية.</Typography>} />
+          <FormControlLabel sx={{ alignItems: 'flex-start', color: '#fff', display: 'flex', mb: 1 }} control={<Checkbox data-testid="legal-consent-retention" checked={retentionConsent} onChange={(e) => setRetentionConsent(e.target.checked)} sx={{ color: '#D4AF37' }} />} label={<Typography variant="caption">I explicitly consent to retention of my data for the published periods, including the 10-year immutable signed-contract audit trail. / أوافق موافقة صريحة على الاحتفاظ ببياناتي للمدد المعلنة، بما في ذلك مسار تدقيق العقود الموقعة غير القابل للتغيير لمدة 10 سنوات.</Typography>} />
+          <FormControlLabel sx={{ alignItems: 'flex-start', color: '#fff', display: 'flex' }} control={<Checkbox data-testid="legal-consent-cross-border-ai" checked={crossBorderAiConsent} onChange={(e) => setCrossBorderAiConsent(e.target.checked)} sx={{ color: '#D4AF37' }} />} label={<Typography variant="caption">I explicitly consent to cross-border transfer of my personal data via third-party AI processors as described in the Privacy Policy. / أوافق موافقة صريحة على نقل بياناتي الشخصية عبر الحدود عبر معالجي ذكاء اصطناعي من أطراف ثالثة وفق سياسة الخصوصية.</Typography>} />
         </Box>
         <Box ref={endRef} data-testid="legal-agreement-end" sx={{ height: 1 }} aria-hidden="true" />
       </DialogContent>
@@ -194,7 +213,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         <Button 
           data-testid="legal-agreement-accept"
           variant="contained" 
-          disabled={!scrolledToBottom || loading}
+          disabled={!scrolledToBottom || !allConsents || loading}
           onClick={handleAgree}
           sx={{ 
             bgcolor: '#D4AF37', 
@@ -205,7 +224,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
             '&:disabled': { bgcolor: '#333', color: '#666' }
           }}
         >
-          {loading ? <CircularProgress size={24} color="inherit" /> : 'I AGREE & ENTER'}
+          {loading ? <CircularProgress size={24} color="inherit" /> : 'I agree / أوافق'}
         </Button>
       </DialogActions>
     </Dialog>

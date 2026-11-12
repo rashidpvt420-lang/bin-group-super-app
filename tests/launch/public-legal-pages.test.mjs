@@ -39,3 +39,41 @@ test('public privacy and terms routes serve the reviewed static legal documents'
     assert.doesNotMatch(doc, />Title<|>Desc<|>Contact Info</);
   }
 });
+
+test('public legal pages are bilingual, withdraw the old fee and SOS wording, and use the founder-approved entity and commercial terms', async () => {
+  const files = [
+    'public/terms-of-service.html',
+    'public/terms.html',
+    'public/privacy-policy.html',
+    'public/privacy.html',
+    'public/delete-account.html',
+  ];
+  for (const path of files) {
+    const doc = await read(path);
+    assert.match(doc, /All Kind Building Projects Contracting L\.L\.C S\.P\.C, trading as BIN GROUP L\.L\.C - S\.P\.C/);
+    assert.match(doc, /CN-5914744/);
+    assert.match(doc, /Abu Dhabi/);
+    assert.match(doc, /Arabic text prevails/);
+    assert.match(doc, /يُعتد بالنص العربي/);
+    assert.match(doc, /for counsel to confirm/);
+    assert.doesNotMatch(doc, /automatically deducted from your monthly rental/i);
+    assert.doesNotMatch(doc, /BIN CONSTRUCTION - GENERAL MAINTENANCE LLC/);
+  }
+  const terms = await read('public/terms-of-service.html');
+  assert.match(terms, /13-month term/);
+  assert.match(terms, /first month's management fee is AED 0/);
+  assert.match(terms, /15% mobilisation/);
+  assert.match(terms, /AED 50,000 per property contract/);
+  assert.match(terms, /never suspended without separate written notice/);
+  assert.match(terms, /days 1–7: 0%/);
+  assert.match(terms, /Commercial Invoice/);
+  assert.match(terms, /withdrawn|replace the previous public Terms/i);
+  assert.match(terms, /two-strike SOS/);
+  const privacy = await read('public/privacy-policy.html');
+  assert.match(privacy, /active duty/);
+  assert.match(privacy, /third-party AI processors/);
+  assert.match(privacy, /10 years/);
+  const deletion = await read('public/delete-account.html');
+  assert.match(deletion, /10 years/);
+  assert.match(deletion, /حذف الحساب/);
+});

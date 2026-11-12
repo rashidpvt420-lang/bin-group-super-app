@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import type * as FirebaseFirestore from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { assertCashWithinPropertyContractCap } from './ownerCashCap';
 import { resolveActivePaymentConfiguration } from './paymentConfiguration';
 import { assertDesignPaymentBinding, designPaymentTerms, DESIGN_PAYMENT_METHODS, DESIGN_PAYMENT_WORKFLOW } from './designPaymentPolicy';
 import { protectedMediaUrl } from './aiDesignMedia';
@@ -98,6 +99,15 @@ export const createDesignPaymentRequest = onCall(options, async (request) => {
       assertBinding(s, method);
       return { ok: true, paymentId: s.paymentRef.id, idempotent: true };
     }
+    await assertCashWithinPropertyContractCap({
+      db,
+      reader: transaction,
+      method,
+      amountAed: Number(s.terms.amount || 0),
+      contractId: s.design.contractId || s.terms.contractId || null,
+      propertyId: s.design.propertyId || null,
+      excludePaymentIds: [s.paymentRef.id],
+    });
     transaction.create(s.paymentRef, {
       paymentId: s.paymentRef.id, type: 'DESIGN_STUDIO_EXECUTION', source: 'AI_DESIGN_STUDIO',
       workflowVersion: DESIGN_PAYMENT_WORKFLOW, designRequestId: requestId, ...s.terms,

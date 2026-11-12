@@ -21,6 +21,7 @@ import {
   ownerGoverningLawJurisdictionCopy,
   ownerLanguagePrecedenceCopy,
   ownerLicenceBlockCopy,
+  BIN_GROUP_LEGAL_ENTITY_NAME,
   ownerMobilisationRefundCopy,
   ownerPdplCopy,
   ownerReturnedChequeCopy,
@@ -553,7 +554,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             }
         });
 
-        doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(GOLD).fontSize(16).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });
         doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT — FIRST MONTH MANAGEMENT FEE WAIVED + 12 MONTHS BILLED AT THE CONTRACT RATE', { align: 'center' });
         doc.fillColor(MUTED).fontSize(9);
         bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً — رسوم الإدارة للشهر الأول مُعفاة + 12 شهراً تُفوتر حسب سعر العقد', null, null, { align: 'center' });
@@ -568,7 +569,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Owner / المالك', textValue(data.ownerName || data.fullName || data.signatureName));
         row(doc, 'Owner Email / بريد المالك', textValue(data.ownerEmail || data.email));
         row(doc, 'Company / الشركة', textValue(data.companyName || data.entityName || 'Private Owner'));
-        row(doc, 'Service Provider / مقدم الخدمة', 'BIN GROUP L.L.C - S.P.C');
+        row(doc, 'Service Provider / مقدم الخدمة', BIN_GROUP_LEGAL_ENTITY_NAME);
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
         const licenceRef = formatPropertyManagementLicenceRef(data.propertyManagementLicenceRef || data.reraLicenceNumber || BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF);
         row(doc, 'RERA / emirate PM licence / ترخيص إدارة العقارات', `${licenceRef.displayEn} / ${licenceRef.displayAr} (placeholder pending legal insertion; not an invented licence number)`);
@@ -629,7 +630,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'VAT / ضريبة القيمة المضافة', `${OWNER_QUOTE_PRICES_ARE_VAT_EXCLUSIVE ? 'Quoted fees exclusive of' : 'Quoted fees inclusive of'} ${OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT}% UAE VAT; invoices currently ${textValue(data.vatTreatment || 'NOT_APPLIED')} until company TRN is verified / الرسوم المعروضة غير شاملة ضريبة القيمة المضافة ${OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT}٪ في دولة الإمارات`);
         row(doc, "First month's management fee waived / رسوم الإدارة للشهر الأول مُعفاة", 'AED 0 recurring management fee / رسوم إدارة متكررة 0 درهم');
         const cancellationFee = formatOwnerInitialCancellationFee(data.cancellationFeeAed ?? data.commercialSchedule?.cancellationFeeAed);
-        row(doc, '30-day administrative disbursement fee / رسم المصروفات الإدارية خلال 30 يوماً', `${cancellationFee.displayEn} / ${cancellationFee.displayAr}`);
+        row(doc, 'Cancellation fee / رسم الإلغاء', `${cancellationFee.displayEn} / ${cancellationFee.displayAr}`);
         renderQuoteLineItems(doc, data);
 
         section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');
@@ -1070,7 +1071,7 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
                 }));
             } catch (error) { reject(error); }
         });
-        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(GOLD).fontSize(14).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });
         doc.fillColor(INK).fontSize(13).text('15% MOBILISATION INVOICE - UNPAID', { align: 'center' });
         doc.fillColor(MUTED).fontSize(10);
         bidiText(doc, 'فاتورة دفعة التفعيل 15% - غير مدفوعة', null, null, { align: 'center' });
@@ -1124,7 +1125,7 @@ export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise
                 }));
             } catch (error) { reject(error); }
         });
-        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(GOLD).fontSize(14).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });
         doc.fillColor(INK).fontSize(13).text('PAYMENT RECEIPT', { align: 'center' });
         doc.fillColor(MUTED).fontSize(10);
         bidiText(doc, 'إيصال دفع', null, null, { align: 'center' });
@@ -1181,7 +1182,7 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
                 }));
             } catch (error) { reject(error); }
         });
-        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(GOLD).fontSize(14).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });
         doc.fillColor(INK).fontSize(13).text('PAID MOBILIZATION INVOICE', { align: 'center' });
         doc.fillColor(MUTED).fontSize(10);
         bidiText(doc, 'فاتورة دفعة التفعيل - مدفوعة', null, null, { align: 'center' });

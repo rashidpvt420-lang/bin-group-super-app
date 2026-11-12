@@ -8,6 +8,8 @@ import {
 import type { User } from "../lib/firebase";
 import { registerPushNotifications } from "../services/pushNotificationService";
 import LegalModal from "../components/LegalModal";
+import TechnicianGpsConsentModal from "../components/TechnicianGpsConsentModal";
+import { LEGAL_CONSENT_VERSION } from "../utils/ownerInitialContractPolicy";
 
 declare global {
     interface Window {
@@ -268,6 +270,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [legalAccepted, setLegalAccepted] = useState(true);
+    const [technicianGpsConsented, setTechnicianGpsConsented] = useState(true);
     const [permissions, setPermissions] = useState<Record<string, boolean>>({});
     const [claimFullAdmin, setClaimFullAdmin] = useState(false);
     const loadingRef = useRef(loading);
@@ -372,7 +375,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setIsAdmin(resolvedIsAdmin);
                 setPermissions((resolvedIsAdmin || roleIsStaff(resolvedRole)) ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
-                setLegalAccepted(!!data.legalAcceptedAt || !!data.legalAcceptedAtClient);
+                setLegalAccepted((data.legalConsentVersion || data.legalAcceptedVersion || data.termsVersion) === LEGAL_CONSENT_VERSION);
+                setTechnicianGpsConsented(data.technicianGpsActiveDutyConsent === true);
 
                 if (resolvedStatus === 'pending_approval') {
                     setError("ACCOUNT PENDING APPROVAL: Verification in progress.");
@@ -563,6 +567,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         }}>
             {user && !legalAccepted && !loading && !error && status !== 'role_required' && (
                 <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />
+            )}
+            {user && legalAccepted && role === 'technician' && !technicianGpsConsented && !loading && !error && (
+                <TechnicianGpsConsentModal onAccepted={() => setTechnicianGpsConsented(true)} />
             )}
             {children}
         </RoleContext.Provider>
