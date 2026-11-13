@@ -38,7 +38,7 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
   doc.text('BIN GROUP', MARGIN, 18);
   doc.setFontSize(9);
   doc.setTextColor(180, 180, 180);
-  doc.text('All Kind Building Projects Contracting LLC S.P.C · Licensed in Abu Dhabi, UAE', MARGIN, 25);
+  doc.text('All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C · Trade licence CN-5914744, Abu Dhabi', MARGIN, 25);
   doc.setFontSize(12);
   doc.setTextColor(255, 255, 255);
   doc.text(`OWNER PROFIT & LOSS REPORT — ${year}`, MARGIN, 35);

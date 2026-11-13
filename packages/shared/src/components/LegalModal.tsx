@@ -8,7 +8,9 @@ import {
   Typography, 
   Box,
   Divider,
-  CircularProgress
+  CircularProgress,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -21,6 +23,10 @@ interface LegalModalProps {
 export function LegalModal({ userId, onAccepted }: LegalModalProps) {
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [processingConsent, setProcessingConsent] = useState(false);
+  const [retentionConsent, setRetentionConsent] = useState(false);
+  const [crossBorderAiConsent, setCrossBorderAiConsent] = useState(false);
+  const allConsents = processingConsent && retentionConsent && crossBorderAiConsent;
   const contentRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = () => {
@@ -33,15 +39,14 @@ export function LegalModal({ userId, onAccepted }: LegalModalProps) {
   };
 
   const handleAgree = () => {
-    if (loading) return;
+    if (loading || !allConsents) return;
     setLoading(true);
     const acceptedAt = new Date().toISOString();
 
     try {
-      localStorage.setItem('bin_legal_terms_accepted_v7_1', acceptedAt);
-      localStorage.setItem(`bin_legal_terms_accepted_v7_1_${userId || 'guest'}`, acceptedAt);
+      localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', acceptedAt);
+      localStorage.setItem(`bin_legal_terms_accepted_legal-review-2026-11-12_${userId || 'guest'}`, acceptedAt);
       localStorage.setItem('bin_pdpl_consent', 'true');
-      localStorage.setItem('bin_gps_consent', 'true');
     } catch (error) {
       console.warn('Local legal consent save failed:', error);
     }
@@ -50,8 +55,13 @@ export function LegalModal({ userId, onAccepted }: LegalModalProps) {
       setDoc(doc(db, 'users', userId), {
         legalAcceptedAt: serverTimestamp(),
         legalAcceptedAtClient: acceptedAt,
+        legalConsentVersion: 'legal-review-2026-11-12',
+        legalAcceptedVersion: 'legal-review-2026-11-12',
+        termsVersion: 'legal-review-2026-11-12',
         pdplCompliance: true,
-        gpsConsent: true,
+        legalProcessingConsent: true,
+        legalRetentionConsent: true,
+        legalCrossBorderAiConsent: true,
         updatedAt: serverTimestamp()
       }, { merge: true }).catch((error) => {
         console.warn('Legal agreement background sync failed:', error);
@@ -108,6 +118,11 @@ export function LegalModal({ userId, onAccepted }: LegalModalProps) {
         </Box>
       </DialogContent>
 
+      <Box sx={{ px: 3, pb: 1 }}>
+          <FormControlLabel control={<Checkbox data-testid="legal-consent-processing" checked={processingConsent} onChange={(e) => setProcessingConsent(e.target.checked)} />} label="I explicitly consent to processing of my personal data / أوافق موافقة صريحة على معالجة بياناتي الشخصية" />
+          <FormControlLabel control={<Checkbox data-testid="legal-consent-retention" checked={retentionConsent} onChange={(e) => setRetentionConsent(e.target.checked)} />} label="I explicitly consent to published retention, including the 10-year signed-contract audit trail / أوافق على الاحتفاظ المعلن بما في ذلك تدقيق العقود لـ 10 سنوات" />
+          <FormControlLabel control={<Checkbox data-testid="legal-consent-cross-border-ai" checked={crossBorderAiConsent} onChange={(e) => setCrossBorderAiConsent(e.target.checked)} />} label="I explicitly consent to cross-border transfer via third-party AI processors / أوافق على النقل عبر الحدود عبر معالجي ذكاء اصطناعي من أطراف ثالثة" />
+        </Box>
       <Divider sx={{ bgcolor: '#333' }} />
 
       <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
@@ -116,7 +131,7 @@ export function LegalModal({ userId, onAccepted }: LegalModalProps) {
         </Typography>
         <Button 
           variant="contained" 
-          disabled={!scrolledToBottom || loading}
+          disabled={!scrolledToBottom || !allConsents || loading}
           onClick={handleAgree}
           sx={{ 
             bgcolor: '#D4AF37', 

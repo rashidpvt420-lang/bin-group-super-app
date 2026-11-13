@@ -59,14 +59,14 @@ test('cancellation fee stays unset in every policy copy and is not an invented n
     assert.match(read(path), /to be confirmed/);
     assert.match(read(path), /Never invent a number/);
     assert.match(read(path), /BIN_GROUP_PROPERTY_MANAGEMENT_LICENCE_REF: string \| null = null/);
-    assert.match(read(path), /BIN_GROUP_TRADE_LICENCE_REF: string \| null = null/);
+    assert.match(read(path), /BIN_GROUP_TRADE_LICENCE_REF: string \| null = 'CN-5914744'/);
     assert.match(read(path), /BIN_GROUP_RERA_ORN_REF: string \| null = null/);
     assert.match(read(path), /BIN_GROUP_ADREC_REG_REF: string \| null = null/);
     assert.match(read(path), /OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT: number \| null = null/);
-    assert.match(read(path), /administrative disbursement fee covering documented onboarding and property assessment costs/);
-    assert.match(read(path), /OWNER_CASH_ACCEPTANCE_THRESHOLD_AED: number \| null = null/);
+    assert.match(read(path), /percentage of the total annual contract value excluding VAT/);
+    assert.match(read(path), /OWNER_CASH_ACCEPTANCE_THRESHOLD_AED: number \| null = 50000/);
     assert.match(read(path), /OWNER_EMERGENCY_REPAIR_PER_INCIDENT_LIMIT_AED: number \| null = null/);
-    assert.match(read(path), /OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH: boolean \| null = null/);
+    assert.match(read(path), /OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH: boolean \| null = true/);
     assert.match(read(path), /AED 1,500 to AED 3,000/);
     assert.match(read(path), /That range is not applied/);
     assert.match(read(path), /AED 55,000/);
@@ -74,36 +74,39 @@ test('cancellation fee stays unset in every policy copy and is not an invented n
     assert.match(read(path), /RETAIN_VERIFIABLE_INCURRED_EXPENSES_REFUND_REMAINDER/);
   }
   assert.equal(OWNER_INITIAL_CANCELLATION_FEE_AED, null);
-  assert.equal(formatOwnerInitialCancellationFee().displayEn, 'to be confirmed');
+  assert.match(formatOwnerInitialCancellationFee().displayEn, /days 1–7: 0%/);
+  assert.equal(formatOwnerInitialCancellationFee().set, true);
   assert.equal(formatOwnerInitialCancellationFee().aed, null);
-  assert.equal(OWNER_CASH_ACCEPTANCE_THRESHOLD_AED, null);
+  assert.equal(OWNER_CASH_ACCEPTANCE_THRESHOLD_AED, 50000);
   assert.equal(OWNER_EMERGENCY_REPAIR_PER_INCIDENT_LIMIT_AED, null);
   assert.equal(OWNER_EMERGENCY_REPAIR_APPROVER, null);
-  assert.equal(OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH, null);
+  assert.equal(OWNER_INITIAL_CANCELLATION_FEE_DURING_WAIVED_MONTH, true);
   assert.equal(OWNER_QUOTE_PRICES_ARE_VAT_EXCLUSIVE, true);
   assert.equal(OWNER_MANAGEMENT_FEE_VAT_RATE_PERCENT, 5);
   assert.equal(OWNER_INVOICE_VAT_TREATMENT_UNTIL_TRN_VERIFIED, 'NOT_APPLIED');
   assert.equal(OWNER_PAYMENT_POLICY_VERSION, 'PHASE1_CASH_CHEQUE_V1');
-  assert.equal(formatOwnerCashAcceptanceThreshold().displayEn, 'to be confirmed');
+  assert.equal(formatOwnerCashAcceptanceThreshold().displayEn, 'AED 50,000');
   assert.equal(formatOwnerEmergencyRepairLimit().displayEn, 'to be confirmed');
 });
 
-test('launch-honesty flags an unset cancellation fee and would clear only after a confirmed amount is set', () => {
-  const unset = evaluateOwnerInitialCancellationFeeHonesty();
-  assert.equal(unset.ok, false);
-  assert.equal(unset.blocksHardPublicLaunch, true);
-  assert.equal(unset.code, OWNER_INITIAL_CANCELLATION_FEE_HONESTY_CODE);
-  assert.match(unset.message, /unset/);
-  assert.match(unset.message, /Do not invent an amount/);
-  const errors = launchHonestyCancellationFeeErrors();
-  assert.equal(errors.length, 1);
-  assert.equal(errors[0], unset.message);
+test('launch-honesty validates the founder-approved percentage-band cancellation model and rejects a flat AED amount', () => {
+  const configured = evaluateOwnerInitialCancellationFeeHonesty();
+  assert.equal(configured.ok, true);
+  assert.equal(configured.blocksHardPublicLaunch, false);
+  assert.equal(configured.code, 'OWNER_CANCELLATION_FEE_BANDS_CONFIGURED');
+  assert.deepEqual(launchHonestyCancellationFeeErrors(), []);
 
-  const set = evaluateOwnerInitialCancellationFeeHonesty(150);
-  assert.equal(set.ok, true);
-  assert.equal(set.blocksHardPublicLaunch, false);
-  assert.deepEqual(launchHonestyCancellationFeeErrors(150), []);
-  assert.equal(formatOwnerInitialCancellationFee(150).displayEn.includes('150'), true);
+  const flat = evaluateOwnerInitialCancellationFeeHonesty(150);
+  assert.equal(flat.ok, false);
+  assert.equal(flat.blocksHardPublicLaunch, true);
+  assert.equal(flat.code, 'OWNER_CANCELLATION_FEE_FLAT_AED_NOT_ALLOWED');
+  assert.match(flat.message, /flat/);
+  assert.match(flat.message, /Do not invent a flat amount/);
+  const flatErrors = launchHonestyCancellationFeeErrors(150);
+  assert.equal(flatErrors.length, 1);
+  assert.equal(flatErrors[0], flat.message);
+  assert.equal(formatOwnerInitialCancellationFee(150).set, false);
+  assert.equal(formatOwnerInitialCancellationFee(150).displayEn.includes('150'), false);
 });
 
 test('hard public launch eligibility hook and live contract/UI copy stay honest while the fee is unset', () => {
@@ -133,8 +136,8 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   assert.doesNotMatch(pdf, /شهر خدمة مجاني/);
   assert.match(commercial, /First month's management fee waived|رسوم الإدارة للشهر الأول مُعفاة/);
   assert.match(review, /First month's management fee waived|رسوم الإدارة للشهر الأول مُعفاة/);
-  assert.match(commercial, /administrative disbursement fee/);
-  assert.match(review, /administrative disbursement fee/);
+  assert.match(commercial, /Cancellation fee \(percentage of annual contract value excluding VAT/);
+  assert.match(review, /Cancellation fee \(percentage of annual contract value excluding VAT/);
   assert.match(pdf, /BIN-GROUP-OWNER-AGREEMENT-v1\.3/);
   assert.match(pdf, /Federal Law No\. 15 of 2020/);
   assert.match(pdf, /ownerPdplCopy/);
@@ -180,17 +183,19 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   assert.match(pdf, /executive instrument/);
 
   assert.equal(OFFICE_HIGH_RISE_LOGISTICS_UPLIFT_PERCENT, null);
-  assert.equal(BIN_GROUP_TRADE_LICENCE_REF, null);
+  assert.equal(BIN_GROUP_TRADE_LICENCE_REF, 'CN-5914744');
   assert.equal(BIN_GROUP_RERA_ORN_REF, null);
   assert.equal(BIN_GROUP_ADREC_REG_REF, null);
   assert.equal(OWNER_CONTRACT_AUTO_RENEWAL, false);
   assert.equal(formatOfficeHighRiseLogisticsUplift().applied, false);
   assert.match(formatOfficeHighRiseLogisticsUplift().displayEn, /to be confirmed/);
-  assert.match(ownerCancellationWindowCopy(), /administrative disbursement fee covering documented onboarding and property assessment costs/);
+  assert.match(ownerCancellationWindowCopy(), /percentage of the total annual contract value excluding VAT/);
+  assert.match(ownerCancellationWindowCopy(), /days 1–7: 0%/);
   assert.match(ownerCancellationWindowCopy(), /Draft, for UAE legal review/);
-  assert.match(ownerCancellationWindowCopy(), /including during the period when the first month's management fee is waived/);
+  assert.match(ownerCancellationWindowCopy(), /for counsel to confirm/);
+  assert.match(ownerCancellationWindowCopy(), /7-day grace period waives the cancellation penalty only/);
   assert.match(ownerCancellationFeePreSignNoticeCopy(), /first month's management fee is waived/);
-  assert.match(ownerCancellationFeePreSignNoticeCopy(), /applies within the 30-day window/);
+  assert.match(ownerCancellationFeePreSignNoticeCopy(), /7-day grace period waives the penalty only/);
   assert.match(ownerComplimentaryMonthCopy(), /first month's management fee is waived/);
   assert.match(ownerComplimentaryMonthCopy(), /13-month term/);
   assert.doesNotMatch(ownerComplimentaryMonthCopy(), /complimentary|free month/i);
@@ -201,7 +206,7 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   assert.match(ownerMobilisationRefundCopy(), /Ejari \/ Tawtheeq setup/);
   assert.match(ownerMobilisationRefundCopy(), /compliance checks/);
   assert.match(ownerMobilisationRefundCopy(), /unearned balance/);
-  assert.match(ownerMobilisationRefundCopy(), /Rashid/);
+  assert.match(ownerMobilisationRefundCopy(), /7-day cancellation-fee grace does not waive payment for verifiable mobilisation work already done/);
   assert.match(ownerGoverningLawJurisdictionCopy(), /Tenancy disputes/);
   assert.match(ownerGoverningLawJurisdictionCopy(), /courts of the Emirate where the Property is physically located/);
   assert.match(ownerGoverningLawJurisdictionCopy(), /Rental Disputes Settlement Centre/);
@@ -211,10 +216,13 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   assert.match(ownerLanguagePrecedenceCopy(), /Arabic version shall prevail/);
   assert.doesNotMatch(ownerLanguagePrecedenceCopy(), /English text shall prevail|English version shall prevail/);
   assert.match(ownerVatTreatmentCopy(), /exclusive of 5% UAE VAT/);
-  assert.match(ownerVatTreatmentCopy(), /VAT not applied/);
+  assert.match(ownerVatTreatmentCopy(), /Commercial Invoice/);
+  assert.match(ownerVatTreatmentCopy(), /must not be titled “Tax Invoice”/);
+  assert.match(ownerVatTreatmentCopy(), /Article 59 \(for counsel to confirm\)/);
   assert.doesNotMatch(ownerVatTreatmentCopy(), /1,500|55,000/);
   assert.match(ownerAmlCashThresholdCopy(), /PHASE1_CASH_CHEQUE_V1/);
-  assert.match(ownerAmlCashThresholdCopy(), /to be confirmed/);
+  assert.match(ownerAmlCashThresholdCopy(), /AED 50,000/);
+  assert.match(ownerAmlCashThresholdCopy(), /linked\/cumulative cash payments/);
   assert.doesNotMatch(ownerAmlCashThresholdCopy(), /55,000/);
   assert.match(ownerReturnedChequeCopy(), /executive instrument/);
   assert.match(ownerReturnedChequeCopy(), /does not waive the outstanding balance/);
@@ -222,6 +230,7 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   assert.match(ownerAgencyNoGuaranteeCopy(), /does not guarantee rental yields/);
   assert.match(ownerEmergencyRepairCopy(), /HVAC or water-leak/);
   assert.match(ownerEmergencyRepairCopy(), /to be confirmed/);
+  assert.match(ownerEmergencyRepairCopy(), /never suspended without separate written notice/);
   assert.match(ownerEmergencyRepairCopy(), /AI systems may never approve/);
   assert.doesNotMatch(ownerEmergencyRepairCopy(), /1,500|2,500/);
   assert.match(ownerPdplCopy(), /separate opt-in/);
@@ -234,6 +243,64 @@ test('hard public launch eligibility hook and live contract/UI copy stay honest 
   for (const fn of [ownerGoverningLawJurisdictionCopy, ownerLanguagePrecedenceCopy, ownerPdplCopy, ownerDecennialAndMollakCopy, ownerLicenceBlockCopy, ownerMobilisationRefundCopy, ownerComplimentaryMonthCopy, ownerCancellationWindowCopy, ownerVatTreatmentCopy, ownerAmlCashThresholdCopy, ownerReturnedChequeCopy, ownerAgencyNoGuaranteeCopy, ownerEmergencyRepairCopy, ownerCancellationFeePreSignNoticeCopy]) {
     assert.match(fn(true), /مسودة، للمراجعة القانونية في دولة الإمارات/);
   }
+});
+
+
+test('cancellation fee bands compute from days since activation against annual contract value excluding VAT', async () => {
+  const {
+    computeOwnerCancellationFeeAed,
+    cashPaymentWouldExceedCap,
+    invoiceDocumentTitle,
+    requiresFullArticle59TaxInvoice,
+    taxInvoiceIssuanceDeadlineIso,
+    OWNER_CANCELLATION_FEE_BANDS,
+    BIN_GROUP_LEGAL_ENTITY_NAME,
+    BIN_GROUP_TRADE_LICENCE_EMIRATE,
+  } = await import('../../scripts/lib/owner-initial-contract-policy.mjs');
+
+  assert.deepEqual(OWNER_CANCELLATION_FEE_BANDS.map((band) => [band.fromDayInclusive, band.toDayInclusive, band.percent]), [
+    [1, 7, 0], [8, 90, 4], [91, 180, 6], [181, 270, 8], [271, null, 10],
+  ]);
+  const annual = 100000;
+  const cases = [
+    [1, 0, 0, true],
+    [7, 0, 0, true],
+    [8, 4, 4000, false],
+    [90, 4, 4000, false],
+    [91, 6, 6000, false],
+    [180, 6, 6000, false],
+    [181, 8, 8000, false],
+    [270, 8, 8000, false],
+    [271, 10, 10000, false],
+    [400, 10, 10000, false],
+  ];
+  for (const [day, percent, fee, waived] of cases) {
+    const result = computeOwnerCancellationFeeAed(annual, day);
+    assert.equal(result.percent, percent, `day ${day}`);
+    assert.equal(result.feeAed, fee, `day ${day} fee`);
+    assert.equal(result.penaltyWaived, waived, `day ${day} waived`);
+    assert.equal(result.mobilisationWorkRemainsPayable, true);
+    assert.equal(result.basis, 'TOTAL_ANNUAL_CONTRACT_VALUE_EXCLUDING_VAT');
+  }
+  assert.equal(computeOwnerCancellationFeeAed(1725.5, 8).feeAed, 69.02);
+
+  assert.equal(cashPaymentWouldExceedCap({ amountAed: 50000, recordedCashAed: 0 }), false);
+  assert.equal(cashPaymentWouldExceedCap({ amountAed: 0.01, recordedCashAed: 50000 }), true);
+  assert.equal(cashPaymentWouldExceedCap({ amountAed: 20000, recordedCashAed: 30000 }), false);
+  assert.equal(cashPaymentWouldExceedCap({ amountAed: 20000.01, recordedCashAed: 30000 }), true);
+
+  assert.equal(invoiceDocumentTitle(false), 'Commercial Invoice / فاتورة تجارية');
+  assert.equal(invoiceDocumentTitle(true), 'Tax Invoice / فاتورة ضريبية');
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: false, isB2B: true, taxableAmountAed: 20000 }), false);
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: true, isB2B: true, taxableAmountAed: 10000 }), false);
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: true, isB2B: true, taxableAmountAed: 10000.01 }), true);
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: true, isB2B: false, taxableAmountAed: 20000 }), false);
+  const deadline = taxInvoiceIssuanceDeadlineIso('2026-11-12T00:00:00.000Z', new Date('2026-11-12T00:00:00.000Z'));
+  assert.equal(deadline.issuanceDays, 14);
+  assert.equal(deadline.overdue, false);
+  assert.equal(BIN_GROUP_LEGAL_ENTITY_NAME, 'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C');
+  assert.equal(BIN_GROUP_TRADE_LICENCE_EMIRATE, 'Abu Dhabi');
+  assert.match(ownerLicenceBlockCopy(), /CN-5914744, Abu Dhabi/);
 });
 
 test('commercial line items total the same annual value the quote engine already produces', async () => {

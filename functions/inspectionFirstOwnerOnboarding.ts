@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertCashWithinPropertyContractCap } from "./ownerCashCap";
 import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import * as crypto from "crypto";
@@ -813,6 +814,14 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!activeConfiguration.approvedMethods.includes(method)) {
     throw new HttpsError("failed-precondition", `The active corporate payment configuration does not approve ${method}.`);
   }
+  await assertCashWithinPropertyContractCap({
+    db,
+    method,
+    amountAed: Number(payment.amount || payment.activationDeposit || 0),
+    contractId: text(payment.contractId || payment.intakeId || paymentId),
+    propertyId: text(payment.propertyId || (Array.isArray(payment.propertyIds) ? payment.propertyIds[0] : "")),
+    excludePaymentIds: [paymentId],
+  });
   const ownerUid = text(payment.ownerUid || payment.ownerId);
   const intakeId = text(payment.intakeId || paymentId);
   // F-5: payment evidence is legal only after the Owner's final signature (or to replace

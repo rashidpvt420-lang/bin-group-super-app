@@ -14,6 +14,7 @@ import {
   ownerAgencyNoGuaranteeCopy,
   ownerAmlCashThresholdCopy,
   ownerCancellationFeePreSignNoticeCopy,
+  BIN_GROUP_LEGAL_ENTITY_NAME,
   ownerComplimentaryMonthCopy,
   ownerDecennialAndMollakCopy,
   ownerEmergencyRepairCopy,
@@ -141,7 +142,7 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
       <Paper sx={{ p: { xs: 2, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.65)', border: '1px solid rgba(255,255,255,0.06)', mb: 4 }}>
         <Box sx={{ bgcolor: '#FFF', color: '#000', p: { xs: 2.5, md: 4 }, borderRadius: 2, mb: 4, position: 'relative', overflow: 'hidden', maxHeight: 760, overflowY: 'auto' }}>
           <ShieldCheck size={220} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.05, transform: 'rotate(-15deg)' }} />
-          <Typography variant="h5" fontWeight="950" align="center" sx={{ color: binThemeTokens.gold }}>BIN GROUP L.L.C - S.P.C</Typography>
+          <Typography variant="h5" fontWeight="950" align="center" sx={{ color: binThemeTokens.gold }}>{BIN_GROUP_LEGAL_ENTITY_NAME}</Typography>
           <Typography variant="subtitle2" align="center" fontWeight="950">OWNER PROPERTY SERVICE APPLICATION</Typography>
           <Typography variant="caption" align="center" display="block" color="text.secondary">طلب خدمات عقار المالك</Typography>
           <Typography variant="caption" align="center" display="block" color="text.secondary" sx={{ mb: 3 }}>Version: {agreementVersion}</Typography>

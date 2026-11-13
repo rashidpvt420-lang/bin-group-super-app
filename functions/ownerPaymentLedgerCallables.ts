@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertCashWithinPropertyContractCap } from "./ownerCashCap";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as crypto from "crypto";
 import { generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
@@ -298,6 +299,15 @@ export const adminRecordReplacementInvoicePayment = onCall({ cors: true, enforce
     const reopened = text(invoice.receiptState).toUpperCase() === "REVERSED" || text(invoice.feeType).toUpperCase() === "RETURNED_CHEQUE_FEE";
     if (!reopened) throw new HttpsError("failed-precondition", "Replacement payments apply only to a reopened (returned-cheque) invoice or a returned-cheque fee.");
     if (invoice.replacementPayment) throw new HttpsError("failed-precondition", "A replacement payment is already recorded on this invoice.");
+    await assertCashWithinPropertyContractCap({
+      db,
+      reader: transaction,
+      method,
+      amountAed: Number(invoice.amount || 0),
+      contractId: text(invoice.contractId || invoice.intakeId),
+      propertyId: text(invoice.propertyId),
+      excludePaymentIds: [invoiceId],
+    });
     transaction.set(invoiceRef, {
       replacementPayment: { method, chequeDetails, reference, amount: Number(invoice.amount || 0), recordedBy: actor.uid, recordedAt: new Date().toISOString(), verifiedAt: null, verifiedBy: null },
       updatedAt: FieldValue.serverTimestamp(),

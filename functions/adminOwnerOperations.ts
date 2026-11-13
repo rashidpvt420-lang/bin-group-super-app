@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { enqueueContractAcceptanceAudit, clientIpFromRequest, deviceIdFromRequest } from "./contractAcceptanceAudit";
 import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { generateContractPdfArtifact, generateMobilizationUnpaidInvoicePdfArtifact } from "./pdfEngine";
@@ -746,6 +747,15 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           updatedAt: ts(),
         }, { merge: true });
       }
+      enqueueContractAcceptanceAudit(transaction, db, {
+        uid: request.auth!.uid,
+        contractId,
+        termsVersion: "BIN-GROUP-OWNER-AGREEMENT-v1.3",
+        acceptedTermsSha256: String(pdfArtifact.pdfSha256 || contractHash),
+        ip: clientIpFromRequest(request),
+        deviceId: deviceIdFromRequest(request),
+        path: "ownerSignContractAndQueuePdf",
+      });
       transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAIL_QUEUED", ownerSignedAt: ts(), pdfUrl, pdfSha256: pdfArtifact.pdfSha256, storagePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, canonicalPdfSource: "SERVER_PDF_ENGINE", updatedAt: ts() }, { merge: true });
       const propertyIds = Array.isArray(freshContract.propertyIds) ? freshContract.propertyIds : [freshContract.propertyId].filter(Boolean);
       propertyIds.forEach((propertyId: string) => {

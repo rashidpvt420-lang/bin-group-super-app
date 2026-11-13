@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertCashWithinPropertyContractCap } from "./ownerCashCap";
 import * as admin from "firebase-admin";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
@@ -61,6 +62,16 @@ export const ownerRecordRentPayment = onCall(
     if (!PHASE1_RENT_PAYMENT_METHODS.has(paymentMethod)) {
       throw new HttpsError("failed-precondition", "Phase 1 rent payment records support Cash and Cheque only.");
     }
+    const propertySnapForCap = await db.collection("properties").doc(propertyId).get();
+    const propertyForCap = propertySnapForCap.data() || {};
+    await assertCashWithinPropertyContractCap({
+      db,
+      method: paymentMethod,
+      amountAed: rentPaid,
+      contractId: text(propertyForCap.contractId || propertyForCap.activeContractId || request.data?.contractId, 160),
+      propertyId,
+      excludePaymentIds: [requestedRecordId],
+    });
     if (!referenceFilePath || !/^[a-f0-9]{64}$/.test(referenceFileHash)) {
       throw new HttpsError("failed-precondition", "An immutable uploaded rent receipt is required.");
     }

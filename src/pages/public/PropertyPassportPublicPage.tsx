@@ -99,7 +99,7 @@ export default function PropertyPassportPublicPage() {
           <Container maxWidth="md">
             <Stack direction="row" justifyContent="center" alignItems="center" spacing={1.5} flexWrap="wrap">
               <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px #22C55E' }} />
-              <Typography sx={{ color: alpha('#fff', 0.7), fontSize: '0.72rem', fontWeight: 800 }}>BIN GROUP · All Kind Building Projects Contracting LLC S.P.C</Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), fontSize: '0.72rem', fontWeight: 800 }}>All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C</Typography>
               <Typography sx={{ color: alpha(gold, 0.5), fontSize: '0.7rem' }}>·</Typography>
               <Typography sx={{ color: alpha(gold, 0.75), fontSize: '0.72rem', fontWeight: 800 }}>Rooted in Al Ain, UAE</Typography>
             </Stack>
@@ -214,7 +214,7 @@ export default function PropertyPassportPublicPage() {
             <Award size={28} color={gold} />
             <Typography variant="h6" fontWeight={950} sx={{ color: gold, mt: 1.5 }}>Managed by BIN GROUP</Typography>
             <Typography variant="body2" sx={{ color: alpha('#fff', 0.5), mt: 0.5, mb: 2 }}>
-              All Kind Building Projects Contracting LLC S.P.C · Licensed in Abu Dhabi, UAE
+              All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C · Trade licence CN-5914744, Abu Dhabi
             </Typography>
             <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap">
               <Stack direction="row" spacing={0.8} alignItems="center">

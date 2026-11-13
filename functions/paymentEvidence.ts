@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertCashWithinPropertyContractCap } from "./ownerCashCap";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -204,6 +205,15 @@ export const submitTenantPaymentProof = onCall(
 
     const paymentId = `tenant_${tenantId}_${submissionId}`;
     const paymentRef = db.collection("payment_transactions").doc(paymentId);
+    const rentContractId = text(unit.contractId || unit.activeContractId || profile.contractId || profile.activeContractId, 160);
+    await assertCashWithinPropertyContractCap({
+      db,
+      method: paymentMethod,
+      amountAed: amount,
+      contractId: rentContractId || null,
+      propertyId,
+      excludePaymentIds: [paymentId],
+    });
     const receiptRegistryRef = db.collection("tenant_receipt_registry").doc(receiptHash);
     const auditRef = db.collection("audit_logs").doc(`tenant_payment_${tenantId}_${submissionId}`);
     const now = FieldValue.serverTimestamp();

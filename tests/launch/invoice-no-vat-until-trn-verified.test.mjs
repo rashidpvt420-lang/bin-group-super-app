@@ -61,6 +61,23 @@ test('the live invoice page takes its totals and TRN from the gated config, not 
   assert.match(source, /import \{ BIN_GROUP_VAT_REGISTRATION, invoiceTotals \} from '\.\.\/utils\/uaeVat\.mjs';/);
   assert.match(source, /= invoiceTotals\(lineNet\);/);
   assert.doesNotMatch(source, /aedTotalWithVat|\* 0\.05|UAE-VAT-CERTIFIED/);
-  assert.match(source, /vatApplied \? 'TAX INVOICE \/ فاتورة ضريبية' : 'INVOICE \/ فاتورة'/);
+  assert.match(source, /invoiceDocumentTitle\(vatApplied\)/);
+  assert.doesNotMatch(source, /'INVOICE \/ فاتورة'/);
+  assert.match(source, /Commercial Invoice, not a Tax Invoice/);
+  assert.match(source, /subject to 5% VAT collected once a TRN is issued/);
   assert.match(source, /vatApplied \? t\('common\.vat_5'\) : 'VAT: not applied \(TRN pending verification\)/);
+});
+
+import { invoiceDocumentTitle, requiresFullArticle59TaxInvoice, taxInvoiceIssuanceDeadlineIso } from '../../scripts/lib/owner-initial-contract-policy.mjs';
+
+test('pre-TRN invoices are commercial invoices; Article 59 tax-invoice fields apply only behind a verified TRN (for counsel to confirm)', () => {
+  assert.equal(invoiceDocumentTitle(false), 'Commercial Invoice / فاتورة تجارية');
+  assert.doesNotMatch(invoiceDocumentTitle(false), /Tax Invoice|فاتورة ضريبية/i);
+  assert.equal(invoiceDocumentTitle(true), 'Tax Invoice / فاتورة ضريبية');
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: false, isB2B: true, taxableAmountAed: 50000 }), false);
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: true, isB2B: true, taxableAmountAed: 10000 }), false);
+  assert.equal(requiresFullArticle59TaxInvoice({ vatApplied: true, isB2B: true, taxableAmountAed: 10000.01 }), true);
+  const deadline = taxInvoiceIssuanceDeadlineIso(new Date('2026-11-01T00:00:00.000Z'), new Date('2026-11-10T00:00:00.000Z'));
+  assert.equal(deadline.issuanceDays, 14);
+  assert.equal(deadline.overdue, false);
 });

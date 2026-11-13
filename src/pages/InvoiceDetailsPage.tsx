@@ -13,6 +13,7 @@ import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 import { BIN_GROUP_VAT_REGISTRATION, invoiceTotals } from '../utils/uaeVat.mjs';
+import { invoiceDocumentTitle, UAE_VAT_ARTICLE_59_CITATION_NOTE, requiresFullArticle59TaxInvoice } from '../utils/ownerInitialContractPolicy';
 import Bi from '../components/Bi';
 
 const formatInvoiceAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
@@ -120,7 +121,7 @@ export default function InvoiceDetailsPage() {
         <Container maxWidth="lg" sx={{ py: 10 }}>
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>{vatApplied ? 'TAX INVOICE / فاتورة ضريبية' : 'INVOICE / فاتورة'}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>{invoiceDocumentTitle(vatApplied)}</Typography>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{invoice.id}</Typography>
                     <Chip
                         label={String(invoice.status || invoice.paymentStatus || 'PENDING').toUpperCase()}
@@ -264,7 +265,9 @@ export default function InvoiceDetailsPage() {
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(total)} AED</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{vatApplied ? t('common.vat_5') : 'VAT: not applied (TRN pending verification) / ضريبة القيمة المضافة: غير مطبقة'}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{vatApplied ? t('common.vat_5') : 'VAT: not applied (TRN pending verification). This is a Commercial Invoice, not a Tax Invoice. Prices are subject to 5% VAT collected once a TRN is issued. / ضريبة القيمة المضافة: غير مطبقة'}</Typography>
+                                {vatApplied ? <Typography variant="caption" sx={{ display: 'block', mt: 1, color: binThemeTokens.textSecondary }}>{requiresFullArticle59TaxInvoice({ vatApplied, isB2B: true, taxableAmountAed: lineNet }) ? 'Full Article 59 tax-invoice fields apply for this B2B supply above AED 10,000 (for counsel to confirm).' : 'Simplified Article 59 tax-invoice fields apply (for counsel to confirm).'} Issuance deadline: 14 days. {UAE_VAT_ARTICLE_59_CITATION_NOTE}</Typography> : null}
+
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(vat)} AED</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />
