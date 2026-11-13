@@ -43,12 +43,14 @@ export function cashRecordAmountAed(payment: Record<string, unknown> | undefined
 }
 
 async function sumQueryCash(
-  reader: Reader,
+  reader: Reader | Transaction | undefined | null,
   query: Query,
   seen: Set<string>,
   excludePaymentIds: Set<string>,
 ): Promise<number> {
-  const snap = await reader.get(query);
+  const snap = reader && typeof (reader as { get?: unknown }).get === "function"
+    ? await (reader as Transaction | Reader).get(query)
+    : await query.get();
   let total = 0;
   for (const doc of snap.docs) {
     if (seen.has(doc.id) || excludePaymentIds.has(doc.id)) continue;
@@ -66,7 +68,7 @@ async function sumQueryCash(
  */
 export async function sumRecordedCashAedForPropertyContract(
   db: Firestore,
-  reader: Reader | Transaction,
+  reader: Reader | Transaction | undefined | null,
   opts: {
     contractId?: string | null;
     propertyId?: string | null;
@@ -104,8 +106,8 @@ export async function assertCashWithinPropertyContractCap(args: {
   if (!isCashPaymentMethod(args.method)) {
     return { recordedCashAed: 0, capAed };
   }
-  const reader = args.reader || args.db;
-  const recordedCashAed = await sumRecordedCashAedForPropertyContract(args.db, reader as Reader, {
+  const reader = args.reader || null;
+  const recordedCashAed = await sumRecordedCashAedForPropertyContract(args.db, reader, {
     contractId: args.contractId,
     propertyId: args.propertyId,
     excludePaymentIds: args.excludePaymentIds,
