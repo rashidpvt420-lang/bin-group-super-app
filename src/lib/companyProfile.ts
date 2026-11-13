@@ -30,7 +30,7 @@ export const COMPANY_PROFILE_DOC_PATH = ['settings', 'companyProfile'] as const;
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   companyName: 'BIN GROUP - UAE General Maintenance, Property Management & Workforce OS',
-  licenseInfo: 'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C | Trade licence CN-5914744, Abu Dhabi | UAE maintenance, property management, digital property-care operations, paperless staff self-service, and workforce compliance operating model',
+  licenseInfo: 'All Kind Building Projects Contracting L.L.C S.P.C, trading as BIN GROUP L.L.C - S.P.C | Trade licence CN-5914744 (issued 2025), Abu Dhabi | UAE maintenance, property management, digital property-care operations, paperless staff self-service, and workforce compliance operating model',
   headline: 'BIN GROUP is a UAE maintenance and property management company rooted in Al Ain, now operating through a formally licensed LLC structure and building a trusted digital property-care and paperless staff operations platform.',
   mission: 'To deliver dependable maintenance and property management services that protect clients\' properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
   vision: 'To become a trusted UAE property-care company starting from Al Ain, known for reliable maintenance, transparent property management, smart digital operations, paperless staff workflows, and long-term client relationships.',

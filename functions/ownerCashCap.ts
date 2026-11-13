@@ -1,4 +1,5 @@
 import { HttpsError } from "firebase-functions/v2/https";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import type { Firestore, Query, Transaction } from "firebase-admin/firestore";
 import {
   OWNER_CASH_ACCEPTANCE_THRESHOLD_AED,

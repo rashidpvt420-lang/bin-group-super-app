@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
 import { assertCashWithinPropertyContractCap } from "./ownerCashCap";
 import * as crypto from "crypto";
 import {
@@ -435,12 +436,14 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
     }
 
     await assertCurrentPaymentConfiguration(data);
+    const db = admin.firestore();
+    const firstPropertyId = Array.isArray(data.properties) && data.properties[0]?.id ? String(data.properties[0].id) : null;
     await assertCashWithinPropertyContractCap({
       db,
       method: data.paymentManifest.method || data.paymentMethod,
       amountAed: money(data.paymentManifest.activationDeposit || data.paymentManifest.amount || data.amount),
-      contractId: data.contractId || data.intakeId || data.paymentId || null,
-      propertyId: data.propertyId || (Array.isArray(data.propertyIds) ? data.propertyIds[0] : null),
+      contractId: data.intakeId || null,
+      propertyId: firstPropertyId,
     });
     return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });
   },

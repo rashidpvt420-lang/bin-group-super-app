@@ -104,7 +104,7 @@ export const createDesignPaymentRequest = onCall(options, async (request) => {
       reader: transaction,
       method,
       amountAed: Number(s.terms.amount || 0),
-      contractId: s.design.contractId || s.terms.contractId || null,
+      contractId: s.design.contractId || null,
       propertyId: s.design.propertyId || null,
       excludePaymentIds: [s.paymentRef.id],
     });

@@ -750,7 +750,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       enqueueContractAcceptanceAudit(transaction, db, {
         uid: request.auth!.uid,
         contractId,
-        termsVersion: String(termFields?.agreementVersion || termFields?.termsVersion || "BIN-GROUP-OWNER-AGREEMENT-v1.3"),
+        termsVersion: "BIN-GROUP-OWNER-AGREEMENT-v1.3",
         acceptedTermsSha256: String(pdfArtifact.pdfSha256 || contractHash),
         ip: clientIpFromRequest(request),
         deviceId: deviceIdFromRequest(request),
