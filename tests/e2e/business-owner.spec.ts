@@ -119,6 +119,12 @@ async function login(page: Page) {
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
+    const now = new Date().toISOString();
+    localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', now);
+    localStorage.setItem('bin_pdpl_consent', 'true');
+    localStorage.setItem('bin_legal_processing_consent', 'true');
+    localStorage.setItem('bin_legal_retention_consent', 'true');
+    localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
   });
   await page.goto(`/login?intendedRole=owner&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
@@ -132,22 +138,32 @@ async function login(page: Page) {
 }
 
 async function acceptLegalAgreementIfRequired(page: Page) {
-  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT|Legal terms|الشروط القانونية/i }).first();
   if (!await agreement.isVisible({ timeout: 5_000 }).catch(() => false)) return;
 
   const content = agreement.getByTestId('legal-agreement-content');
   await expect(content, 'Owner legal agreement must expose its scrollable content').toBeVisible({ timeout: 10_000 });
   const agree = agreement.getByTestId('legal-agreement-accept');
-  await expect(agree).toHaveAccessibleName(/I AGREE & ENTER/i);
+  await expect(agree).toHaveAccessibleName(/I AGREE & ENTER|I agree|أوافق/i);
+
+  for (const testId of ['legal-consent-processing', 'legal-consent-retention', 'legal-consent-cross-border-ai']) {
+    const cb = agreement.getByTestId(testId);
+    if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (!await cb.isChecked().catch(() => false)) {
+        await cb.check().catch(() => cb.click().catch(() => undefined));
+      }
+    }
+  }
+
   await expect.poll(async () => {
     // Fonts and responsive Dialog layout can change the scroll height after the
     // first synthetic scroll. Re-apply the real end position until React has
     // observed the final layout instead of racing one fire-and-forget event.
-    await agreement.getByTestId('legal-agreement-end').scrollIntoViewIfNeeded();
+    await agreement.getByTestId('legal-agreement-end').scrollIntoViewIfNeeded().catch(() => undefined);
     await content.evaluate((node) => {
       node.scrollTop = node.scrollHeight;
       node.dispatchEvent(new Event('scroll', { bubbles: true }));
-    });
+    }).catch(() => undefined);
     return agree.isEnabled().catch(() => false);
   }, {
     timeout: 20_000,
@@ -156,7 +172,7 @@ async function acceptLegalAgreementIfRequired(page: Page) {
   }).toBe(true);
   await agree.click();
   await expect(agreement).not.toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('body')).not.toContainText(/SOVEREIGN INSTITUTIONAL AGREEMENT/i, { timeout: 10_000 });
+  await expect(page.locator('body')).not.toContainText(/SOVEREIGN INSTITUTIONAL AGREEMENT|Legal terms|الشروط القانونية/i, { timeout: 10_000 });
 }
 
 async function expectAcquiredOwnerDashboard(page: Page) {

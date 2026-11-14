@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { LEGAL_CONSENT_VERSION } from './lib/owner-initial-contract-policy.mjs';
 
 for (const envPath of [
   path.resolve(process.cwd(), '.env.e2e'),
@@ -36,6 +37,24 @@ initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 const now = admin.firestore.FieldValue.serverTimestamp();
 const verifiedGeoAt = admin.firestore.Timestamp.now();
+
+const legalConsentFields = {
+  legalConsentVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedVersion: LEGAL_CONSENT_VERSION,
+  termsVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedAt: now,
+  legalAcceptedAtClient: new Date().toISOString(),
+  pdplCompliance: true,
+  legalProcessingConsent: true,
+  legalRetentionConsent: true,
+  legalCrossBorderAiConsent: true,
+};
+
+const technicianGpsFields = {
+  technicianGpsActiveDutyConsent: true,
+  technicianGpsActiveDutyConsentAt: now,
+  technicianGpsConsentVersion: LEGAL_CONSENT_VERSION,
+};
 
 function safeId(value) {
   return String(value || 'unknown').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -184,6 +203,7 @@ await db.collection('users').doc(ownerUid).set({
   activeContractId: contractId,
   propertyIds: [propertyId],
   e2eLaunchSeed: true,
+  ...legalConsentFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -209,6 +229,7 @@ await db.collection('owners').doc(ownerUid).set({
   activeContractId: contractId,
   propertyIds: [propertyId],
   e2eLaunchSeed: true,
+  ...legalConsentFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -325,6 +346,7 @@ await db.collection('users').doc(tenantUid).set({
   assignedUnitId: unitId,
   activeContractId: contractId,
   e2eLaunchSeed: true,
+  ...legalConsentFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -351,6 +373,7 @@ await db.collection('tenants').doc(tenantUid).set({
   assignedUnitId: unitId,
   activeContractId: contractId,
   e2eLaunchSeed: true,
+  ...legalConsentFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -368,6 +391,8 @@ await db.collection('users').doc(technicianUid).set({
   dispatchReady: true,
   approvalStatus: 'APPROVED',
   e2eLaunchSeed: true,
+  ...legalConsentFields,
+  ...technicianGpsFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -382,6 +407,8 @@ await db.collection('technicians').doc(technicianUid).set({
   primaryTrade: 'General Maintenance',
   serviceZone: 'Al Ain',
   e2eLaunchSeed: true,
+  ...legalConsentFields,
+  ...technicianGpsFields,
   updatedAt: now,
 }, { merge: true });
 
@@ -573,6 +600,42 @@ await db.collection('broker_commissions').doc(brokerCommissionId).set({
   updatedAt: now,
 }, { merge: true });
 
+await db.collection('users').doc(brokerUid).set({
+  uid: brokerUid,
+  authUid: brokerUid,
+  userId: brokerUid,
+  email: brokerEmail,
+  brokerEmail,
+  displayName: brokerUser.displayName || 'E2E Broker',
+  role: 'broker',
+  userRole: 'broker',
+  primaryRole: 'broker',
+  status: 'active',
+  approvalStatus: 'APPROVED',
+  suspended: false,
+  onboardingComplete: true,
+  e2eLaunchSeed: true,
+  ...legalConsentFields,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('brokers').doc(brokerUid).set({
+  uid: brokerUid,
+  authUid: brokerUid,
+  userId: brokerUid,
+  email: brokerEmail,
+  brokerEmail,
+  displayName: brokerUser.displayName || 'E2E Broker',
+  role: 'broker',
+  status: 'active',
+  approvalStatus: 'APPROVED',
+  suspended: false,
+  onboardingComplete: true,
+  e2eLaunchSeed: true,
+  ...legalConsentFields,
+  updatedAt: now,
+}, { merge: true });
+
 const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim().toLowerCase();
 const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
 if (techBEmail && techBPassword) {
@@ -594,6 +657,8 @@ if (techBEmail && techBPassword) {
     dispatchReady: true,
     approvalStatus: 'APPROVED',
     e2eLaunchSeed: true,
+    ...legalConsentFields,
+    ...technicianGpsFields,
     updatedAt: now,
   }, { merge: true });
   await db.collection('technicians').doc(techBUser.uid).set({
@@ -607,6 +672,8 @@ if (techBEmail && techBPassword) {
     primaryTrade: 'General Maintenance',
     serviceZone: 'Al Ain',
     e2eLaunchSeed: true,
+    ...legalConsentFields,
+    ...technicianGpsFields,
     updatedAt: now,
   }, { merge: true });
   console.log(`technicianBUid=${techBUser.uid}`);
