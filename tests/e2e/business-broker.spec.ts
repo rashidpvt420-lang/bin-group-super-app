@@ -29,13 +29,48 @@ function requireLaunchCredentials() {
   }
 }
 
+async function dismissLegalModalIfPresent(page: Page) {
+  const legalDialog = page.getByRole('dialog').filter({ hasText: /Legal terms|الشروط القانونية|SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  if (await legalDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    for (const testId of ['legal-consent-processing', 'legal-consent-retention', 'legal-consent-cross-border-ai']) {
+      const cb = legalDialog.getByTestId(testId);
+      if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+        if (!await cb.isChecked().catch(() => false)) {
+          await cb.check().catch(() => cb.click().catch(() => undefined));
+        }
+      }
+    }
+    const content = legalDialog.getByTestId('legal-agreement-content');
+    if (await content.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await content.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+        node.dispatchEvent(new Event('scroll', { bubbles: true }));
+      }).catch(() => undefined);
+    }
+    const acceptBtn = legalDialog.getByTestId('legal-agreement-accept');
+    if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
+      await acceptBtn.click().catch(() => undefined);
+      await expect(legalDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+    }
+  }
+}
+
 async function login(page: Page) {
   requireLaunchCredentials();
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => {
+    const now = new Date().toISOString();
+    localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', now);
+    localStorage.setItem('bin_pdpl_consent', 'true');
+    localStorage.setItem('bin_legal_processing_consent', 'true');
+    localStorage.setItem('bin_legal_retention_consent', 'true');
+    localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
+  });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForURL('**/broker/dashboard', { timeout: 20_000 });
+  await dismissLegalModalIfPresent(page);
 
   const identitySpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
   await expect(
@@ -121,6 +156,7 @@ test.describe('Broker Business Workflow', () => {
     await submitBrokerLead(page, uniqueLead);
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
+    await dismissLegalModalIfPresent(page);
     await waitForBrokerFinanceReady(page);
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
     await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 30_000 });

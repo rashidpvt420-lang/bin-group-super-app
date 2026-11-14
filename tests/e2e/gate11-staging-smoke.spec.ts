@@ -26,10 +26,18 @@ const forbiddenByRole: Record<RoleName, string[]> = {
 };
 
 async function acceptLegalAgreementIfRequired(page: Page) {
-  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT|Legal terms|الشروط القانونية/i }).first();
   if (!await agreement.isVisible({ timeout: 4_000 }).catch(() => false)) return;
   const content = agreement.getByTestId('legal-agreement-content');
   const agree = agreement.getByTestId('legal-agreement-accept');
+  for (const testId of ['legal-consent-processing', 'legal-consent-retention', 'legal-consent-cross-border-ai']) {
+    const cb = agreement.getByTestId(testId);
+    if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (!await cb.isChecked().catch(() => false)) {
+        await cb.check().catch(() => cb.click().catch(() => undefined));
+      }
+    }
+  }
   if (await content.isVisible().catch(() => false)) {
     await agreement.getByTestId('legal-agreement-end').scrollIntoViewIfNeeded().catch(() => undefined);
     await content.evaluate((node) => {

@@ -3,6 +3,7 @@
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { parseCsvRequired } from './lib/hard-launch-control.mjs';
+import { LEGAL_CONSENT_VERSION } from './lib/owner-initial-contract-policy.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
@@ -115,6 +116,17 @@ const technicianReadiness = {
   gpsMaxAgeMs: 60 * 60 * 1000,
   activeJobCount: 0,
   maxConcurrentJobs: 10,
+  legalConsentVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedVersion: LEGAL_CONSENT_VERSION,
+  termsVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedAt: verifiedAt,
+  pdplCompliance: true,
+  legalProcessingConsent: true,
+  legalRetentionConsent: true,
+  legalCrossBorderAiConsent: true,
+  technicianGpsActiveDutyConsent: true,
+  technicianGpsActiveDutyConsentAt: verifiedAt,
+  technicianGpsConsentVersion: LEGAL_CONSENT_VERSION,
   protectedFiveRoleEvidenceReady: true,
   protectedFiveRoleEvidenceRunId: text(process.env.GITHUB_RUN_ID),
   updatedAt: serverNow,

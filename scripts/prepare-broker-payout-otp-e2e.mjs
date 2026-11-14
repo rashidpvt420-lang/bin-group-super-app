@@ -8,6 +8,7 @@ import {
   BROKER_COMMISSION_SCAN_LIMIT,
   isStaleSyntheticBrokerCommission,
 } from './lib/broker-e2e-fixture-isolation.mjs';
+import { LEGAL_CONSENT_VERSION } from './lib/owner-initial-contract-policy.mjs';
 
 for (const envPath of [
   path.resolve(process.cwd(), '.env.e2e'),
@@ -88,6 +89,14 @@ batch.set(profileRef, {
   ibanVerified: true,
   approvedSubmissionHash: submissionHash,
   payoutOtpE2eReady: true,
+  legalConsentVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedVersion: LEGAL_CONSENT_VERSION,
+  termsVersion: LEGAL_CONSENT_VERSION,
+  legalAcceptedAt: now,
+  pdplCompliance: true,
+  legalProcessingConsent: true,
+  legalRetentionConsent: true,
+  legalCrossBorderAiConsent: true,
   updatedAt: now,
 }, { merge: true });
 

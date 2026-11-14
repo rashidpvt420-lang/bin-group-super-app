@@ -125,6 +125,47 @@ async function hasCurrentProductionPushToken(userId: string, notOlderThanMs: num
   };
 }
 
+async function dismissLegalAndGpsModalsIfPresent(page: Page) {
+  const legalDialog = page.getByRole('dialog').filter({ hasText: /Legal terms|الشروط القانونية|SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  if (await legalDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    for (const testId of ['legal-consent-processing', 'legal-consent-retention', 'legal-consent-cross-border-ai']) {
+      const cb = legalDialog.getByTestId(testId);
+      if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+        if (!await cb.isChecked().catch(() => false)) {
+          await cb.check().catch(() => cb.click().catch(() => undefined));
+        }
+      }
+    }
+    const content = legalDialog.getByTestId('legal-agreement-content');
+    if (await content.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await content.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+        node.dispatchEvent(new Event('scroll', { bubbles: true }));
+      }).catch(() => undefined);
+    }
+    const acceptBtn = legalDialog.getByTestId('legal-agreement-accept');
+    if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
+      await acceptBtn.click().catch(() => undefined);
+      await expect(legalDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+    }
+  }
+
+  const gpsDialog = page.getByRole('dialog').filter({ hasText: /Technician location consent|موافقة موقع الفني/i }).first();
+  if (await gpsDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    const cb = gpsDialog.getByTestId('technician-gps-consent');
+    if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (!await cb.isChecked().catch(() => false)) {
+        await cb.check().catch(() => cb.click().catch(() => undefined));
+      }
+    }
+    const acceptBtn = gpsDialog.getByTestId('technician-gps-consent-accept');
+    if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
+      await acceptBtn.click().catch(() => undefined);
+      await expect(gpsDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+    }
+  }
+}
+
 async function login(page: Page) {
   requireLaunchCredentials();
   await page.context().clearCookies();
@@ -132,12 +173,21 @@ async function login(page: Page) {
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
+    const now = new Date().toISOString();
+    localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', now);
+    localStorage.setItem('bin_pdpl_consent', 'true');
+    localStorage.setItem('bin_legal_processing_consent', 'true');
+    localStorage.setItem('bin_legal_retention_consent', 'true');
+    localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
+    localStorage.setItem('bin_technician_gps_active_duty_consent', 'true');
+    localStorage.setItem('bin_gps_consent', 'true');
   });
   await page.goto(`/login?intendedRole=technician&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForURL('**/technician/dashboard', { timeout: 25_000 });
+  await dismissLegalAndGpsModalsIfPresent(page);
   await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|identity fault/i, { timeout: 10_000 });
 }
 
@@ -246,6 +296,16 @@ test.describe('Technician Business Workflow', () => {
       gpsMaxAgeMs: 60 * 60 * 1000,
       activeJobCount: 0,
       maxConcurrentJobs: 10,
+      legalConsentVersion: 'legal-review-2026-11-12',
+      legalAcceptedVersion: 'legal-review-2026-11-12',
+      termsVersion: 'legal-review-2026-11-12',
+      pdplCompliance: true,
+      legalProcessingConsent: true,
+      legalRetentionConsent: true,
+      legalCrossBorderAiConsent: true,
+      technicianGpsActiveDutyConsent: true,
+      technicianGpsActiveDutyConsentAt: admin.firestore.Timestamp.now(),
+      technicianGpsConsentVersion: 'legal-review-2026-11-12',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     await Promise.all([

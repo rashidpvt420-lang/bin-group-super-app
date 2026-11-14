@@ -62,6 +62,47 @@ function initializeAdminSdk() {
   admin.initializeApp({ projectId });
 }
 
+async function dismissModalsIfPresent(page: Page) {
+  const legalDialog = page.getByRole('dialog').filter({ hasText: /Legal terms|الشروط القانونية|SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  if (await legalDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    for (const testId of ['legal-consent-processing', 'legal-consent-retention', 'legal-consent-cross-border-ai']) {
+      const cb = legalDialog.getByTestId(testId);
+      if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+        if (!await cb.isChecked().catch(() => false)) {
+          await cb.check().catch(() => cb.click().catch(() => undefined));
+        }
+      }
+    }
+    const content = legalDialog.getByTestId('legal-agreement-content');
+    if (await content.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await content.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+        node.dispatchEvent(new Event('scroll', { bubbles: true }));
+      }).catch(() => undefined);
+    }
+    const acceptBtn = legalDialog.getByTestId('legal-agreement-accept');
+    if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
+      await acceptBtn.click().catch(() => undefined);
+      await expect(legalDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+    }
+  }
+
+  const gpsDialog = page.getByRole('dialog').filter({ hasText: /Technician location consent|موافقة موقع الفني/i }).first();
+  if (await gpsDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    const cb = gpsDialog.getByTestId('technician-gps-consent');
+    if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (!await cb.isChecked().catch(() => false)) {
+        await cb.check().catch(() => cb.click().catch(() => undefined));
+      }
+    }
+    const acceptBtn = gpsDialog.getByTestId('technician-gps-consent-accept');
+    if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
+      await acceptBtn.click().catch(() => undefined);
+      await expect(gpsDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+    }
+  }
+}
+
 async function login(page: Page, role: 'tenant' | 'technician', email: string, password: string) {
   await page.context().clearCookies();
   await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
@@ -69,11 +110,15 @@ async function login(page: Page, role: 'tenant' | 'technician', email: string, p
     localStorage.clear();
     sessionStorage.clear();
     const now = new Date().toISOString();
-    localStorage.setItem('bin_legal_terms_accepted_v7_1', now);
+    localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', now);
     if (loginEmail) {
-      localStorage.setItem(`bin_legal_terms_accepted_v7_1_${loginEmail.toLowerCase()}`, now);
+      localStorage.setItem(`bin_legal_terms_accepted_legal-review-2026-11-12_${loginEmail.toLowerCase()}`, now);
     }
     localStorage.setItem('bin_pdpl_consent', 'true');
+    localStorage.setItem('bin_legal_processing_consent', 'true');
+    localStorage.setItem('bin_legal_retention_consent', 'true');
+    localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
+    localStorage.setItem('bin_technician_gps_active_duty_consent', 'true');
     localStorage.setItem('bin_gps_consent', 'true');
   }, email);
   await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
@@ -95,6 +140,7 @@ async function login(page: Page, role: 'tenant' | 'technician', email: string, p
   await submitButton.click();
 
   await page.waitForURL(`**/${role}/dashboard`, { timeout: 30_000 });
+  await dismissModalsIfPresent(page);
   await expect(page.locator('body')).not.toContainText(
     /Network|SOVEREIGN_FAILURE|System Interruption|Minified React error|permission-denied/i,
     { timeout: 10_000 },
@@ -284,6 +330,19 @@ async function assignToProtectedTechnician(ticketId: string) {
     updatedBy: 'PROTECTED_E2E_DISPATCH_FIXTURE',
     updatedByRole: 'system',
     e2eRunMarker: RUN_MARKER,
+  }, { merge: true });
+
+  await db.collection('users').doc(technicianUid).set({
+    technicianGpsActiveDutyConsent: true,
+    technicianGpsActiveDutyConsentAt: admin.firestore.FieldValue.serverTimestamp(),
+    technicianGpsConsentVersion: 'legal-review-2026-11-12',
+    legalConsentVersion: 'legal-review-2026-11-12',
+    legalAcceptedVersion: 'legal-review-2026-11-12',
+    termsVersion: 'legal-review-2026-11-12',
+    pdplCompliance: true,
+    legalProcessingConsent: true,
+    legalRetentionConsent: true,
+    legalCrossBorderAiConsent: true,
   }, { merge: true });
 
   await expect.poll(async () => {
@@ -717,6 +776,13 @@ test.describe('Tenant Business Workflow', () => {
         status: 'active',
         approvalStatus: 'approved',
         suspended: false,
+        legalConsentVersion: 'legal-review-2026-11-12',
+        legalAcceptedVersion: 'legal-review-2026-11-12',
+        termsVersion: 'legal-review-2026-11-12',
+        pdplCompliance: true,
+        legalProcessingConsent: true,
+        legalRetentionConsent: true,
+        legalCrossBorderAiConsent: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true }),
       db.collection('tenants').doc(tenantUid).set({
