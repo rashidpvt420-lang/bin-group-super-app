@@ -57,7 +57,17 @@ async function run() {
     email: tenantEmail,
     role: "TENANT",
     status: "ACTIVE",
-    displayName: userRecord.displayName || "E2E Tenant"
+    displayName: userRecord.displayName || "E2E Tenant",
+    legalConsentVersion: 'legal-review-2026-11-12',
+    legalAcceptedVersion: 'legal-review-2026-11-12',
+    termsVersion: 'legal-review-2026-11-12',
+    legalAcceptedAt: new Date().toISOString(),
+    legalAcceptedAtClient: new Date().toISOString(),
+    pdplCompliance: true,
+    pdplConsent: true,
+    legalProcessingConsent: true,
+    legalRetentionConsent: true,
+    legalCrossBorderAiConsent: true,
   }, { merge: true });
 
   console.log("Upserting property document...");

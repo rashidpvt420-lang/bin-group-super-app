@@ -390,6 +390,18 @@ async function main() {
   const createdOwner = await auth.getUser(ownerUid);
   await auth.updateUser(ownerUid, { emailVerified: true, disabled: false, displayName: signatureName });
   await auth.setCustomUserClaims(ownerUid, { ...(createdOwner.customClaims || {}), role: 'owner', testAccount: true });
+  const legalConsentFields = {
+    legalConsentVersion: 'legal-review-2026-11-12',
+    legalAcceptedVersion: 'legal-review-2026-11-12',
+    termsVersion: 'legal-review-2026-11-12',
+    legalAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+    legalAcceptedAtClient: new Date().toISOString(),
+    pdplCompliance: true,
+    pdplConsent: true,
+    legalProcessingConsent: true,
+    legalRetentionConsent: true,
+    legalCrossBorderAiConsent: true,
+  };
   await db.collection('users').doc(ownerUid).set({
     testAccount: true,
     role: 'owner',
@@ -398,6 +410,7 @@ async function main() {
     dashboardUnlocked: false,
     adminApproved: false,
     paymentVerified: false,
+    ...legalConsentFields,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -647,6 +660,11 @@ async function main() {
   assert(upper(inspection.status) === 'COMPLETED' && upper(inspection.evidenceStatus) === 'VERIFIED', 'Evidence-backed property inspection is not complete.');
   assert(invoiceId.startsWith('MOB-') && text(invoice.proofHash) === text(activatedPayment.invoiceProofHash), 'Mobilisation invoice hash is missing or inconsistent.');
   assert(Math.abs(Number(invoice.amount) - finalActivationDeposit) <= 0.01, 'Mobilisation invoice does not equal the final verified locked 15% deposit.');
+
+  await Promise.all([
+    db.collection('users').doc(ownerUid).set(legalConsentFields, { merge: true }),
+    db.collection('owners').doc(ownerUid).set(legalConsentFields, { merge: true }),
+  ]);
 
   const invoiceMail = await waitForMailDelivery(`owner_invoice_${intakeId}_${invoiceId}`, ownerEmail);
 

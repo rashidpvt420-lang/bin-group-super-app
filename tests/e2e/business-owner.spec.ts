@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect, Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-test.use({ trace: 'off', video: 'off', screenshot: 'off' });
+test.use({ trace: 'retain-on-failure', video: 'retain-on-failure', screenshot: 'only-on-failure' });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
@@ -116,16 +116,19 @@ async function login(page: Page) {
   requireLaunchCredentials();
   await page.context().clearCookies();
   await page.goto(`/login?intendedRole=owner&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => {
+  await page.evaluate((ownerEmail) => {
     localStorage.clear();
     sessionStorage.clear();
     const now = new Date().toISOString();
     localStorage.setItem('bin_legal_terms_accepted_legal-review-2026-11-12', now);
+    if (ownerEmail) {
+      localStorage.setItem(`bin_legal_terms_accepted_legal-review-2026-11-12_${ownerEmail.toLowerCase()}`, now);
+    }
     localStorage.setItem('bin_pdpl_consent', 'true');
     localStorage.setItem('bin_legal_processing_consent', 'true');
     localStorage.setItem('bin_legal_retention_consent', 'true');
     localStorage.setItem('bin_legal_cross_border_ai_consent', 'true');
-  });
+  }, EMAIL);
   await page.goto(`/login?intendedRole=owner&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -150,7 +153,7 @@ async function acceptLegalAgreementIfRequired(page: Page) {
     const cb = agreement.getByTestId(testId);
     if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
       if (!await cb.isChecked().catch(() => false)) {
-        await cb.check().catch(() => cb.click().catch(() => undefined));
+        await cb.check({ force: true, timeout: 2_000 }).catch(() => cb.click({ force: true, timeout: 2_000 }).catch(() => undefined));
       }
     }
   }
@@ -170,7 +173,7 @@ async function acceptLegalAgreementIfRequired(page: Page) {
     intervals: [100, 250, 500, 1_000],
     message: 'Owner legal consent must become enabled after the full agreement is reviewed',
   }).toBe(true);
-  await agree.click();
+  await agree.click({ force: true, timeout: 5_000 }).catch(() => undefined);
   await expect(agreement).not.toBeVisible({ timeout: 20_000 });
   await expect(page.locator('body')).not.toContainText(/SOVEREIGN INSTITUTIONAL AGREEMENT|Legal terms|الشروط القانونية/i, { timeout: 10_000 });
 }

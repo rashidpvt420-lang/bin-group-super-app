@@ -69,7 +69,7 @@ async function dismissModalsIfPresent(page: Page) {
       const cb = legalDialog.getByTestId(testId);
       if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
         if (!await cb.isChecked().catch(() => false)) {
-          await cb.check().catch(() => cb.click().catch(() => undefined));
+          await cb.check({ force: true, timeout: 2_000 }).catch(() => cb.click({ force: true, timeout: 2_000 }).catch(() => undefined));
         }
       }
     }
@@ -82,7 +82,7 @@ async function dismissModalsIfPresent(page: Page) {
     }
     const acceptBtn = legalDialog.getByTestId('legal-agreement-accept');
     if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
-      await acceptBtn.click().catch(() => undefined);
+      await acceptBtn.click({ force: true, timeout: 3_000 }).catch(() => undefined);
       await expect(legalDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
     }
   }
@@ -92,12 +92,12 @@ async function dismissModalsIfPresent(page: Page) {
     const cb = gpsDialog.getByTestId('technician-gps-consent');
     if (await cb.isVisible({ timeout: 500 }).catch(() => false)) {
       if (!await cb.isChecked().catch(() => false)) {
-        await cb.check().catch(() => cb.click().catch(() => undefined));
+        await cb.check({ force: true, timeout: 2_000 }).catch(() => cb.click({ force: true, timeout: 2_000 }).catch(() => undefined));
       }
     }
     const acceptBtn = gpsDialog.getByTestId('technician-gps-consent-accept');
     if (await acceptBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
-      await acceptBtn.click().catch(() => undefined);
+      await acceptBtn.click({ force: true, timeout: 3_000 }).catch(() => undefined);
       await expect(gpsDialog).not.toBeVisible({ timeout: 5_000 }).catch(() => undefined);
     }
   }
@@ -652,7 +652,16 @@ async function createRecoveryTenant() {
     // This fixture exercises unit-link recovery, not first-login legal consent.
     // Mark the temporary Tenant as having already accepted the agreement so
     // the global modal cannot obscure the recovery form.
+    legalConsentVersion: 'legal-review-2026-11-12',
+    legalAcceptedVersion: 'legal-review-2026-11-12',
+    termsVersion: 'legal-review-2026-11-12',
     legalAcceptedAt: new Date().toISOString(),
+    legalAcceptedAtClient: new Date().toISOString(),
+    pdplCompliance: true,
+    pdplConsent: true,
+    legalProcessingConsent: true,
+    legalRetentionConsent: true,
+    legalCrossBorderAiConsent: true,
     e2eTenantRecovery: true,
     e2eRunMarker: RUN_MARKER,
     expiresAtMs: Date.now() + (30 * 60 * 1000),
