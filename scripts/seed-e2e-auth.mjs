@@ -246,7 +246,16 @@ async function seed() {
         testAccount: true,
         displayName: user.displayName,
         onboardingComplete: true,
+        legalConsentVersion: 'legal-review-2026-11-12',
+        legalAcceptedVersion: 'legal-review-2026-11-12',
+        termsVersion: 'legal-review-2026-11-12',
         legalAcceptedAt: new Date().toISOString(),
+        legalAcceptedAtClient: new Date().toISOString(),
+        pdplCompliance: true,
+        pdplConsent: true,
+        legalProcessingConsent: true,
+        legalRetentionConsent: true,
+        legalCrossBorderAiConsent: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(user.extraProfile || {})
       }, { merge: true });
