@@ -299,6 +299,10 @@ export const adminReviewBrokerCommission = onCall(
       if (commission.complianceHold === true || Number(commission.amount || 0) <= 0) {
         throw new HttpsError("failed-precondition", "Held or zero-value commissions cannot be approved or paid.");
       }
+      const brokerId = String(commission.brokerId || "").trim();
+      if (brokerId && brokerId === request.auth?.uid) {
+        throw new HttpsError("permission-denied", "Segregation of duties: a broker cannot review, approve, or pay their own commission.");
+      }
       const currentStatus = String(commission.status || "").toUpperCase();
       const targetStatus = action === "MARK_PAID" ? "PAID" : action === "APPROVE" ? "APPROVED" : "REJECTED";
       if (currentStatus === targetStatus) {

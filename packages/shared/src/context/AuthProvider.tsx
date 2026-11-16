@@ -231,6 +231,10 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
     };
 
     const hasPermission = (permission: SovereignPermission): boolean => {
+        if (permission === 'canVerifyPayments') {
+            const r = String(role || '').trim().toLowerCase();
+            return r === 'finance_admin' || r === 'finance_manager' || r === 'finance_controller';
+        }
         if (isAdmin) return true;
         return !!permissions[permission];
     };

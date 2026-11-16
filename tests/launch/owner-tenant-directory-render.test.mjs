@@ -9,7 +9,9 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server.js';
 
-const root = process.env.UI_AUDIT_ROOT || new URL('../../', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+
+const root = process.env.UI_AUDIT_ROOT || fileURLToPath(new URL('../../', import.meta.url));
 const nodeRequire = createRequire(import.meta.url);
 
 // Execute the actual page and directory model. Only the external session,

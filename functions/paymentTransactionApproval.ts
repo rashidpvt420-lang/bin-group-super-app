@@ -919,6 +919,11 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
   const now = ts();
   const actorId = request.auth?.uid || "admin";
 
+  const payerUid = String(payment.ownerUid || payment.ownerId || payment.tenantUid || payment.tenantId || payment.payerId || "").trim();
+  if (payerUid && payerUid === actorId) {
+    throw new HttpsError("permission-denied", "Dual control: a customer or payer cannot decide or reject their own payment transaction.");
+  }
+
   if (isRentCollectionPayment(payment)) {
     let rentRejectionIdempotent = false;
     await db.runTransaction(async (transaction) => {

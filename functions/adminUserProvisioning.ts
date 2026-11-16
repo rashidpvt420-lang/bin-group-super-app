@@ -46,7 +46,7 @@ const STAFF_ROLES = new Set([
  * Payroll Admin stays prep-only (no admin modules). Every assignment writes
  * audit_logs with financeTierAssignment: true.
  */
-const FINANCE_TIER_ROLES: ReadonlySet<string> = new Set(["finance_manager", "finance_controller", "payroll_admin"]);
+const FINANCE_TIER_ROLES: ReadonlySet<string> = new Set(["finance_admin", "finance_manager", "finance_controller", "payroll_admin"]);
 const FINANCE_TIER_ASSIGNER_ROLES = new Set(["super_admin", "ceo"]);
 
 function isFinanceTierAssigner(claims: any) {
@@ -59,7 +59,7 @@ function isFinanceTierAssigner(claims: any) {
 async function requireFinanceTierAssigner(request: any) {
   const token = request.auth?.token || {};
   if (!isFinanceTierAssigner(token)) {
-    throw new HttpsError("permission-denied", "Only a Super Admin or CEO can assign or change a finance role (Finance Manager, Finance Controller, Payroll Admin).");
+    throw new HttpsError("permission-denied", "Only a Super Admin or CEO can assign or change a finance role (Finance Admin, Finance Manager, Finance Controller, Payroll Admin).");
   }
   const record = await admin.auth().getUser(request.auth.uid);
   if (!isFinanceTierAssigner(record.customClaims || {})) {
@@ -233,6 +233,9 @@ function claimsForAccess(role: string, modules: string[], permissions: Record<st
     staff: true,
     isStaff: true,
     technician: role === "technician",
+    finance_admin: role === "finance_admin",
+    finance_manager: role === "finance_manager",
+    finance_controller: role === "finance_controller",
     admin: false,
     isAdmin: false,
     superAdmin: false,
@@ -459,6 +462,9 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
   const { actorId, actorRole } = await requireProvisioningAdmin(request);
   const payload = request.data || {};
   const uid = cleanString(payload.uid);
+  if (uid && uid === actorId) {
+    throw new HttpsError("permission-denied", "Self-assignment prohibited: an administrator cannot modify their own staff access or assigned roles.");
+  }
   const role = cleanString(payload.role).toLowerCase();
   const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
   if ((currentRole === "technician") !== (role === "technician")) {
@@ -506,6 +512,9 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
   const { actorId, actorRole } = await requireProvisioningAdmin(request);
   const payload = request.data || {};
   const uid = cleanString(payload.uid);
+  if (uid && uid === actorId) {
+    throw new HttpsError("permission-denied", "Self-modification prohibited: an administrator cannot modify their own operational status.");
+  }
   const requestedStatus = cleanString(payload.status).toUpperCase();
   if (!["ACTIVE", "SUSPENDED"].includes(requestedStatus)) throw new HttpsError("invalid-argument", "status must be ACTIVE or SUSPENDED.");
 

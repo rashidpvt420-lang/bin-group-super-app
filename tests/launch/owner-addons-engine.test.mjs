@@ -4,6 +4,7 @@ import { buildSync } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 // Bundle the real engine so the assertions run against the code the quote uses.
 const dir = mkdtempSync(join(tmpdir(), 'addons-'));
@@ -11,7 +12,7 @@ const entry = join(dir, 'entry.ts');
 writeFileSync(entry, `export * from ${JSON.stringify(join(process.cwd(), 'src/utils/calculateUaeQuote2026.ts'))};`);
 const out = join(dir, 'engine.mjs');
 buildSync({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'error' });
-const E = await import(out);
+const E = await import(pathToFileURL(out).href);
 
 const base = { assetClassId: 'res-bldg', emirate: 'dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 20000, units: 20, propertyAge: 8, floors: 5, lifts: 0, slaTier: 'standard', paymentPlan: 'annual' };
 

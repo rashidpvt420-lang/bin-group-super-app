@@ -8,8 +8,8 @@ const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = r
 
 const { adminReviewBrokerCommission, adminSettlePayrollRecord } = lib('runtimeAll.js');
 const MFA = { firebase: { sign_in_second_factor: 'phone' } };
-const DENIED_ROLES = ['manager', 'operations_admin', 'operations_manager', 'hr_admin', 'hr_manager', 'hr_staff',
-  'support_admin', 'finance_staff', 'account_manager', 'dispatcher', 'finance_manager', 'finance_controller', 'technician', 'owner', 'tenant', 'broker'];
+const DENIED_ROLES = ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'operations_manager', 'hr_admin', 'hr_manager', 'hr_staff',
+  'support_admin', 'finance_staff', 'account_manager', 'dispatcher', 'technician', 'owner', 'tenant', 'broker'];
 
 const approve = (actor) => call(adminReviewBrokerCommission, actor, { commissionId: 'comm_acc', action: 'APPROVE' });
 const settle = (actor) => call(adminSettlePayrollRecord, actor, { payrollId: 'pay_acc', paymentReference: 'REF-ACC-1' });
@@ -71,7 +71,7 @@ test('stale-claim: admin suspended in live claims after token mint is refused', 
   await assertUnchanged();
 });
 
-for (const role of ['admin', 'super_admin', 'ceo', 'finance_admin']) {
+for (const role of ['finance_admin', 'finance_manager', 'finance_controller']) {
   test(`${role} with MFA and live claims passes the authority gate`, async () => {
     const actor = await createUser(`acc_ok_${role}`, { role }, { tokenExtra: MFA });
     for (const run of [approve, settle]) {
@@ -82,13 +82,22 @@ for (const role of ['admin', 'super_admin', 'ceo', 'finance_admin']) {
   });
 }
 
+test('CEO with explicit separately assigned Finance claim passes authority gate', async () => {
+  const actor = await createUser('acc_ok_ceo_fa', { role: 'ceo', ceo: true, finance_admin: true }, { tokenExtra: MFA });
+  for (const run of [approve, settle]) {
+    try { await run(actor); } catch (error) {
+      assert.notEqual(error?.code, 'permission-denied', `ceo+finance_admin: ${error?.message}`);
+    }
+  }
+});
+
 // ---- payment approval (securePaymentApproval) + painting: live-claims guard ----
 const { adminApprovePayment, adminRejectPayment, financeDecidePaintingPayment } = lib('runtimeAll.js');
 
 test('payment approval: denied roles and stale/suspended admins refused, payment untouched', async () => {
   await db.doc('payment_transactions/pay_tx_acc').set({ status: 'PENDING_VERIFICATION', amount: 100, paymentMethod: 'CASH' });
   const actors = [];
-  for (const role of ['manager', 'operations_admin', 'hr_admin', 'finance_staff', 'finance_manager']) actors.push(await createUser(`pa_${role}`, { role }, { tokenExtra: MFA }));
+  for (const role of ['manager', 'operations_admin', 'hr_admin', 'finance_staff', 'admin', 'super_admin', 'ceo', 'technician', 'owner', 'tenant', 'broker']) actors.push(await createUser(`pa_${role}`, { role }, { tokenExtra: MFA }));
   const stale = await createUser('pa_fa_stale', { role: 'finance_admin' }, { tokenExtra: MFA });
   await admin.auth().setCustomUserClaims(stale.uid, { role: 'hr_admin' });
   const susp = await createUser('pa_admin_susp', { role: 'admin', admin: true }, { tokenExtra: MFA });

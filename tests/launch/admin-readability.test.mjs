@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : new URL('../../', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+
+const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : fileURLToPath(new URL('../../', import.meta.url));
 const read = (p) => readFileSync(`${root}apps/admin-panel/src/${p}`, 'utf8');
 
 // Page titles sat on the #020617 shell with an inherited near-black colour (1.03:1).

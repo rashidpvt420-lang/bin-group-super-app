@@ -3,20 +3,22 @@ import { HttpsError } from "firebase-functions/v2/https";
 
 if (!admin.apps.length) admin.initializeApp();
 
-// Same authority model as the payment-approval gate in securePaymentApproval.ts:
-// finance-capable Admin role AND a verified second-factor (MFA) sign-in.
-const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
+// Centralized explicit Finance approval authorization policy.
+// CEO, super_admin, and generic admin alone NEVER grant financial approval authority.
+// Financial approvals must be restricted to explicitly authorized Finance approver identities.
+export const FINANCE_ADMIN_ROLES = new Set(["finance_admin", "finance_manager", "finance_controller"]);
 const text = (value: unknown) => String(value || "").trim();
 
-// Nov 9 follow-up (from #1996 D-01): a generic admin/isAdmin boolean only counts when the account
-// carries no explicit role, matching hasAdminClaimCycleFree() in firestore.rules. A staff account with
-// an explicit non-finance role (e.g. operations_admin, hr_admin) never gains money authority from a
-// stray boolean claim. superAdmin / super_admin / ceo flags and the role set are unchanged.
-function claimsGrantFinanceAdmin(claims: Record<string, any>): boolean {
+export function claimsGrantFinanceAdmin(claims: Record<string, any>): boolean {
+  if (!claims || claims.suspended === true) return false;
   const role = text(claims.role || claims.userRole || claims.primaryRole).toLowerCase();
   if (FINANCE_ADMIN_ROLES.has(role)) return true;
-  if (claims.superAdmin === true || claims.super_admin === true || claims.ceo === true) return true;
-  return role === "" && (claims.admin === true || claims.isAdmin === true);
+  // If an account holds a separately assigned explicit Finance approver role in custom claims,
+  // that explicit Finance role authorizes the operation. CEO or Super Admin status alone is never sufficient.
+  if (claims.finance_admin === true || claims.finance_manager === true || claims.finance_controller === true) {
+    return true;
+  }
+  return false;
 }
 
 export async function requireMfaFinanceAdminActor(request: any): Promise<{ uid: string; email: string }> {

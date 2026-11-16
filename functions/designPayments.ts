@@ -17,6 +17,7 @@ import {
   publicLockedChoice,
   sameLockedChoice,
 } from './designExecutionBrief';
+import { claimsGrantFinanceAdmin } from './financeAdminMfa';
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -27,7 +28,7 @@ const ENGINEER_ROLES = ['technician', 'engineer'];
 const now = () => admin.firestore.FieldValue.serverTimestamp();
 const text = (value: unknown, max = 300) => String(value ?? '').trim().slice(0, max);
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
-const financeRole = (token: any) => ['admin', 'super_admin', 'ceo', 'finance_admin'].includes(roleOf(token)) || token?.admin === true || token?.isAdmin === true || token?.superAdmin === true || token?.super_admin === true || token?.ceo === true;
+const financeRole = (token: any) => claimsGrantFinanceAdmin(token || {});
 const pendingStatuses = ['AI_CONCEPT_READY', 'DEPOSIT_PENDING', 'OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'PAYMENT_PENDING'];
 
 function id(value: unknown) {

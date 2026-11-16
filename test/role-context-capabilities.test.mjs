@@ -21,6 +21,48 @@ test('full admin is only admin, super_admin, ceo', () => {
   for (const r of ['admin', 'super_admin', 'ceo']) assert.equal(mod.resolvePermission(r, false, {}, 'canEditPricing'), true);
 });
 
+test('CEO, Super Admin, and generic Admin alone NEVER receive MONEY_CAPABILITIES even with fullAdmin flag', () => {
+  const moneyCaps = ['canVerifyPayments', 'canApproveExpenses', 'canManagePayroll'];
+  const flags = { canVerifyPayments: true, canApproveExpenses: true, canManagePayroll: true };
+  for (const role of ['ceo', 'super_admin', 'admin']) {
+    for (const cap of moneyCaps) {
+      assert.equal(mod.resolvePermission(role, true, flags, cap), false, `${role} with fullAdmin must NOT receive ${cap}`);
+      assert.equal(mod.resolvePermission(role, false, flags, cap), false, `${role} without fullAdmin must NOT receive ${cap}`);
+    }
+  }
+});
+
+test('CEO retains executive dashboard, reporting, and non-money operational visibility', () => {
+  const nonMoneyCaps = ['canEditPricing', 'canManageCompanyProfile', 'canManageProperties', 'canExportReports', 'canViewFinancials', 'canViewAuditLogs'];
+  for (const cap of nonMoneyCaps) {
+    assert.equal(mod.resolvePermission('ceo', true, {}, cap), true, `CEO must retain ${cap}`);
+  }
+});
+
+test('authorized Finance roles receive their assigned capabilities', () => {
+  // finance_admin receives all finance capabilities including payroll
+  assert.equal(mod.resolvePermission('finance_admin', false, {}, 'canVerifyPayments'), true);
+  assert.equal(mod.resolvePermission('finance_admin', false, {}, 'canApproveExpenses'), true);
+  assert.equal(mod.resolvePermission('finance_admin', false, {}, 'canManagePayroll'), true);
+  assert.equal(mod.resolvePermission('finance_admin', false, {}, 'canViewFinancials'), true);
+
+  // finance_manager and finance_controller receive payment verification and expense approvals
+  for (const r of ['finance_manager', 'finance_controller']) {
+    assert.equal(mod.resolvePermission(r, false, {}, 'canVerifyPayments'), true, r);
+    assert.equal(mod.resolvePermission(r, false, {}, 'canApproveExpenses'), true, r);
+    assert.equal(mod.resolvePermission(r, false, {}, 'canManagePayroll'), false, r);
+  }
+});
+
+test('end-user roles (owner, tenant, technician, broker) NEVER receive money capabilities', () => {
+  const flags = { canVerifyPayments: true, canApproveExpenses: true, canManagePayroll: true };
+  for (const r of ['owner', 'tenant', 'technician', 'broker']) {
+    for (const cap of ['canVerifyPayments', 'canApproveExpenses', 'canManagePayroll']) {
+      assert.equal(mod.resolvePermission(r, false, flags, cap), false, `${r} must NOT receive ${cap}`);
+    }
+  }
+});
+
 test('departmental admins do not get full permissions', () => {
   for (const r of ['manager', 'operations_admin', 'hr_admin', 'support_admin', 'finance_admin']) {
     assert.equal(mod.resolvePermission(r, false, {}, 'canEditPricing'), false, r);

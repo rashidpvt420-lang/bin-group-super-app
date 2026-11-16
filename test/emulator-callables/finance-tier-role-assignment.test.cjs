@@ -14,7 +14,7 @@ test.beforeEach(clearFirestore);
 
 test('plain admin cannot assign a finance tier; ordinary staff roles still work', async () => {
   const adminActor = await createUser('d04_admin', { role: 'admin', admin: true }, { tokenExtra: MFA });
-  for (const role of ['finance_manager', 'finance_controller', 'payroll_admin']) {
+  for (const role of ['finance_admin', 'finance_manager', 'finance_controller', 'payroll_admin']) {
     await expectHttpsError(create(adminActor, role, 'a'), 'permission-denied');
     await assert.rejects(admin.auth().getUserByEmail(`fin.tier.${role}.a@example.invalid`), /no user record|user-not-found/i);
   }
@@ -31,7 +31,7 @@ test('super_admin demoted in live claims is refused', async () => {
   await expectHttpsError(create(sa, 'finance_controller', 'c'), 'permission-denied');
 });
 
-for (const role of ['finance_manager', 'finance_controller', 'payroll_admin']) {
+for (const role of ['finance_admin', 'finance_manager', 'finance_controller', 'payroll_admin']) {
   test(`super_admin with MFA assigns ${role}, server-derived claims, audit logged`, async () => {
     const sa = await createUser(`d04_sa_${role}`, { role: 'super_admin', super_admin: true }, { tokenExtra: MFA });
     const result = await create(sa, role, 'ok');
