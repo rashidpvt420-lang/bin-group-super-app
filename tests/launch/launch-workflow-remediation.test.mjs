@@ -58,7 +58,7 @@ test('design detail state is isolated across request, account, and role changes'
 
 const primaryPath = 'ai_design_renders/owner1/d1/primary.jpg';
 const airyPath = 'ai_design_renders/owner1/d1/option_2.jpg';
-const roleFor = (uid = '') => uid.startsWith('owner') ? 'owner' : uid.startsWith('tenant') ? 'tenant' : uid.startsWith('tech') ? 'technician' : 'admin';
+const roleFor = (uid = '') => uid.startsWith('owner') ? 'owner' : uid.startsWith('tenant') ? 'tenant' : uid.startsWith('tech') ? 'technician' : 'finance_admin';
 
 function designRecord(tenant) {
   return {

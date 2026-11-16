@@ -21,8 +21,8 @@ export const PAINTING_FINANCE_PATH = '/finance/painting-payments';
 // Payroll Admin: opens only the payroll preparation page (and their own HR page). The server decides
 // (adminGeneratePayrollBatch with MFA); settling payroll stays with MFA Finance Admin.
 export const PAYROLL_ADMIN_ROLES = new Set(['payroll_admin']);
-/** D-04: roles only a Super Admin / CEO may assign (server-enforced). */
-export const FINANCE_TIER_ROLES = new Set(['finance_admin', 'finance_manager', 'finance_controller', 'payroll_admin']);
+export const FINANCE_TIER_ROLES = new Set(['finance_manager', 'finance_controller', 'payroll_admin']);
+export const FINANCE_APPROVER_ROLES = new Set(['finance_admin', 'finance_manager', 'finance_controller']);
 export const canAssignFinanceTierRoles = (user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined) => {
   const role = String(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole || '').trim().toLowerCase();
   return role === 'super_admin' || role === 'ceo' || user?.claims?.superAdmin === true || user?.claims?.super_admin === true || user?.claims?.ceo === true;

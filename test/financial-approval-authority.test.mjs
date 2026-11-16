@@ -6,15 +6,41 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { buildSync } from 'esbuild';
 
-const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const src = (f) => readFileSync(`${root}functions/${f}`, 'utf8');
 const body = (s, name) => { const i = s.indexOf(`export const ${name} = onCall`); assert.ok(i >= 0, name); return s.slice(i, i + 1200); };
 
-const { claimsGrantFinanceAdmin, FINANCE_ADMIN_ROLES } = require('../functions/lib/financeAdminMfa.js');
-const { paymentDualControlViolation, assertPaymentDualControl } = require('../functions/lib/paymentDualControl.js');
+function bundleModule(entryRelPath) {
+  const res = buildSync({
+    entryPoints: [`${root}functions/${entryRelPath}`],
+    bundle: true,
+    write: false,
+    format: 'cjs',
+    platform: 'node',
+    external: ['firebase-admin', 'firebase-functions', 'firebase-functions/*'],
+    logLevel: 'silent',
+  });
+  const mod = { exports: {} };
+  const fn = new Function('module', 'exports', 'require', res.outputFiles[0].text);
+  fn(mod, mod.exports, (name) => ({
+    apps: [{}],
+    initializeApp: () => {},
+    firestore: () => ({}),
+    HttpsError: class HttpsError extends Error {
+      constructor(code, message, details) {
+        super(message);
+        this.code = code;
+        this.details = details;
+      }
+    },
+  }));
+  return mod.exports;
+}
+
+const { claimsGrantFinanceAdmin, FINANCE_ADMIN_ROLES } = bundleModule('financeAdminMfa.ts');
+const { paymentDualControlViolation, assertPaymentDualControl } = bundleModule('paymentDualControl.ts');
 
 test('finance admin role set contains only authorized finance approver roles and strictly excludes ceo, super_admin, admin', () => {
   const m = src('financeAdminMfa.ts').match(/FINANCE_ADMIN_ROLES = new Set\(\[([^\]]*)\]/);

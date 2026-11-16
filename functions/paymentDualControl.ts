@@ -27,43 +27,60 @@ function text(value: unknown): string {
 
 /** The Admin uid that recorded the payment evidence, if an Admin recorded it. */
 export function paymentEvidenceRecorderUid(payment: any): string {
-  return text(payment?.paymentEvidenceRecordedBy) || text(payment?.paymentProofEvidence?.recordedBy);
+  const uid = text(payment?.paymentEvidenceRecordedBy) || text(payment?.paymentProofEvidence?.recordedBy);
+  if (uid.toLowerCase() === "unknown" || uid.toLowerCase() === "null" || uid.toLowerCase() === "undefined") return "";
+  return uid;
 }
 
 /** True when the evidence on this payment was recorded by an Admin (not the Owner, not Stripe). */
 export function isAdminRecordedPaymentEvidence(payment: any): boolean {
   return Boolean(paymentEvidenceRecorderUid(payment)) ||
-    text(payment?.verificationState).toUpperCase() === "PAYMENT_EVIDENCE_RECORDED";
+    text(payment?.verificationState).toUpperCase() === "PAYMENT_EVIDENCE_RECORDED" ||
+    text(payment?.verificationState).toUpperCase() === "ADMIN_RECORDED" ||
+    text(payment?.paymentEvidenceSource).toUpperCase() === "STAFF" ||
+    text(payment?.paymentEvidenceSource).toUpperCase() === "ADMIN" ||
+    Boolean(payment?.paymentEvidenceRecordedBy);
 }
 
 export function paymentDualControlViolation(payment: any, approverUid: string): DualControlViolation | null {
   const approver = text(approverUid);
   if (!approver) return "RECORDER_UNKNOWN";
 
-  // 1. Payer self-approval check: an approver cannot be the owner/tenant/payer of this transaction
+  // 1. Payer self-decision check: an approver or rejector cannot be the owner/tenant/payer of this transaction
   const payerUid = text(payment?.ownerUid || payment?.ownerId || payment?.tenantUid || payment?.tenantId || payment?.payerId);
   if (payerUid && payerUid === approver) {
     return "SAME_PAYER";
   }
 
-  // 2. Admin-recorded evidence: recorder and approver must be different individuals
+  // 2. Admin-recorded evidence: recorder and approver/rejector must be different individuals
   if (isAdminRecordedPaymentEvidence(payment)) {
     const recorder = paymentEvidenceRecorderUid(payment);
     if (!recorder) return "RECORDER_UNKNOWN";
     if (recorder === approver) return "SAME_ADMIN";
-    return null;
   }
 
-  // 3. Customer-submitted evidence or external evidence
+  // 3. Evidence provenance and integrity
   const verificationState = text(payment?.verificationState).toUpperCase();
-  if (verificationState === "OWNER_SUBMITTED" || verificationState === "TENANT_SUBMITTED") {
-    // If marked as customer-submitted in pending admin approval, evidence provenance must exist
+  const status = text(payment?.status).toUpperCase();
+  const paymentStatus = text(payment?.paymentStatus).toUpperCase();
+  const isPendingReview = status.includes("PENDING") || paymentStatus.includes("PENDING");
+
+  if (payment?.malformedEvidence === true || payment?.evidenceMalformed === true || verificationState === "MALFORMED") {
+    return "MALFORMED_EVIDENCE";
+  }
+
+  if (
+    verificationState === "OWNER_SUBMITTED" ||
+    verificationState === "TENANT_SUBMITTED" ||
+    verificationState === "CUSTOMER_SUBMITTED"
+  ) {
+    // If marked as customer-submitted in pending review, evidence provenance must exist
     const hasProof = Boolean(
       payment?.paymentProofPath || payment?.receiptPath || payment?.referenceFilePath ||
       payment?.paymentProofHash || payment?.receiptHash || payment?.referenceFileHash ||
       payment?.paymentReferenceId || payment?.paymentReference,
     );
-    if (payment?.status === "PENDING_ADMIN_APPROVAL" && !hasProof) {
+    if ((isPendingReview || status === "PENDING_ADMIN_APPROVAL") && !hasProof) {
       return "MALFORMED_EVIDENCE";
     }
   }

@@ -4,6 +4,7 @@ import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { DEFAULT_WORKING_HOURS } from "./hrPayConfig";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -65,6 +66,51 @@ async function requireFinanceTierAssigner(request: any) {
   if (!isFinanceTierAssigner(record.customClaims || {})) {
     throw new HttpsError("permission-denied", "Super Admin / CEO authority is no longer active on this account.");
   }
+}
+
+export const FINANCE_APPROVER_ROLES: ReadonlySet<string> = new Set(["finance_admin", "finance_manager", "finance_controller"]);
+const INDEPENDENT_FINANCE_APPROVER_ROLES = new Set(["super_admin", "ceo", "finance_controller"]);
+
+function isIndependentFinanceApprover(claims: any) {
+  const role = cleanString(claims?.role || claims?.userRole || claims?.primaryRole).toLowerCase();
+  return claims?.suspended !== true && (
+    INDEPENDENT_FINANCE_APPROVER_ROLES.has(role) ||
+    claims?.superAdmin === true ||
+    claims?.super_admin === true ||
+    claims?.ceo === true ||
+    claims?.finance_controller === true
+  );
+}
+
+async function requireIndependentFinanceApprover(request: any) {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  await requirePrivilegedMfaSession(request.auth);
+  const token = request.auth.token || {};
+  if (!isIndependentFinanceApprover(token)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only an independent authorized authority (Super Admin, CEO, or Finance Controller) can approve Finance role assignments.",
+    );
+  }
+  const record = await admin.auth().getUser(request.auth.uid);
+  if (record.disabled || !isIndependentFinanceApprover(record.customClaims || {})) {
+    throw new HttpsError(
+      "permission-denied",
+      "Independent approval authority is not active or account is disabled.",
+    );
+  }
+  const role = cleanString(
+    record.customClaims?.role ||
+    record.customClaims?.userRole ||
+    record.customClaims?.primaryRole ||
+    (record.customClaims?.ceo ? "ceo" : record.customClaims?.super_admin ? "super_admin" : "finance_controller"),
+    "super_admin",
+  );
+  return {
+    approverId: request.auth.uid,
+    approverRole: role,
+    approverEmail: cleanString(record.email || token.email),
+  };
 }
 
 
@@ -361,10 +407,13 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   const { modules, permissions } = canonicalAccess(role, payload);
   const financeTierAssignment = FINANCE_TIER_ROLES.has(role);
   if (financeTierAssignment) await requireFinanceTierAssigner(request);
+  const isFinanceApprover = FINANCE_APPROVER_ROLES.has(role);
   await assertNoExistingIdentity(email);
   const authUser = await admin.auth().createUser({ email, displayName, password: generatedBootstrapPassword(), emailVerified: false, disabled: false });
   const uid = authUser.uid;
   const now = FieldValue.serverTimestamp();
+  const authDocRef = db.collection("finance_role_authorizations").doc();
+  const authorizationId = authDocRef.id;
   const onboardingChecklist = {
     profileComplete: false,
     documentsComplete: false,
@@ -374,7 +423,14 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   };
 
   try {
-    await admin.auth().setCustomUserClaims(uid, claimsForAccess(role, modules, permissions, true));
+    const claims = claimsForAccess(role, modules, permissions, true);
+    if (isFinanceApprover) {
+      claims.finance_admin = false;
+      claims.finance_manager = false;
+      claims.finance_controller = false;
+      (claims as any).financeApprovalPending = true;
+    }
+    await admin.auth().setCustomUserClaims(uid, claims);
     const loginUrl = loginUrlForRole(role);
     const actionCodeSettings = { url: loginUrl, handleCodeInApp: false };
     const [emailVerificationLink, passwordResetLink] = await Promise.all([
@@ -391,6 +447,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       onboardingStage: "INVITED", onboardingChecklist, onboardingComplete: false,
       invitationStatus: "QUEUED", createdAt: now, updatedAt: now, createdBy: actorId,
       provisionedBy: actorId, provisionedVia: "adminCreateUser",
+      ...(isFinanceApprover ? { financeApprovalStatus: "PENDING_INDEPENDENT_APPROVAL", financeApprovalRequired: true } : {}),
     };
     const scheduleProfile = {
       uid, displayName, role, employeeType: role, department, specialization,
@@ -421,6 +478,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       tx.create(db.collection("staffAccess").doc(uid), {
         uid, role, active: false, suspended: true, status: "INVITED", onboardingStage: "INVITED",
         modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now,
+        ...(isFinanceApprover ? { financeApprovalStatus: "PENDING_INDEPENDENT_APPROVAL" } : {}),
       });
       tx.create(db.collection("hrProfiles").doc(uid), scheduleProfile);
       tx.create(db.collection("private_hr_profiles").doc(uid), privateHrProfile);
@@ -440,16 +498,56 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         metadata: {
           emailHash: hashValue(email), role, modules, permissionKeys: Object.keys(permissions).sort(),
           financeTierAssignment,
+          isFinanceApprover,
           invitationQueued: true, invitationMailId: invitationRef.id, privateHrSeparated: true,
           onboardingStage: "INVITED", activationRequired: true, portalAccessActive: false,
         },
         createdAt: now,
       });
+      if (isFinanceApprover) {
+        tx.create(authDocRef, {
+          authorizationId,
+          actionType: "CREATE_FINANCE_APPROVER",
+          targetUid: uid,
+          targetEmail: email,
+          targetRole: role,
+          modules,
+          requesterId: actorId,
+          requesterRole: actorRole,
+          status: "PENDING_INDEPENDENT_APPROVAL",
+          twoPersonVerified: false,
+          consumed: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+        tx.create(db.collection("audit_logs").doc(), {
+          actorId,
+          actorRole,
+          action: "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT",
+          targetType: "users",
+          targetId: uid,
+          metadata: {
+            authorizationId,
+            actionType: "CREATE_FINANCE_APPROVER",
+            targetUid: uid,
+            targetRole: role,
+            requesterId: actorId,
+            status: "PENDING_INDEPENDENT_APPROVAL",
+          },
+          createdAt: now,
+        });
+      }
     });
 
     return {
       success: true, uid, role, modules, invitationQueued: true, onboardingStage: "INVITED", portalAccessActive: false,
-      message: "Staff identity created and invitation queued. HR activation is required before portal authority is granted.",
+      ...(isFinanceApprover ? {
+        pendingIndependentApproval: true,
+        authorizationId,
+        message: "Staff identity created. Two-person authorization is required before Finance approver authority is granted.",
+      } : {
+        message: "Staff identity created and invitation queued. HR activation is required before portal authority is granted.",
+      }),
     };
   } catch (error: any) {
     await admin.auth().deleteUser(uid).catch((rollbackError) => console.error("Failed to roll back newly created staff Auth user", { uid, rollbackError }));
@@ -472,6 +570,30 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
   }
   const financeTierAssignment = FINANCE_TIER_ROLES.has(role) || FINANCE_TIER_ROLES.has(currentRole);
   if (financeTierAssignment) await requireFinanceTierAssigner(request);
+  const isFinanceApproverChange = (FINANCE_APPROVER_ROLES.has(role) || FINANCE_APPROVER_ROLES.has(currentRole)) && role !== currentRole;
+  const authorizationId = cleanString(payload.authorizationId);
+  if (isFinanceApproverChange) {
+    if (!authorizationId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Two-person authorization required: promoting staff into a Finance approver role or changing an existing Finance approver's role requires independent second-person approval. Request authorization and supply the approved authorizationId.",
+      );
+    }
+    const authSnap = await db.collection("finance_role_authorizations").doc(authorizationId).get();
+    if (!authSnap.exists) {
+      throw new HttpsError("not-found", "Finance role authorization request not found.");
+    }
+    const authData = authSnap.data() || {};
+    if (authData.status !== "APPROVED" || authData.consumed === true) {
+      throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been consumed.");
+    }
+    if (authData.targetUid !== uid || authData.targetRole !== role) {
+      throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user or requested role.");
+    }
+    if (authData.approverId === actorId || authData.requesterId === authData.approverId) {
+      throw new HttpsError("permission-denied", "Segregation of duties: requester cannot apply their own unverified approval.");
+    }
+  }
   const { modules, permissions } = canonicalAccess(role, payload);
   const lifecycleActive = cleanString(userSnap.data()?.status).toUpperCase() === "ACTIVE" &&
     userSnap.data()?.onboardingComplete === true && accessSnap.data()?.active === true;
@@ -489,11 +611,19 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
       });
       tx.update(db.collection("hrProfiles").doc(uid), { role, employeeType: role, updatedAt: now });
       if (role === "technician") tx.update(db.collection("technicians").doc(uid), { role, userRole: role, primaryRole: role, staffModules: modules, modules, permissions, updatedAt: now });
+      if (isFinanceApproverChange && authorizationId) {
+        tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
+          consumed: true,
+          consumedAt: now,
+          consumedBy: actorId,
+        });
+      }
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: "ADMIN_UPDATE_STAFF_ACCESS", targetType: "users", targetId: uid,
         metadata: {
           previousRole: currentRole, role, modules, permissionKeys: Object.keys(permissions).sort(), financeTierAssignment,
           lifecycleActive, onboardingComplete: userSnap.data()?.onboardingComplete === true,
+          ...(authorizationId ? { authorizationId, twoPersonVerified: true } : {}),
         },
         createdAt: now,
       });
@@ -520,6 +650,30 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
 
   const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
   if (requestedStatus === "ACTIVE" && FINANCE_TIER_ROLES.has(currentRole)) await requireFinanceTierAssigner(request);
+  const isFinanceApproverReactivation = requestedStatus === "ACTIVE" && FINANCE_APPROVER_ROLES.has(currentRole);
+  const authorizationId = cleanString(payload.authorizationId);
+  if (isFinanceApproverReactivation) {
+    if (!authorizationId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Two-person authorization required: reactivating a suspended Finance approver requires independent second-person approval. Provide the approved authorizationId.",
+      );
+    }
+    const authSnap = await db.collection("finance_role_authorizations").doc(authorizationId).get();
+    if (!authSnap.exists) {
+      throw new HttpsError("not-found", "Finance role authorization request not found.");
+    }
+    const authData = authSnap.data() || {};
+    if (authData.status !== "APPROVED" || authData.consumed === true) {
+      throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been used.");
+    }
+    if (authData.targetUid !== uid) {
+      throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user.");
+    }
+    if (authData.approverId === actorId || authData.requesterId === authData.approverId) {
+      throw new HttpsError("permission-denied", "Segregation of duties: requester cannot apply their own unverified approval.");
+    }
+  }
   if (requestedStatus === "ACTIVE" && userSnap.data()?.onboardingComplete !== true) {
     throw new HttpsError("failed-precondition", "Complete canonical HR onboarding before activating staff access.");
   }
@@ -539,9 +693,19 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
       tx.update(db.collection("staffAccess").doc(uid), { active: !suspended, suspended, status: requestedStatus, updatedAt: now, updatedBy: actorId });
       tx.update(db.collection("hrProfiles").doc(uid), { status: requestedStatus, suspended, updatedAt: now });
       if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), { status: requestedStatus, suspended, available: suspended ? false : true, onDuty: false, updatedAt: now });
+      if (isFinanceApproverReactivation && authorizationId) {
+        tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
+          consumed: true,
+          consumedAt: now,
+          consumedBy: actorId,
+        });
+      }
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: suspended ? "ADMIN_SUSPEND_STAFF_USER" : "ADMIN_RESTORE_STAFF_USER",
-        targetType: "users", targetId: uid, metadata: { role: currentRole, refreshTokensRevoked: true, onboardingComplete: userSnap.data()?.onboardingComplete === true }, createdAt: now,
+        targetType: "users", targetId: uid, metadata: {
+          role: currentRole, refreshTokensRevoked: true, onboardingComplete: userSnap.data()?.onboardingComplete === true,
+          ...(authorizationId ? { authorizationId, twoPersonVerified: true } : {}),
+        }, createdAt: now,
       });
     });
     return { success: true, uid, status: requestedStatus, refreshTokensRevoked: true };
@@ -572,4 +736,241 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
   } catch (error: any) {
     if (error?.code !== "auth/user-not-found") console.error(`Failed to enforce suspension for ${uid}`, error);
   }
+});
+
+export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { actorId, actorRole } = await requireProvisioningAdmin(request);
+  const token = request.auth?.token || {};
+  if (!isFinanceTierAssigner(token)) {
+    throw new HttpsError("permission-denied", "Only a Super Admin or CEO can initiate a Finance role assignment request.");
+  }
+  const payload = request.data || {};
+  const targetUid = cleanString(payload.targetUid || payload.uid);
+  const targetRole = cleanString(payload.targetRole || payload.role).toLowerCase();
+  const actionType = cleanString(payload.actionType, "PROMOTE_STAFF").toUpperCase();
+
+  if (!targetUid) throw new HttpsError("invalid-argument", "targetUid is required.");
+  if (targetUid === actorId) {
+    throw new HttpsError("permission-denied", "Self-assignment prohibited: you cannot request Finance authority for yourself.");
+  }
+  if (!FINANCE_APPROVER_ROLES.has(targetRole)) {
+    throw new HttpsError("invalid-argument", `Invalid Finance approver role: ${targetRole}. Must be one of: finance_admin, finance_manager, finance_controller.`);
+  }
+
+  const { authUser, userSnap, currentRole } = await loadExistingStaff(targetUid);
+  const now = FieldValue.serverTimestamp();
+  const authDocRef = db.collection("finance_role_authorizations").doc();
+  const authorizationId = authDocRef.id;
+
+  await db.runTransaction(async (tx) => {
+    tx.create(authDocRef, {
+      authorizationId,
+      actionType,
+      targetUid,
+      targetEmail: authUser.email || userSnap.data()?.email || "",
+      targetRole,
+      previousRole: currentRole,
+      requesterId: actorId,
+      requesterRole: actorRole,
+      status: "PENDING_INDEPENDENT_APPROVAL",
+      twoPersonVerified: false,
+      consumed: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    tx.create(db.collection("audit_logs").doc(), {
+      actorId,
+      actorRole,
+      action: "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT",
+      targetType: "users",
+      targetId: targetUid,
+      metadata: {
+        authorizationId,
+        actionType,
+        targetUid,
+        targetRole,
+        previousRole: currentRole,
+        requesterId: actorId,
+        status: "PENDING_INDEPENDENT_APPROVAL",
+      },
+      createdAt: now,
+    });
+  });
+
+  return {
+    success: true,
+    authorizationId,
+    targetUid,
+    targetRole,
+    status: "PENDING_INDEPENDENT_APPROVAL",
+    message: "Finance role assignment request submitted. An independent authorized approver must approve it.",
+  };
+});
+
+export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { approverId, approverRole } = await requireIndependentFinanceApprover(request);
+  const payload = request.data || {};
+  const authorizationId = cleanString(payload.authorizationId);
+  if (!authorizationId) throw new HttpsError("invalid-argument", "authorizationId is required.");
+
+  const authRef = db.collection("finance_role_authorizations").doc(authorizationId);
+  const authSnap = await authRef.get();
+  if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+
+  const authData = authSnap.data() || {};
+  if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
+    throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
+  }
+
+  // Segregation of duties:
+  if (approverId === authData.requesterId) {
+    throw new HttpsError("permission-denied", "Segregation of duties violation: the person requesting the Finance role assignment cannot approve it.");
+  }
+  if (approverId === authData.targetUid) {
+    throw new HttpsError("permission-denied", "Self-promotion violation: target user cannot approve their own Finance role assignment.");
+  }
+
+  const targetUid = authData.targetUid;
+  const targetRole = authData.targetRole;
+  const actionType = authData.actionType;
+  const now = FieldValue.serverTimestamp();
+
+  // Load existing target account
+  const targetUser = await admin.auth().getUser(targetUid);
+  const existingClaims = targetUser.customClaims || {};
+  const { modules, permissions } = canonicalAccess(targetRole, {});
+
+  const isReactivation = actionType === "REACTIVATE_STAFF" || actionType === "RESTORE_AUTHORITY";
+  const nextClaims = {
+    ...existingClaims,
+    ...claimsForAccess(targetRole, modules, permissions, isReactivation ? false : existingClaims.suspended === true),
+    role: targetRole,
+    userRole: targetRole,
+    primaryRole: targetRole,
+    finance_admin: targetRole === "finance_admin",
+    finance_manager: targetRole === "finance_manager",
+    finance_controller: targetRole === "finance_controller",
+    financeApprovalPending: false,
+    ...(isReactivation ? { suspended: false } : {}),
+  };
+
+  if (isReactivation) {
+    await admin.auth().updateUser(targetUid, { disabled: false });
+  }
+  await admin.auth().setCustomUserClaims(targetUid, nextClaims);
+  await admin.auth().revokeRefreshTokens(targetUid);
+
+  await db.runTransaction(async (tx) => {
+    tx.update(authRef, {
+      status: "APPROVED",
+      approverId,
+      approverRole,
+      twoPersonVerified: true,
+      approvedAt: now,
+      updatedAt: now,
+    });
+    tx.update(db.collection("users").doc(targetUid), {
+      role: targetRole,
+      userRole: targetRole,
+      primaryRole: targetRole,
+      staffModules: modules,
+      modules,
+      permissions,
+      ...(isReactivation ? { status: "ACTIVE", suspended: false, restoredAt: now, restoredBy: approverId } : {}),
+      updatedAt: now,
+    });
+    tx.update(db.collection("staffAccess").doc(targetUid), {
+      role: targetRole,
+      modules,
+      staffModules: modules,
+      permissions,
+      active: isReactivation ? true : false,
+      suspended: isReactivation ? false : true,
+      updatedAt: now,
+      updatedBy: approverId,
+    });
+    tx.create(db.collection("audit_logs").doc(), {
+      actorId: approverId,
+      actorRole: approverRole,
+      action: "FINANCE_ROLE_ASSIGNMENT_APPROVED",
+      targetType: "users",
+      targetId: targetUid,
+      metadata: {
+        authorizationId,
+        actionType,
+        targetUid,
+        targetRole,
+        requesterId: authData.requesterId,
+        approverId,
+        twoPersonVerified: true,
+      },
+      createdAt: now,
+    });
+  });
+
+  return {
+    success: true,
+    authorizationId,
+    status: "APPROVED",
+    targetUid,
+    targetRole,
+    twoPersonVerified: true,
+    message: "Finance role assignment independently approved and granted.",
+  };
+});
+
+export const adminRejectFinanceRoleAssignment = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { approverId, approverRole } = await requireIndependentFinanceApprover(request);
+  const payload = request.data || {};
+  const authorizationId = cleanString(payload.authorizationId);
+  const reason = cleanString(payload.reason, "Rejected by independent approver.");
+  if (!authorizationId) throw new HttpsError("invalid-argument", "authorizationId is required.");
+
+  const authRef = db.collection("finance_role_authorizations").doc(authorizationId);
+  const authSnap = await authRef.get();
+  if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+
+  const authData = authSnap.data() || {};
+  if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
+    throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
+  }
+  if (approverId === authData.requesterId) {
+    throw new HttpsError("permission-denied", "Segregation of duties violation: requester cannot reject their own request in place of independent review.");
+  }
+
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (tx) => {
+    tx.update(authRef, {
+      status: "REJECTED",
+      rejectedBy: approverId,
+      rejectedByRole: approverRole,
+      rejectionReason: reason,
+      rejectedAt: now,
+      updatedAt: now,
+    });
+    tx.create(db.collection("audit_logs").doc(), {
+      actorId: approverId,
+      actorRole: approverRole,
+      action: "FINANCE_ROLE_ASSIGNMENT_REJECTED",
+      targetType: "users",
+      targetId: authData.targetUid,
+      metadata: {
+        authorizationId,
+        actionType: authData.actionType,
+        targetUid: authData.targetUid,
+        targetRole: authData.targetRole,
+        requesterId: authData.requesterId,
+        approverId,
+        reason,
+      },
+      createdAt: now,
+    });
+  });
+
+  return {
+    success: true,
+    authorizationId,
+    status: "REJECTED",
+    reason,
+  };
 });
