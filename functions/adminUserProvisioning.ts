@@ -638,106 +638,6 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
   }
 });
 
-export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
-  const { actorId, actorRole } = await requireProvisioningAdmin(request);
-  const payload = request.data || {};
-  const uid = cleanString(payload.uid);
-  if (uid && uid === actorId) {
-    throw new HttpsError("permission-denied", "Self-modification prohibited: an administrator cannot modify their own operational status.");
-  }
-  const requestedStatus = cleanString(payload.status).toUpperCase();
-  if (!["ACTIVE", "SUSPENDED"].includes(requestedStatus)) throw new HttpsError("invalid-argument", "status must be ACTIVE or SUSPENDED.");
-
-  const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
-  if (requestedStatus === "ACTIVE" && FINANCE_TIER_ROLES.has(currentRole)) await requireFinanceTierAssigner(request);
-  const isFinanceApproverReactivation = requestedStatus === "ACTIVE" && FINANCE_APPROVER_ROLES.has(currentRole);
-  const authorizationId = cleanString(payload.authorizationId);
-  if (isFinanceApproverReactivation) {
-    if (!authorizationId) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Two-person authorization required: reactivating a suspended Finance approver requires independent second-person approval. Provide the approved authorizationId.",
-      );
-    }
-    const authSnap = await db.collection("finance_role_authorizations").doc(authorizationId).get();
-    if (!authSnap.exists) {
-      throw new HttpsError("not-found", "Finance role authorization request not found.");
-    }
-    const authData = authSnap.data() || {};
-    if (authData.status !== "APPROVED" || authData.consumed === true) {
-      throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been used.");
-    }
-    if (authData.targetUid !== uid) {
-      throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user.");
-    }
-    if (authData.approverId === actorId || authData.requesterId === authData.approverId) {
-      throw new HttpsError("permission-denied", "Segregation of duties: requester cannot apply their own unverified approval.");
-    }
-  }
-  if (requestedStatus === "ACTIVE" && userSnap.data()?.onboardingComplete !== true) {
-    throw new HttpsError("failed-precondition", "Complete canonical HR onboarding before activating staff access.");
-  }
-  const modules = normalizeModules(currentRole, userSnap.data()?.staffModules || accessSnap.data()?.modules || []);
-  const permissions = permissionsForModules(modules);
-  const suspended = requestedStatus === "SUSPENDED";
-  const previousClaims = authUser.customClaims || {};
-  const previousDisabled = authUser.disabled;
-  const now = FieldValue.serverTimestamp();
-
-  try {
-    await admin.auth().updateUser(uid, { disabled: suspended });
-    await admin.auth().setCustomUserClaims(uid, claimsForAccess(currentRole, modules, permissions, suspended));
-    await admin.auth().revokeRefreshTokens(uid);
-    await db.runTransaction(async (tx) => {
-      tx.update(db.collection("users").doc(uid), { status: requestedStatus, suspended, updatedAt: now, ...(suspended ? { suspendedAt: now, suspendedBy: actorId } : { restoredAt: now, restoredBy: actorId }) });
-      tx.update(db.collection("staffAccess").doc(uid), { active: !suspended, suspended, status: requestedStatus, updatedAt: now, updatedBy: actorId });
-      tx.update(db.collection("hrProfiles").doc(uid), { status: requestedStatus, suspended, updatedAt: now });
-      if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), { status: requestedStatus, suspended, available: suspended ? false : true, onDuty: false, updatedAt: now });
-      if (isFinanceApproverReactivation && authorizationId) {
-        tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
-          consumed: true,
-          consumedAt: now,
-          consumedBy: actorId,
-        });
-      }
-      tx.create(db.collection("audit_logs").doc(), {
-        actorId, actorRole, action: suspended ? "ADMIN_SUSPEND_STAFF_USER" : "ADMIN_RESTORE_STAFF_USER",
-        targetType: "users", targetId: uid, metadata: {
-          role: currentRole, refreshTokensRevoked: true, onboardingComplete: userSnap.data()?.onboardingComplete === true,
-          ...(authorizationId ? { authorizationId, twoPersonVerified: true } : {}),
-        }, createdAt: now,
-      });
-    });
-    return { success: true, uid, status: requestedStatus, refreshTokensRevoked: true };
-  } catch (error: any) {
-    await Promise.all([admin.auth().updateUser(uid, { disabled: previousDisabled }), admin.auth().setCustomUserClaims(uid, previousClaims)])
-      .catch((rollbackError) => console.error("Failed to restore staff Auth state after status update failure", { uid, rollbackError }));
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError("internal", `Unable to update staff status safely: ${error?.message || error}`);
-  }
-});
-
-// Fail-safe only: direct Firestore edits may suspend an account, but they may
-// never grant or change role/module claims. Access changes must use the callable.
-export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (event) => {
-  const before = event.data?.before.data();
-  const after = event.data?.after.data();
-  if (!after || after.isStaff !== true) return;
-  const beforeStatus = cleanString(before?.status).toUpperCase();
-  const afterStatus = cleanString(after?.status).toUpperCase();
-  if (beforeStatus === afterStatus || afterStatus !== "SUSPENDED") return;
-
-  const uid = event.params.userId;
-  try {
-    const authUser = await admin.auth().getUser(uid);
-    await admin.auth().updateUser(uid, { disabled: true });
-    await admin.auth().setCustomUserClaims(uid, { ...(authUser.customClaims || {}), suspended: true });
-    await admin.auth().revokeRefreshTokens(uid);
-  } catch (error: any) {
-    if (error?.code !== "auth/user-not-found") console.error(`Failed to enforce suspension for ${uid}`, error);
-  }
-});
-
 export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireProvisioningAdmin(request);
   const token = request.auth?.token || {};
@@ -974,3 +874,104 @@ export const adminRejectFinanceRoleAssignment = onCall({ cors: true, region: "eu
     reason,
   };
 });
+
+export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { actorId, actorRole } = await requireProvisioningAdmin(request);
+  const payload = request.data || {};
+  const uid = cleanString(payload.uid);
+  if (uid && uid === actorId) {
+    throw new HttpsError("permission-denied", "Self-modification prohibited: an administrator cannot modify their own operational status.");
+  }
+  const requestedStatus = cleanString(payload.status).toUpperCase();
+  if (!["ACTIVE", "SUSPENDED"].includes(requestedStatus)) throw new HttpsError("invalid-argument", "status must be ACTIVE or SUSPENDED.");
+
+  const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
+  if (requestedStatus === "ACTIVE" && FINANCE_TIER_ROLES.has(currentRole)) await requireFinanceTierAssigner(request);
+  const isFinanceApproverReactivation = requestedStatus === "ACTIVE" && FINANCE_APPROVER_ROLES.has(currentRole);
+  const authorizationId = cleanString(payload.authorizationId);
+  if (isFinanceApproverReactivation) {
+    if (!authorizationId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Two-person authorization required: reactivating a suspended Finance approver requires independent second-person approval. Provide the approved authorizationId.",
+      );
+    }
+    const authSnap = await db.collection("finance_role_authorizations").doc(authorizationId).get();
+    if (!authSnap.exists) {
+      throw new HttpsError("not-found", "Finance role authorization request not found.");
+    }
+    const authData = authSnap.data() || {};
+    if (authData.status !== "APPROVED" || authData.consumed === true) {
+      throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been used.");
+    }
+    if (authData.targetUid !== uid) {
+      throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user.");
+    }
+    if (authData.approverId === actorId || authData.requesterId === authData.approverId) {
+      throw new HttpsError("permission-denied", "Segregation of duties: requester cannot apply their own unverified approval.");
+    }
+  }
+  if (requestedStatus === "ACTIVE" && userSnap.data()?.onboardingComplete !== true) {
+    throw new HttpsError("failed-precondition", "Complete canonical HR onboarding before activating staff access.");
+  }
+  const modules = normalizeModules(currentRole, userSnap.data()?.staffModules || accessSnap.data()?.modules || []);
+  const permissions = permissionsForModules(modules);
+  const suspended = requestedStatus === "SUSPENDED";
+  const previousClaims = authUser.customClaims || {};
+  const previousDisabled = authUser.disabled;
+  const now = FieldValue.serverTimestamp();
+
+  try {
+    await admin.auth().updateUser(uid, { disabled: suspended });
+    await admin.auth().setCustomUserClaims(uid, claimsForAccess(currentRole, modules, permissions, suspended));
+    await admin.auth().revokeRefreshTokens(uid);
+    await db.runTransaction(async (tx) => {
+      tx.update(db.collection("users").doc(uid), { status: requestedStatus, suspended, updatedAt: now, ...(suspended ? { suspendedAt: now, suspendedBy: actorId } : { restoredAt: now, restoredBy: actorId }) });
+      tx.update(db.collection("staffAccess").doc(uid), { active: !suspended, suspended, status: requestedStatus, updatedAt: now, updatedBy: actorId });
+      tx.update(db.collection("hrProfiles").doc(uid), { status: requestedStatus, suspended, updatedAt: now });
+      if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), { status: requestedStatus, suspended, available: suspended ? false : true, onDuty: false, updatedAt: now });
+      if (isFinanceApproverReactivation && authorizationId) {
+        tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
+          consumed: true,
+          consumedAt: now,
+          consumedBy: actorId,
+        });
+      }
+      tx.create(db.collection("audit_logs").doc(), {
+        actorId, actorRole, action: suspended ? "ADMIN_SUSPEND_STAFF_USER" : "ADMIN_RESTORE_STAFF_USER",
+        targetType: "users", targetId: uid, metadata: {
+          role: currentRole, refreshTokensRevoked: true, onboardingComplete: userSnap.data()?.onboardingComplete === true,
+          ...(authorizationId ? { authorizationId, twoPersonVerified: true } : {}),
+        }, createdAt: now,
+      });
+    });
+    return { success: true, uid, status: requestedStatus, refreshTokensRevoked: true };
+  } catch (error: any) {
+    await Promise.all([admin.auth().updateUser(uid, { disabled: previousDisabled }), admin.auth().setCustomUserClaims(uid, previousClaims)])
+      .catch((rollbackError) => console.error("Failed to restore staff Auth state after status update failure", { uid, rollbackError }));
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", `Unable to update staff status safely: ${error?.message || error}`);
+  }
+});
+
+// Fail-safe only: direct Firestore edits may suspend an account, but they may
+// never grant or change role/module claims. Access changes must use the callable.
+export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after || after.isStaff !== true) return;
+  const beforeStatus = cleanString(before?.status).toUpperCase();
+  const afterStatus = cleanString(after?.status).toUpperCase();
+  if (beforeStatus === afterStatus || afterStatus !== "SUSPENDED") return;
+
+  const uid = event.params.userId;
+  try {
+    const authUser = await admin.auth().getUser(uid);
+    await admin.auth().updateUser(uid, { disabled: true });
+    await admin.auth().setCustomUserClaims(uid, { ...(authUser.customClaims || {}), suspended: true });
+    await admin.auth().revokeRefreshTokens(uid);
+  } catch (error: any) {
+    if (error?.code !== "auth/user-not-found") console.error(`Failed to enforce suspension for ${uid}`, error);
+  }
+});
+
