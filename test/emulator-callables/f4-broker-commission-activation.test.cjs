@@ -13,7 +13,7 @@ const { reconcileBrokerCommissionOnContractActivation, adminReviewBrokerCommissi
 
 let adminActor;
 test.before(async () => {
-  adminActor = await createUser('admin_f4_comm', { role: 'admin', admin: true }, {
+  adminActor = await createUser('admin_f4_comm', { role: 'finance_admin', finance_admin: true }, {
     tokenExtra: { firebase: { sign_in_second_factor: 'phone' } },
   });
 });

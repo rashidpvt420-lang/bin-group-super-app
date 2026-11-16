@@ -20,8 +20,8 @@ const MFA = { firebase: { sign_in_provider: 'password', sign_in_second_factor: '
 let financeAdmin;
 let adminWithoutMfa;
 test.before(async () => {
-  financeAdmin = await createUser('admin_rent_fils', { role: 'admin' }, { tokenExtra: MFA });
-  adminWithoutMfa = await createUser('admin_rent_no_mfa', { role: 'admin' });
+  financeAdmin = await createUser('admin_rent_fils', { role: 'finance_admin', finance_admin: true }, { tokenExtra: MFA });
+  adminWithoutMfa = await createUser('admin_rent_no_mfa', { role: 'finance_admin', finance_admin: true });
 });
 test.beforeEach(clearFirestore);
 
