@@ -24,22 +24,34 @@ function bundleModule(entryRelPath) {
   });
   const mod = { exports: {} };
   const fn = new Function('module', 'exports', 'require', res.outputFiles[0].text);
+  class HttpsError extends Error {
+    constructor(code, message, details) {
+      super(message);
+      this.code = code;
+      this.details = details;
+    }
+  }
   fn(mod, mod.exports, (name) => ({
     apps: [{}],
     initializeApp: () => {},
     firestore: () => ({}),
-    HttpsError: class HttpsError extends Error {
-      constructor(code, message, details) {
-        super(message);
-        this.code = code;
-        this.details = details;
-      }
-    },
+    auth: () => ({
+      getUser: async (uid) => {
+        const users = globalThis.__financeAdminUsers || {};
+        if (!users[uid]) {
+          const err = new Error('user not found');
+          err.code = 'auth/user-not-found';
+          throw err;
+        }
+        return users[uid];
+      },
+    }),
+    HttpsError,
   }));
   return mod.exports;
 }
 
-const { claimsGrantFinanceAdmin, FINANCE_ADMIN_ROLES } = bundleModule('financeAdminMfa.ts');
+const { claimsGrantFinanceAdmin, FINANCE_ADMIN_ROLES, FINANCE_AUTHORIZATION_TTL_MS, isAuthorizationExpired, parseAuthorizationTimestampMs, requireMfaFinanceAdminActor } = bundleModule('financeAdminMfa.ts');
 const { paymentDualControlViolation, assertPaymentDualControl } = bundleModule('paymentDualControl.ts');
 
 test('finance admin role set contains only authorized finance approver roles and strictly excludes ceo, super_admin, admin', () => {
@@ -212,4 +224,71 @@ test('isFinance\(\) in Firestore rules no longer treats generic Admin, CEO, or S
   const catchAll = rules.match(/match \/\{collection\}\/\{document=\*\*\} \{[\s\S]*\}\s*\}\s*\}\s*$/);
   assert.ok(catchAll, 'admin catch-all must exist');
   assert.match(catchAll[0], /'payouts'/);
+});
+
+test('finance access TTL: fresh grants are current; missing, malformed, exact 24h and older are expired', () => {
+  const now = 1_700_000_000_000;
+  assert.equal(FINANCE_AUTHORIZATION_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(isAuthorizationExpired(now - 2 * 60 * 60 * 1000, now).expired, false);
+  assert.equal(isAuthorizationExpired(now - FINANCE_AUTHORIZATION_TTL_MS + 1, now).expired, false);
+  assert.equal(isAuthorizationExpired(now - FINANCE_AUTHORIZATION_TTL_MS, now).expired, true);
+  assert.equal(isAuthorizationExpired(now - FINANCE_AUTHORIZATION_TTL_MS - 1, now).expired, true);
+  assert.equal(isAuthorizationExpired(undefined, now).expired, true);
+  assert.equal(isAuthorizationExpired(null, now).expired, true);
+  assert.equal(isAuthorizationExpired('invalid', now).expired, true);
+  assert.equal(isAuthorizationExpired(now + 61_000, now).reason, 'FUTURE_TIMESTAMP_DRIFT');
+  assert.equal(parseAuthorizationTimestampMs(now), now);
+});
+
+test('requireMfaFinanceAdminActor denies expired or demoted finance access and allows a fresh grant', async () => {
+  const now = Date.now();
+  const mfa = { firebase: { sign_in_second_factor: 'phone' } };
+  const fresh = now - 60 * 60 * 1000;
+  const expired = now - FINANCE_AUTHORIZATION_TTL_MS;
+  const baseRecord = (claims) => ({
+    disabled: false,
+    emailVerified: true,
+    email: 'finance@example.invalid',
+    customClaims: claims,
+  });
+  const callActor = (uid, tokenClaims, liveClaims) => {
+    globalThis.__financeAdminUsers = {
+      [uid]: baseRecord(liveClaims),
+    };
+    return requireMfaFinanceAdminActor({
+      auth: {
+        uid,
+        token: { ...tokenClaims, email_verified: true, email: 'finance@example.invalid', ...mfa },
+      },
+    });
+  };
+
+  await assert.rejects(
+    () => callActor('fa_expired', { role: 'finance_admin', finance_admin: true, financeAuthorizedAt: expired }, { role: 'finance_admin', finance_admin: true, financeAuthorizedAt: expired }),
+    (err) => err.code === 'permission-denied' && /expired/i.test(err.message),
+  );
+  await assert.rejects(
+    () => callActor('fa_missing', { role: 'finance_admin', finance_admin: true }, { role: 'finance_admin', finance_admin: true }),
+    (err) => err.code === 'permission-denied' && /expired/i.test(err.message),
+  );
+  await assert.rejects(
+    () => callActor('fa_demoted', { role: 'finance_admin', finance_admin: true, financeAuthorizedAt: fresh }, { role: 'hr_admin' }),
+    (err) => err.code === 'permission-denied' && /no longer active/i.test(err.message),
+  );
+
+  const ok = await callActor(
+    'fa_fresh',
+    { role: 'finance_admin', finance_admin: true, financeAuthorizedAt: fresh },
+    { role: 'finance_admin', finance_admin: true, financeAuthorizedAt: fresh },
+  );
+  assert.equal(ok.uid, 'fa_fresh');
+  assert.equal(ok.email, 'finance@example.invalid');
+});
+
+test('money approval gate enforces the 24h financeAuthorizedAt TTL on live claims', () => {
+  const srcText = src('financeAdminMfa.ts');
+  const gate = srcText.slice(srcText.indexOf('export async function requireMfaFinanceAdminActor'));
+  assert.match(gate, /isAuthorizationExpired\(live\[FINANCE_AUTHORIZED_AT_CLAIM\]\)/);
+  assert.match(gate, /Finance Admin authorization has expired/);
+  assert.match(src('adminUserProvisioning.ts'), /financeAuthorizedAt: Date\.now\(\)/);
 });

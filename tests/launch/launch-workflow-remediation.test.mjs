@@ -149,7 +149,13 @@ function fixture({ tenant = false } = {}) {
   const admin = { apps: [{}], firestore, auth: () => ({ getUser: async (uid) => {
     const role = roleFor(uid);
     const existing = accounts.get(uid);
-    return { email: `${uid}@example.com`, disabled: false, emailVerified: true, ...existing, customClaims: { role, ...existing?.customClaims } };
+    const claims = { role, ...existing?.customClaims };
+    const financeRole = String(claims.role || claims.userRole || claims.primaryRole || '').toLowerCase();
+    if (['finance_admin', 'finance_manager', 'finance_controller'].includes(financeRole)
+      || claims.finance_admin === true || claims.finance_manager === true || claims.finance_controller === true) {
+      if (claims.financeAuthorizedAt === undefined) claims.financeAuthorizedAt = Date.now();
+    }
+    return { email: `${uid}@example.com`, disabled: false, emailVerified: true, ...existing, customClaims: claims };
   } }), storage: () => ({ bucket: () => ({ file: (path) => ({
     save: async (bytes, options) => {
       assert.equal(options.preconditionOpts.ifGenerationMatch, 0, 'Receipt cannot overwrite evidence.');
