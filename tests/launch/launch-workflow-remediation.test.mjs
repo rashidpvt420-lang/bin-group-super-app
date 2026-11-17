@@ -148,7 +148,8 @@ function fixture({ tenant = false } = {}) {
   const firestore = Object.assign(() => db, { Timestamp: class Timestamp {}, FieldValue: { serverTimestamp: () => 'SERVER_TIMESTAMP' } });
   const admin = { apps: [{}], firestore, auth: () => ({ getUser: async (uid) => {
     const role = roleFor(uid);
-    return accounts.get(uid) || { disabled: false, emailVerified: true, customClaims: { role } };
+    const existing = accounts.get(uid);
+    return { email: `${uid}@example.com`, disabled: false, emailVerified: true, ...existing, customClaims: { role, ...existing?.customClaims } };
   } }), storage: () => ({ bucket: () => ({ file: (path) => ({
     save: async (bytes, options) => {
       assert.equal(options.preconditionOpts.ifGenerationMatch, 0, 'Receipt cannot overwrite evidence.');
