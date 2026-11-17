@@ -69,6 +69,68 @@ async function requireFinanceTierAssigner(request: any) {
 }
 
 export const FINANCE_APPROVER_ROLES: ReadonlySet<string> = new Set(["finance_admin", "finance_manager", "finance_controller"]);
+export const FINANCE_AUTHORIZATION_TTL_MS = 24 * 60 * 60 * 1000; // 86,400,000 ms (24 hours)
+
+/**
+ * Robust parser for Firestore timestamps, dates, millisecond integers, and ISO strings.
+ * Returns null if timestamp is missing, malformed, non-finite, or invalid.
+ */
+export function parseAuthorizationTimestampMs(timestamp: unknown): number | null {
+  if (timestamp === null || timestamp === undefined) return null;
+  if (typeof (timestamp as any)?.toMillis === "function") {
+    try {
+      const ms = (timestamp as any).toMillis();
+      return typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? ms : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof timestamp === "object") {
+    const s = (timestamp as any)._seconds ?? (timestamp as any).seconds;
+    const ns = (timestamp as any)._nanoseconds ?? (timestamp as any).nanoseconds ?? 0;
+    if (typeof s === "number" && Number.isFinite(s) && s > 0) {
+      const ms = s * 1000 + Math.floor(ns / 1e6);
+      return Number.isFinite(ms) ? ms : null;
+    }
+  }
+  if (timestamp instanceof Date) {
+    const ms = timestamp.getTime();
+    return Number.isFinite(ms) && ms > 0 ? ms : null;
+  }
+  if (typeof timestamp === "number" && Number.isFinite(timestamp) && timestamp > 0) {
+    return timestamp;
+  }
+  if (typeof timestamp === "string" && timestamp.trim()) {
+    const parsed = Date.parse(timestamp);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Checks whether a Finance role authorization has expired under the strict 24-hour rule.
+ * Fails closed: if timestamp is missing, malformed, or unparseable, returns expired: true.
+ * If ageMs >= FINANCE_AUTHORIZATION_TTL_MS, returns expired: true.
+ */
+export function isAuthorizationExpired(
+  createdAt: unknown,
+  nowMs: number = Date.now(),
+): { expired: boolean; reason?: string; ageMs?: number; createdMs?: number } {
+  const createdMs = parseAuthorizationTimestampMs(createdAt);
+  if (createdMs === null) {
+    return { expired: true, reason: "MISSING_OR_MALFORMED_TIMESTAMP" };
+  }
+  // Max 60-second forward clock-drift guard
+  if (createdMs > nowMs + 60000) {
+    return { expired: true, reason: "FUTURE_TIMESTAMP_DRIFT", createdMs };
+  }
+  const ageMs = nowMs - createdMs;
+  if (ageMs >= FINANCE_AUTHORIZATION_TTL_MS) {
+    return { expired: true, reason: "EXPIRED_AFTER_24_HOURS", ageMs, createdMs };
+  }
+  return { expired: false, ageMs, createdMs };
+}
+
 const INDEPENDENT_FINANCE_APPROVER_ROLES = new Set(["super_admin", "ceo", "finance_controller"]);
 
 function isIndependentFinanceApprover(claims: any) {
@@ -587,6 +649,10 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
     if (authData.status !== "APPROVED" || authData.consumed === true) {
       throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been consumed.");
     }
+    const expiry = isAuthorizationExpired(authData.createdAt);
+    if (expiry.expired) {
+      throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+    }
     if (authData.targetUid !== uid || authData.targetRole !== role) {
       throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user or requested role.");
     }
@@ -612,6 +678,15 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
       tx.update(db.collection("hrProfiles").doc(uid), { role, employeeType: role, updatedAt: now });
       if (role === "technician") tx.update(db.collection("technicians").doc(uid), { role, userRole: role, primaryRole: role, staffModules: modules, modules, permissions, updatedAt: now });
       if (isFinanceApproverChange && authorizationId) {
+        const txAuthSnap = await tx.get(db.collection("finance_role_authorizations").doc(authorizationId));
+        if (!txAuthSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+        const txAuthData = txAuthSnap.data() || {};
+        if (txAuthData.status !== "APPROVED" || txAuthData.consumed === true) {
+          throw new HttpsError("failed-precondition", "Finance role authorization is no longer valid or has already been consumed.");
+        }
+        if (isAuthorizationExpired(txAuthData.createdAt).expired) {
+          throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+        }
         tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
           consumed: true,
           consumedAt: now,
@@ -648,16 +723,33 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
   const targetUid = cleanString(payload.targetUid || payload.uid);
   const targetRole = cleanString(payload.targetRole || payload.role).toLowerCase();
   const actionType = cleanString(payload.actionType, "PROMOTE_STAFF").toUpperCase();
+  const isDemotion = actionType === "DEMOTE_STAFF" || actionType === "REVOKE_AUTHORITY" || actionType === "DEMOTE_FINANCE_APPROVER" || actionType === "REVOKE_FINANCE_APPROVER";
 
   if (!targetUid) throw new HttpsError("invalid-argument", "targetUid is required.");
   if (targetUid === actorId) {
-    throw new HttpsError("permission-denied", "Self-assignment prohibited: you cannot request Finance authority for yourself.");
-  }
-  if (!FINANCE_APPROVER_ROLES.has(targetRole)) {
-    throw new HttpsError("invalid-argument", `Invalid Finance approver role: ${targetRole}. Must be one of: finance_admin, finance_manager, finance_controller.`);
+    throw new HttpsError("permission-denied", isDemotion
+      ? "Self-demotion prohibited: you cannot request demotion or revocation for yourself."
+      : "Self-assignment prohibited: you cannot request Finance authority for yourself.");
   }
 
   const { authUser, userSnap, currentRole } = await loadExistingStaff(targetUid);
+
+  if (isDemotion) {
+    if (!FINANCE_APPROVER_ROLES.has(currentRole)) {
+      throw new HttpsError("failed-precondition", `Target user is not currently a Finance approver (current role: ${currentRole}). Demotion request invalid.`);
+    }
+    if (!STAFF_ROLES.has(targetRole)) {
+      throw new HttpsError("invalid-argument", `Invalid demotion target role: ${targetRole}. Must be a valid staff role.`);
+    }
+    if (FINANCE_APPROVER_ROLES.has(targetRole)) {
+      throw new HttpsError("invalid-argument", `Demotion workflow cannot assign a Finance approver role (${targetRole}). Authority escalation prohibited.`);
+    }
+  } else {
+    if (!FINANCE_APPROVER_ROLES.has(targetRole)) {
+      throw new HttpsError("invalid-argument", `Invalid Finance approver role: ${targetRole}. Must be one of: finance_admin, finance_manager, finance_controller.`);
+    }
+  }
+
   const now = FieldValue.serverTimestamp();
   const authDocRef = db.collection("finance_role_authorizations").doc();
   const authorizationId = authDocRef.id;
@@ -681,7 +773,7 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     tx.create(db.collection("audit_logs").doc(), {
       actorId,
       actorRole,
-      action: "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT",
+      action: isDemotion ? "ADMIN_REQUEST_FINANCE_ROLE_DEMOTION" : "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT",
       targetType: "users",
       targetId: targetUid,
       metadata: {
@@ -703,7 +795,9 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     targetUid,
     targetRole,
     status: "PENDING_INDEPENDENT_APPROVAL",
-    message: "Finance role assignment request submitted. An independent authorized approver must approve it.",
+    message: isDemotion
+      ? "Finance role demotion request submitted. An independent authorized approver must approve it."
+      : "Finance role assignment request submitted. An independent authorized approver must approve it.",
   };
 });
 
@@ -714,62 +808,125 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
   if (!authorizationId) throw new HttpsError("invalid-argument", "authorizationId is required.");
 
   const authRef = db.collection("finance_role_authorizations").doc(authorizationId);
-  const authSnap = await authRef.get();
-  if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
-
-  const authData = authSnap.data() || {};
-  if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
-    throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
-  }
-
-  // Segregation of duties:
-  if (approverId === authData.requesterId) {
-    throw new HttpsError("permission-denied", "Segregation of duties violation: the person requesting the Finance role assignment cannot approve it.");
-  }
-  if (approverId === authData.targetUid) {
-    throw new HttpsError("permission-denied", "Self-promotion violation: target user cannot approve their own Finance role assignment.");
-  }
-
-  const targetUid = authData.targetUid;
-  const targetRole = authData.targetRole;
-  const actionType = authData.actionType;
   const now = FieldValue.serverTimestamp();
 
-  // Load existing target account
-  const targetUser = await admin.auth().getUser(targetUid);
-  const existingClaims = targetUser.customClaims || {};
-  const { modules, permissions } = canonicalAccess(targetRole, {});
+  let expiredAuditPayload: any = null;
+  let txResult: any;
 
-  const isReactivation = actionType === "REACTIVATE_STAFF" || actionType === "RESTORE_AUTHORITY";
-  const nextClaims = {
-    ...existingClaims,
-    ...claimsForAccess(targetRole, modules, permissions, isReactivation ? false : existingClaims.suspended === true),
-    role: targetRole,
-    userRole: targetRole,
-    primaryRole: targetRole,
-    finance_admin: targetRole === "finance_admin",
-    finance_manager: targetRole === "finance_manager",
-    finance_controller: targetRole === "finance_controller",
-    financeApprovalPending: false,
-    ...(isReactivation ? { suspended: false } : {}),
-  };
+  // 1. Authoritative Firestore transaction: lock document, enforce TTL expiry, verify segregation of duties & live role
+  try {
+    txResult = await db.runTransaction(async (tx) => {
+      const authSnap = await tx.get(authRef);
+      if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
 
-  if (isReactivation) {
-    await admin.auth().updateUser(targetUid, { disabled: false });
-  }
-  await admin.auth().setCustomUserClaims(targetUid, nextClaims);
-  await admin.auth().revokeRefreshTokens(targetUid);
+      const authData = authSnap.data() || {};
+      if (authData.status === "APPROVED") {
+        if (authData.authSyncRetryRequired === true) {
+          if (approverId === authData.requesterId) {
+            throw new HttpsError("permission-denied", "Segregation of duties violation: requester cannot approve auth sync recovery.");
+          }
+          if (approverId === authData.targetUid) {
+            throw new HttpsError("permission-denied", "Self-promotion/demotion violation: target user cannot approve their own auth sync recovery.");
+          }
+          const actionType = authData.actionType;
+          const isDemotion = actionType === "DEMOTE_STAFF" || actionType === "REVOKE_AUTHORITY" || actionType === "DEMOTE_FINANCE_APPROVER" || actionType === "REVOKE_FINANCE_APPROVER";
+          const isReactivation = actionType === "REACTIVATE_STAFF" || actionType === "RESTORE_AUTHORITY";
+          const { modules, permissions } = canonicalAccess(authData.targetRole, {});
+          return {
+            targetUid: authData.targetUid,
+            targetRole: authData.targetRole,
+            actionType,
+            isDemotion,
+            isReactivation,
+            modules,
+            permissions,
+            isRecovery: true,
+          };
+        }
+        throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
+      }
+      if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
+        throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
+      }
 
-  await db.runTransaction(async (tx) => {
+      // Authoritative 24-hour expiration check (fail closed)
+      const expiry = isAuthorizationExpired(authData.createdAt);
+      if (expiry.expired) {
+        expiredAuditPayload = {
+          actorId: approverId,
+          actorRole: approverRole,
+          action: "FINANCE_ROLE_ASSIGNMENT_EXPIRED_REFUSAL",
+          targetType: "finance_role_authorizations",
+          targetId: authorizationId,
+          metadata: {
+            authorizationId,
+            actionType: authData.actionType || null,
+            targetUid: authData.targetUid || null,
+            targetRole: authData.targetRole || null,
+            previousRole: authData.previousRole || null,
+            createdAt: authData.createdAt ?? null,
+            reason: expiry.reason || "AUTHORIZATION_EXPIRED_24H",
+            ageMs: typeof expiry.ageMs === "number" ? expiry.ageMs : null,
+            attemptedAt: now,
+          },
+          createdAt: now,
+        };
+        throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+      }
+
+    // Segregation of duties:
+    if (approverId === authData.requesterId) {
+      throw new HttpsError("permission-denied", "Segregation of duties violation: the person requesting the Finance role assignment cannot approve it.");
+    }
+    if (approverId === authData.targetUid) {
+      throw new HttpsError("permission-denied", "Self-promotion/demotion violation: target user cannot approve their own Finance role assignment.");
+    }
+
+    const targetUid = authData.targetUid;
+    const targetRole = authData.targetRole;
+    const actionType = authData.actionType;
+    const isDemotion = actionType === "DEMOTE_STAFF" || actionType === "REVOKE_AUTHORITY" || actionType === "DEMOTE_FINANCE_APPROVER" || actionType === "REVOKE_FINANCE_APPROVER";
+
+    // Re-read target user doc inside transaction to prevent stale role mutations
+    const userRef = db.collection("users").doc(targetUid);
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) {
+      throw new HttpsError("not-found", "Target user record not found.");
+    }
+    const userData = userSnap.data() || {};
+    const liveTargetRole = cleanString(userData.role || userData.userRole || userData.primaryRole).toLowerCase();
+
+    // Verify underlying conditions haven't changed:
+    if (authData.previousRole && liveTargetRole !== authData.previousRole) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Underlying condition changed: target user role (${liveTargetRole}) no longer matches authorization previous role (${authData.previousRole}).`,
+      );
+    }
+
+    if (isDemotion) {
+      if (!FINANCE_APPROVER_ROLES.has(liveTargetRole)) {
+        throw new HttpsError("failed-precondition", "Target user does not currently hold a Finance approver role to demote.");
+      }
+      if (FINANCE_APPROVER_ROLES.has(targetRole)) {
+        throw new HttpsError("failed-precondition", "Demotion cannot grant financial approval authority.");
+      }
+    }
+
+    const isReactivation = actionType === "REACTIVATE_STAFF" || actionType === "RESTORE_AUTHORITY";
+    const { modules, permissions } = canonicalAccess(targetRole, {});
+
     tx.update(authRef, {
       status: "APPROVED",
+      authSyncStatus: "PENDING",
+      authSyncRetryRequired: false,
       approverId,
       approverRole,
       twoPersonVerified: true,
       approvedAt: now,
       updatedAt: now,
     });
-    tx.update(db.collection("users").doc(targetUid), {
+    tx.update(userRef, {
       role: targetRole,
       userRole: targetRole,
       primaryRole: targetRole,
@@ -784,15 +941,15 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
       modules,
       staffModules: modules,
       permissions,
-      active: isReactivation ? true : false,
-      suspended: isReactivation ? false : true,
+      active: isReactivation ? true : (isDemotion ? true : false),
+      suspended: isReactivation ? false : (isDemotion ? false : true),
       updatedAt: now,
       updatedBy: approverId,
     });
     tx.create(db.collection("audit_logs").doc(), {
       actorId: approverId,
       actorRole: approverRole,
-      action: "FINANCE_ROLE_ASSIGNMENT_APPROVED",
+      action: isDemotion ? "FINANCE_ROLE_DEMOTION_APPROVED" : "FINANCE_ROLE_ASSIGNMENT_APPROVED",
       targetType: "users",
       targetId: targetUid,
       metadata: {
@@ -800,22 +957,168 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
         actionType,
         targetUid,
         targetRole,
+        proposedRole: targetRole,
+        previousRole: authData.previousRole || liveTargetRole,
         requesterId: authData.requesterId,
         approverId,
         twoPersonVerified: true,
+        decision: "APPROVED",
+        reason: isDemotion ? "Finance role demotion independently approved" : "Finance role assignment independently approved",
       },
       createdAt: now,
     });
+
+    return {
+      targetUid,
+      targetRole,
+      actionType,
+      isDemotion,
+      isReactivation,
+      modules,
+      permissions,
+    };
   });
+  } catch (txErr: any) {
+    if (expiredAuditPayload) {
+      await Promise.all([
+        db.collection("audit_logs").add(expiredAuditPayload),
+        authRef.update({
+          status: "EXPIRED",
+          expiredAt: now,
+          updatedAt: now,
+        }),
+      ]).catch((auditErr) => console.error("Failed to persist expired refusal audit", auditErr));
+    }
+    throw txErr;
+  }
+
+  // 2. Auth claims synchronization & session revocation with resilient error handling & recoverable state
+  let authSyncSuccess = false;
+  let authSyncError: any = null;
+
+  try {
+    const targetUser = await admin.auth().getUser(txResult.targetUid);
+    const existingClaims = targetUser.customClaims || {};
+    const nextClaims = {
+      ...existingClaims,
+      ...claimsForAccess(
+        txResult.targetRole,
+        txResult.modules,
+        txResult.permissions,
+        txResult.isReactivation ? false : (txResult.isDemotion ? false : existingClaims.suspended === true),
+      ),
+      role: txResult.targetRole,
+      userRole: txResult.targetRole,
+      primaryRole: txResult.targetRole,
+      finance_admin: txResult.targetRole === "finance_admin",
+      finance_manager: txResult.targetRole === "finance_manager",
+      finance_controller: txResult.targetRole === "finance_controller",
+      financeApprovalPending: false,
+      ...(txResult.isReactivation ? { suspended: false } : {}),
+    };
+
+    if (txResult.isReactivation) {
+      await admin.auth().updateUser(txResult.targetUid, { disabled: false });
+    }
+    await admin.auth().setCustomUserClaims(txResult.targetUid, nextClaims);
+    await admin.auth().revokeRefreshTokens(txResult.targetUid);
+    authSyncSuccess = true;
+  } catch (authErr: any) {
+    authSyncError = authErr;
+    console.error("Critical: Auth claims sync or token revocation failed post-transaction", {
+      targetUid: txResult.targetUid,
+      authorizationId,
+      error: authErr,
+    });
+  }
+
+  if (!authSyncSuccess) {
+    // Explicit failure handling & recoverable state:
+    // Mark authorization and user doc as requiring retry, and log immutable failure audit.
+    const failureAudit = {
+      actorId: approverId,
+      actorRole: approverRole,
+      action: txResult.isDemotion ? "FINANCE_ROLE_DEMOTION_AUTH_SYNC_FAILED" : "FINANCE_ROLE_ASSIGNMENT_AUTH_SYNC_FAILED",
+      targetType: "users",
+      targetId: txResult.targetUid,
+      metadata: {
+        authorizationId,
+        actionType: txResult.actionType,
+        targetUid: txResult.targetUid,
+        targetRole: txResult.targetRole,
+        error: String(authSyncError?.message || authSyncError),
+        authSyncRetryRequired: true,
+      },
+      createdAt: now,
+    };
+
+    await Promise.allSettled([
+      authRef.update({
+        authSyncStatus: "FAILED",
+        authSyncRetryRequired: true,
+        authSyncError: String(authSyncError?.message || authSyncError),
+        updatedAt: now,
+      }),
+      db.collection("users").doc(txResult.targetUid).update({
+        authSyncRetryRequired: true,
+        updatedAt: now,
+      }),
+      db.collection("audit_logs").add(failureAudit),
+    ]);
+
+    throw new HttpsError(
+      "internal",
+      `Database transaction succeeded, but external Auth claims sync or token revocation failed: ${authSyncError?.message || authSyncError}. Security flag authSyncRetryRequired set for recovery.`,
+    );
+  }
+
+  if (txResult.isRecovery) {
+    await Promise.allSettled([
+      authRef.update({
+        authSyncStatus: "COMPLETED",
+        authSyncRetryRequired: false,
+        authSyncError: null,
+        recoveredAt: now,
+        recoveredBy: approverId,
+        updatedAt: now,
+      }),
+      db.collection("users").doc(txResult.targetUid).update({
+        authSyncRetryRequired: false,
+        updatedAt: now,
+      }),
+      db.collection("audit_logs").add({
+        actorId: approverId,
+        actorRole: approverRole,
+        action: txResult.isDemotion ? "FINANCE_ROLE_DEMOTION_AUTH_SYNC_RECOVERED" : "FINANCE_ROLE_ASSIGNMENT_AUTH_SYNC_RECOVERED",
+        targetType: "users",
+        targetId: txResult.targetUid,
+        metadata: {
+          authorizationId,
+          targetUid: txResult.targetUid,
+          targetRole: txResult.targetRole,
+          recoveryCompleted: true,
+        },
+        createdAt: now,
+      }),
+    ]);
+  } else {
+    await authRef.update({
+      authSyncStatus: "COMPLETED",
+      authSyncRetryRequired: false,
+      updatedAt: now,
+    }).catch((err) => console.error("Non-fatal: failed to set authSyncStatus to COMPLETED", err));
+  }
 
   return {
     success: true,
     authorizationId,
     status: "APPROVED",
-    targetUid,
-    targetRole,
+    targetUid: txResult.targetUid,
+    targetRole: txResult.targetRole,
     twoPersonVerified: true,
-    message: "Finance role assignment independently approved and granted.",
+    message: txResult.isDemotion
+      ? "Finance role demotion independently approved and applied."
+      : "Finance role assignment independently approved and granted.",
   };
 });
 
@@ -827,51 +1130,124 @@ export const adminRejectFinanceRoleAssignment = onCall({ cors: true, region: "eu
   if (!authorizationId) throw new HttpsError("invalid-argument", "authorizationId is required.");
 
   const authRef = db.collection("finance_role_authorizations").doc(authorizationId);
-  const authSnap = await authRef.get();
-  if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
-
-  const authData = authSnap.data() || {};
-  if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
-    throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
-  }
-  if (approverId === authData.requesterId) {
-    throw new HttpsError("permission-denied", "Segregation of duties violation: requester cannot reject their own request in place of independent review.");
-  }
-
   const now = FieldValue.serverTimestamp();
-  await db.runTransaction(async (tx) => {
-    tx.update(authRef, {
-      status: "REJECTED",
-      rejectedBy: approverId,
-      rejectedByRole: approverRole,
-      rejectionReason: reason,
-      rejectedAt: now,
-      updatedAt: now,
+
+  let expiredAuditPayload: any = null;
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const authSnap = await tx.get(authRef);
+      if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+
+      const authData = authSnap.data() || {};
+      if (authData.status !== "PENDING_INDEPENDENT_APPROVAL") {
+        throw new HttpsError("failed-precondition", `Request is not pending approval (current status: ${authData.status}).`);
+      }
+      if (approverId === authData.requesterId) {
+        throw new HttpsError("permission-denied", "Segregation of duties violation: requester cannot reject their own request in place of independent review.");
+      }
+
+      const expiry = isAuthorizationExpired(authData.createdAt);
+      if (expiry.expired) {
+        expiredAuditPayload = {
+          actorId: approverId,
+          actorRole: approverRole,
+          action: "FINANCE_ROLE_ASSIGNMENT_EXPIRED_REFUSAL",
+          targetType: "finance_role_authorizations",
+          targetId: authorizationId,
+          metadata: {
+            authorizationId,
+            actionType: authData.actionType || null,
+            targetUid: authData.targetUid || null,
+            targetRole: authData.targetRole || null,
+            previousRole: authData.previousRole || null,
+            createdAt: authData.createdAt ?? null,
+            reason: expiry.reason || "AUTHORIZATION_EXPIRED_24H",
+            ageMs: typeof expiry.ageMs === "number" ? expiry.ageMs : null,
+            attemptedAt: now,
+          },
+          createdAt: now,
+        };
+        throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+      }
+
+      tx.update(authRef, {
+        status: "REJECTED",
+        rejectedBy: approverId,
+        rejectedByRole: approverRole,
+        rejectionReason: reason,
+        rejectedAt: now,
+        updatedAt: now,
+      });
+      tx.create(db.collection("audit_logs").doc(), {
+        actorId: approverId,
+        actorRole: approverRole,
+        action: "FINANCE_ROLE_ASSIGNMENT_REJECTED",
+        targetType: "users",
+        targetId: authData.targetUid,
+        metadata: {
+          authorizationId,
+          actionType: authData.actionType || null,
+          targetUid: authData.targetUid || null,
+          targetRole: authData.targetRole || null,
+          previousRole: authData.previousRole || null,
+          requesterId: authData.requesterId || null,
+          approverId,
+          decision: "REJECTED",
+          reason,
+        },
+        createdAt: now,
+      });
     });
-    tx.create(db.collection("audit_logs").doc(), {
-      actorId: approverId,
-      actorRole: approverRole,
-      action: "FINANCE_ROLE_ASSIGNMENT_REJECTED",
-      targetType: "users",
-      targetId: authData.targetUid,
-      metadata: {
-        authorizationId,
-        actionType: authData.actionType,
-        targetUid: authData.targetUid,
-        targetRole: authData.targetRole,
-        requesterId: authData.requesterId,
-        approverId,
-        reason,
-      },
-      createdAt: now,
-    });
-  });
+  } catch (txErr: any) {
+    if (expiredAuditPayload) {
+      await Promise.all([
+        db.collection("audit_logs").add(expiredAuditPayload),
+        authRef.update({
+          status: "EXPIRED",
+          expiredAt: now,
+          updatedAt: now,
+        }),
+      ]).catch((auditErr) => console.error("Failed to persist expired refusal audit on rejection", auditErr));
+    }
+    throw txErr;
+  }
 
   return {
     success: true,
     authorizationId,
     status: "REJECTED",
     reason,
+  };
+});
+
+export const adminGetFinanceRoleAuthorization = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  const token = request.auth.token || {};
+  if (!hasAdminAccess(token) && !isIndependentFinanceApprover(token)) {
+    throw new HttpsError("permission-denied", "Only administrators or finance approvers may evaluate finance role authorizations.");
+  }
+
+  const payload = request.data || {};
+  const authorizationId = cleanString(payload.authorizationId);
+  if (!authorizationId) throw new HttpsError("invalid-argument", "authorizationId is required.");
+
+  const authRef = db.collection("finance_role_authorizations").doc(authorizationId);
+  const authSnap = await authRef.get();
+  if (!authSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+
+  const authData = authSnap.data() || {};
+  const expiryCheck = isAuthorizationExpired(authData.createdAt);
+
+  return {
+    success: true,
+    authorization: {
+      ...authData,
+      isExpired: expiryCheck.expired,
+      expiredReason: expiryCheck.reason || null,
+      ageMs: expiryCheck.ageMs || null,
+      ttlRemainingMs: expiryCheck.expired ? 0 : Math.max(0, FINANCE_AUTHORIZATION_TTL_MS - (expiryCheck.ageMs || 0)),
+    },
   };
 });
 
@@ -904,6 +1280,10 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
     if (authData.status !== "APPROVED" || authData.consumed === true) {
       throw new HttpsError("failed-precondition", "Finance role authorization is not approved or has already been used.");
     }
+    const expiry = isAuthorizationExpired(authData.createdAt);
+    if (expiry.expired) {
+      throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+    }
     if (authData.targetUid !== uid) {
       throw new HttpsError("failed-precondition", "Finance role authorization does not match the target user.");
     }
@@ -931,6 +1311,15 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
       tx.update(db.collection("hrProfiles").doc(uid), { status: requestedStatus, suspended, updatedAt: now });
       if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), { status: requestedStatus, suspended, available: suspended ? false : true, onDuty: false, updatedAt: now });
       if (isFinanceApproverReactivation && authorizationId) {
+        const txAuthSnap = await tx.get(db.collection("finance_role_authorizations").doc(authorizationId));
+        if (!txAuthSnap.exists) throw new HttpsError("not-found", "Finance role authorization request not found.");
+        const txAuthData = txAuthSnap.data() || {};
+        if (txAuthData.status !== "APPROVED" || txAuthData.consumed === true) {
+          throw new HttpsError("failed-precondition", "Finance role authorization is no longer valid or has already been used.");
+        }
+        if (isAuthorizationExpired(txAuthData.createdAt).expired) {
+          throw new HttpsError("failed-precondition", "Finance role authorization request has expired (24-hour limit exceeded).");
+        }
         tx.update(db.collection("finance_role_authorizations").doc(authorizationId), {
           consumed: true,
           consumedAt: now,
