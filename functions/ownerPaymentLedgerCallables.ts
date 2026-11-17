@@ -25,12 +25,17 @@ import {
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const text = (value: unknown) => String(value ?? "").trim();
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
+// Oversight reads only. Money mutations below use requireMfaFinanceAdminActor;
+// CEO / Super Admin / generic Admin cannot approve or mark paid via this set.
+const LEDGER_OVERSIGHT_ROLES = new Set([
+  "admin", "super_admin", "ceo", "finance_admin", "finance_manager", "finance_controller",
+]);
 
-function isAdminToken(token: Record<string, any>): boolean {
+function canReadOwnerPaymentLedger(token: Record<string, any>): boolean {
   const role = text(token.role || token.userRole || token.primaryRole).toLowerCase();
-  return token.suspended !== true && (ADMIN_ROLES.has(role) || token.admin === true || token.isAdmin === true ||
-    token.superAdmin === true || token.super_admin === true || token.ceo === true);
+  return token.suspended !== true && (LEDGER_OVERSIGHT_ROLES.has(role) || token.admin === true || token.isAdmin === true ||
+    token.superAdmin === true || token.super_admin === true || token.ceo === true ||
+    token.finance_admin === true || token.finance_manager === true || token.finance_controller === true);
 }
 
 /**
@@ -162,7 +167,7 @@ export const getOwnerPaymentLedger = onCall({ cors: true, enforceAppCheck: true 
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Login required.");
   const requestedOwner = text(request.data?.ownerUid);
-  const adminCaller = isAdminToken(request.auth?.token || {});
+  const adminCaller = canReadOwnerPaymentLedger(request.auth?.token || {});
   const ownerUid = adminCaller && requestedOwner ? requestedOwner : uid;
   if (!adminCaller && requestedOwner && requestedOwner !== uid) {
     throw new HttpsError("permission-denied", "Owners can view only their own payments.");

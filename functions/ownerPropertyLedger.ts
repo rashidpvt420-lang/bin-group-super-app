@@ -16,7 +16,10 @@ const text = (v: unknown, max = 200) => String(v ?? "").trim().slice(0, max);
 const upper = (v: unknown) => text(v, 60).toUpperCase();
 const money = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0; };
 const sum = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin", "operations_admin"]);
+// Oversight / operations reads only. This callable never writes or approves money.
+const LEDGER_OVERSIGHT_ROLES = new Set([
+  "admin", "super_admin", "ceo", "finance_admin", "finance_manager", "finance_controller", "operations_admin",
+]);
 const OWNER_FIELDS = ["ownerId", "ownerUid"];
 const owns = (d: Record<string, any>, uid: string) => OWNER_FIELDS.some((f) => text(d[f], 128) === uid);
 export const CHEQUE_WINDOW_DAYS = 90;
@@ -72,8 +75,10 @@ export function buildPropertyLedger(input: {
 export const getOwnerPropertyLedger = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
-  const role = text(request.auth?.token?.role || request.auth?.token?.userRole, 40).toLowerCase();
-  const isAdmin = request.auth?.token?.admin === true || ADMIN_ROLES.has(role);
+  const token: Record<string, any> = request.auth?.token || {};
+  const role = text(token.role || token.userRole, 40).toLowerCase();
+  const isAdmin = token.admin === true || token.finance_admin === true || token.finance_manager === true ||
+    token.finance_controller === true || LEDGER_OVERSIGHT_ROLES.has(role);
   if (role !== "owner" && !isAdmin) throw new HttpsError("permission-denied", "Owner access required.");
   const propertyId = text(request.data?.propertyId, 128);
   if (!/^[A-Za-z0-9_-]{3,128}$/.test(propertyId)) throw new HttpsError("invalid-argument", "propertyId is required.");

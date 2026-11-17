@@ -153,3 +153,63 @@ test('dual control evaluation enforces segregation of duties', () => {
     ownerUid: 'owner_1'
   }, 'admin_2'), null);
 });
+
+test('non-payout money approval and mark-paid callables use requireMfaFinanceAdminActor', () => {
+  const callables = [
+    ['ownerPaymentLedgerCallables.ts', 'adminSetOwnerChequeClearance'],
+    ['ownerPaymentLedgerCallables.ts', 'adminRecordReplacementInvoicePayment'],
+    ['ownerPaymentLedgerCallables.ts', 'adminVerifyReplacementInvoicePayment'],
+    ['pdcRegister.ts', 'financeRecordPdcStatus'],
+    ['paymentCollectionRecords.ts', 'financeRecordPaymentCollection'],
+    ['paymentCollectionRecords.ts', 'financeVoidPaymentCollection'],
+    ['ownerReferralRewards.ts', 'financeApproveOwnerReferralReward'],
+    ['ownerReferralRewards.ts', 'financeRejectOwnerReferral'],
+    ['preventiveMaintenancePlans.ts', 'financeActivatePmSubscription'],
+    ['inspectionFirstOwnerOnboarding.ts', 'adminRecordOwnerMobilizationPaymentEvidence'],
+    ['designPayments.ts', 'adminReviewDesignPayment'],
+  ];
+  for (const [file, name] of callables) {
+    const code = src(file);
+    const fn = body(code, name);
+    if (name === 'adminReviewDesignPayment') {
+      assert.match(fn, /actor\(request, true\)/, `${name} must use the finance actor`);
+      assert.match(code, /requireMfaFinanceAdminActor\(request\)/, `${file} must call requireMfaFinanceAdminActor`);
+    } else {
+      assert.match(fn, /requireMfaFinanceAdminActor\(request\)/, `${name} must use requireMfaFinanceAdminActor`);
+    }
+  }
+});
+
+test('legacy profileP1 payout review is gone; runtime exports the MFA Finance Admin implementation', () => {
+  const p1 = src('profileP1Workflows.ts');
+  assert.doesNotMatch(p1, /export const adminReviewBrokerPayoutRequest/);
+  assert.doesNotMatch(p1, /ADMIN_\$\{action\}_BROKER_PAYOUT/);
+  const runtime = src('runtime.ts');
+  assert.match(runtime, /export \{ adminReviewBrokerPayoutRequest \} from "\.\/adminBrokerPayoutReview"/);
+});
+
+test('owner payment ledger leftovers no longer treat ADMIN_ROLES as money approval authority', () => {
+  const ledger = src('ownerPaymentLedgerCallables.ts');
+  assert.doesNotMatch(ledger, /const ADMIN_ROLES = new Set/);
+  assert.match(ledger, /LEDGER_OVERSIGHT_ROLES/);
+  for (const name of ['adminSetOwnerChequeClearance', 'adminRecordReplacementInvoicePayment', 'adminVerifyReplacementInvoicePayment']) {
+    assert.match(body(ledger, name), /requireMfaFinanceAdminActor\(request\)/);
+    assert.doesNotMatch(body(ledger, name), /canReadOwnerPaymentLedger|LEDGER_OVERSIGHT_ROLES|isAdminToken/);
+  }
+});
+
+test('isFinance\(\) in Firestore rules no longer treats generic Admin, CEO, or Super Admin as finance', () => {
+  const rules = readFileSync(`${root}firestore.rules`, 'utf8');
+  const match = rules.match(/function isFinance\(\) \{[\s\S]*?\n    \}/);
+  assert.ok(match, 'isFinance() must exist');
+  assert.doesNotMatch(match[0], /isAdmin\(\)/);
+  assert.doesNotMatch(match[0], /'admin'|'ceo'|'super_admin'|"admin"|"ceo"|"super_admin"/);
+  assert.match(match[0], /finance_admin/);
+  const payouts = rules.match(/match \/payouts\/\{payoutId\} \{[\s\S]*?\n    \}/);
+  assert.ok(payouts, 'payouts match block must exist');
+  assert.match(payouts[0], /allow create, update, delete: if false;/);
+  assert.doesNotMatch(payouts[0], /allow write: if isAdmin\(\)/);
+  const catchAll = rules.match(/match \/\{collection\}\/\{document=\*\*\} \{[\s\S]*\}\s*\}\s*\}\s*$/);
+  assert.ok(catchAll, 'admin catch-all must exist');
+  assert.match(catchAll[0], /'payouts'/);
+});
