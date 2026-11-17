@@ -153,18 +153,24 @@ test('Payroll Hub opens payroll prep and the prepare button is not a silent payo
   assert.match(payroll, /fin\.payroll_settle_gate/);
 });
 
-test('payment and payout approvals state the Admin/CEO/Finance Admin MFA gate', () => {
+test('payment and payout approvals require explicit Finance approver MFA, not CEO or generic Admin', () => {
   const payments = read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx');
   assert.match(payments, /fin\.payment_approval_gate/);
-  assert.match(payments, /canSettlePayroll/);
+  assert.match(payments, /claimsGrantFinanceApproverUi/);
   assert.match(payments, /!canApprovePayments/);
+  assert.doesNotMatch(payments, /canSettlePayroll/);
   const brokers = read('apps/admin-panel/src/pages/brokers/BrokerManagementPage.tsx');
-  assert.match(brokers, /Payout approval is limited to Admin, CEO and Finance Admin/);
+  assert.match(brokers, /Payout approval is limited to Finance Admin, Finance Manager or Finance Controller/);
+  assert.doesNotMatch(brokers, /Payout approval is limited to Admin, CEO and Finance Admin/);
   assert.match(brokers, /commissionTotalsExcludingVoid/);
   assert.match(brokers, /!canApprovePayout/);
   const server = read('functions/adminBrokerPayoutReview.ts');
   assert.match(server, /VOID or cancelled commissions cannot be settled/);
-  assert.match(server, /verified Admin MFA session is required/);
+  assert.match(server, /requireMfaFinanceAdminActor/);
+  assert.match(server, /enforceAppCheck:\s*true/);
+  const financeGate = read('functions/financeAdminMfa.ts');
+  assert.match(financeGate, /verified Admin MFA session is required/);
+  assert.doesNotMatch(financeGate, /["']admin["'],\s*["']super_admin["'],\s*["']ceo["']/);
 });
 
 test('painting admin copy keeps owner quote acceptance and Finance Manager/Controller internal approval', () => {

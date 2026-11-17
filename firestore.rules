@@ -176,6 +176,17 @@ service cloud.firestore {
       )));
     }
 
+    // Explicit Finance approver identities. CEO / Super Admin / generic Admin alone
+    // never match this helper. Used only to read server-written money records they review.
+    function isFinanceApprover() {
+      return signedIn() && isNotSuspended() && (
+        claimedRole() in ['finance_admin', 'finance_manager', 'finance_controller'] ||
+        request.auth.token.get('finance_admin', false) == true ||
+        request.auth.token.get('finance_manager', false) == true ||
+        request.auth.token.get('finance_controller', false) == true
+      );
+    }
+
     function isOps() {
       return signedIn() && (isAdmin() || (signedIn() && (
         ('role' in request.auth.token && request.auth.token.role in ['operations_admin', 'operations_manager', 'dispatcher']) ||
@@ -1692,7 +1703,7 @@ service cloud.firestore {
     }
 
     match /broker_payout_requests/{requestId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
+      allow read: if isAdmin() || isFinanceApprover() || brokerOwns(resource.data) || emailOwns(resource.data);
       allow create, update, delete: if false;
     }
 
@@ -2340,7 +2351,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || isFinanceApprover() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
       allow create, update, delete: if false;
     }
     match /contract_renewal_watch/{watchId} {

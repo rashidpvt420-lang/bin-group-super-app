@@ -176,3 +176,28 @@ export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     const modules = normalizeStaffModules(user?.claims?.modules ?? user?.staffModules);
     return modules.includes(requiredModule);
 };
+
+/** UI mirror of requireMfaFinanceAdminActor: explicit Finance approver + verified MFA. CEO/Super Admin/Admin alone never qualify. */
+export function claimsGrantFinanceApproverUi(
+  user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined,
+  mfaVerified: boolean,
+): boolean {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+  if (claims.suspended === true || mfaVerified !== true) return false;
+  return FINANCE_APPROVER_ROLES.has(role) ||
+    claims.finance_admin === true ||
+    claims.finance_manager === true ||
+    claims.finance_controller === true;
+}
+
+/** Payroll settlement UI: Finance Admin with MFA only. HR prepares; manager/controller do not mark paid. */
+export function claimsGrantPayrollSettleUi(
+  user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined,
+  mfaVerified: boolean,
+): boolean {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+  if (claims.suspended === true || mfaVerified !== true) return false;
+  return role === 'finance_admin' || claims.finance_admin === true;
+}

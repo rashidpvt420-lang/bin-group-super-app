@@ -79,7 +79,8 @@ test('Founder review, payment decisions and Broker payout review require MFA-bac
   assert.match(propertyReview, /canonical BIN GROUP founder account is required/i);
   assert.match(paymentReview, /requireMfaFinanceAdmin/);
   assert.match(paymentReview, /enforceAppCheck:\s*true/g);
-  assert.match(payoutReview, /sign_in_second_factor/);
+  assert.match(payoutReview, /requireMfaFinanceAdminActor/);
+  assert.match(payoutReview, /enforceAppCheck:\s*true/);
   assert.match(payoutReview, /ADMIN_BROKER_PAYOUT_\$\{action\}/);
   assert.match(payoutReview, /idempotent/);
   assert.match(runtime, /adminReviewBrokerPayoutRequest/);

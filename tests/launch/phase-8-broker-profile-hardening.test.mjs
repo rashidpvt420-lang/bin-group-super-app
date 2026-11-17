@@ -133,14 +133,17 @@ test('Phase 8 payout OTP and settlement cannot be bypassed by the Broker browser
 
   assert.match(adminReview, /adminReviewBrokerPayoutRequest = onCall/);
   assert.match(adminReview, /enforceAppCheck: true/);
-  assert.match(adminReview, /sign_in_second_factor/);
-  assert.match(adminReview, /currentClaims = record\.customClaims \|\| \{\}/);
+  assert.match(adminReview, /requireMfaFinanceAdminActor/);
+  assert.match(adminReview, /Phase 1 payout settlement accepts Cash or Cheque only/);
   assert.match(adminReview, /Only an approved payout request can be marked paid/);
-
+  const financeGate = await read('functions/financeAdminMfa.ts');
+  assert.match(financeGate, /sign_in_second_factor/);
+  assert.match(financeGate, /record\.customClaims/);
   const payoutBlockStart = rules.indexOf('match /broker_payout_requests/{requestId}');
   assert.ok(payoutBlockStart >= 0);
   const payoutRules = rules.slice(payoutBlockStart, payoutBlockStart + 500);
   assert.match(payoutRules, /brokerOwns\(resource\.data\)/);
+  assert.match(payoutRules, /isFinanceApprover\(\)/);
   assert.match(payoutRules, /allow create, update, delete: if false/);
 });
 

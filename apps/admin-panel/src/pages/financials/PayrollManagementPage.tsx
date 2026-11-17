@@ -33,13 +33,13 @@ import { useAuth } from '../../context/AuthContext';
 // Payroll separation of duties (Rashid, 4 Nov 2026): HR prepares, Finance Admin settles.
 // UI only; adminGeneratePayrollBatch / adminSettlePayrollRecord stay the authority server-side.
 export type PayrollScreenMode = 'prepare' | 'settle';
-const SETTLE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
+const SETTLE_ROLES = new Set(['finance_admin']);
 const PREPARE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'hr_admin', 'hr_manager', 'payroll_admin']);
 export const canSettlePayroll = (user: any, mfaVerified: boolean): boolean => {
   const claims = user?.claims || {};
-  const role = String(user?.role || claims.role || '').trim().toLowerCase();
+  const role = String(user?.role || claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
   if (claims.suspended === true || mfaVerified !== true) return false;
-  return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || SETTLE_ROLES.has(role));
+  return role === 'finance_admin' || claims.finance_admin === true;
 };
 export const canPreparePayroll = (user: any, mfaVerified: boolean): boolean => {
   const claims = user?.claims || {};

@@ -105,6 +105,18 @@ test('commission and payroll callables require MFA Finance Admin and enforce seg
   assert.match(hrSrc, /techId && techId === request\.auth\?\.uid/);
 });
 
+test('broker payout review uses the same MFA Finance Admin gate, denies CEO/Super Admin/Admin, and enforces requester segregation plus cash/cheque settlement', () => {
+  const payoutSrc = src('adminBrokerPayoutReview.ts');
+  assert.match(body(payoutSrc, 'adminReviewBrokerPayoutRequest'), /requireMfaFinanceAdminActor\(request\)/);
+  assert.match(payoutSrc, /enforceAppCheck:\s*true/);
+  assert.doesNotMatch(payoutSrc, /ADMIN_ROLES = new Set/);
+  assert.doesNotMatch(payoutSrc, /token\.ceo === true/);
+  assert.doesNotMatch(payoutSrc, /token\.admin === true/);
+  assert.match(payoutSrc, /the payout requester cannot approve, reject, or mark paid their own payout/);
+  assert.match(payoutSrc, /PHASE1_PAYOUT_METHODS = new Set\(\["CASH", "CHEQUE"\]\)/);
+  assert.match(payoutSrc, /Phase 1 payout settlement accepts Cash or Cheque only/);
+});
+
 test('painting payments stay with Finance Manager / Controller only', () => {
   assert.match(body(src('paintingProjects.ts'), 'financeDecidePaintingPayment'), /requirePaintingFinanceApprover/);
 });
