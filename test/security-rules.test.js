@@ -1818,4 +1818,73 @@ describe('Firestore Security Rules', () => {
     await assertFails(setDoc(doc(owner, 'issued_document_registry/rpt_forged000000000000000000000000'), { sha256: 'b'.repeat(64) }));
   });
 
+
+  it('broker payout requests: finance approvers can read but cannot approve or mark paid from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'broker_payout_requests/payout_fin'), {
+        brokerId: 'broker_payout_owner',
+        brokerUid: 'broker_payout_owner',
+        requestedBy: 'broker_payout_owner',
+        amount: 1500,
+        status: 'PENDING_ADMIN_REVIEW',
+        approvalStatus: 'PENDING',
+        paymentStatus: 'REQUESTED',
+        commissionIds: ['commission_fin'],
+      });
+      await setDoc(doc(db, 'broker_commissions/commission_fin'), {
+        brokerId: 'broker_payout_owner',
+        amount: 1500,
+        status: 'APPROVED',
+        payoutStatus: 'REQUESTED',
+        payoutRequestId: 'payout_fin',
+      });
+    });
+
+    const mfa = { firebase: { sign_in_second_factor: 'phone' }, email_verified: true };
+    for (const role of ['finance_admin', 'finance_manager', 'finance_controller']) {
+      const finDb = testEnv.authenticatedContext(`fin_${role}`, { role, ...mfa }).firestore();
+      await assertSucceeds(getDoc(doc(finDb, 'broker_payout_requests/payout_fin')));
+      await assertSucceeds(getDoc(doc(finDb, 'broker_commissions/commission_fin')));
+      await assertFails(updateDoc(doc(finDb, 'broker_payout_requests/payout_fin'), { status: 'APPROVED', approvedBy: `fin_${role}` }));
+      await assertFails(updateDoc(doc(finDb, 'broker_payout_requests/payout_fin'), { status: 'PAID', paymentStatus: 'PAID' }));
+      await assertFails(deleteDoc(doc(finDb, 'broker_payout_requests/payout_fin')));
+    }
+
+    // CEO / Super Admin / generic Admin may still read (executive visibility) but cannot write.
+    for (const role of ['ceo', 'super_admin', 'admin']) {
+      const execDb = testEnv.authenticatedContext(`exec_${role}`, { role, [role === 'super_admin' ? 'super_admin' : role]: true, ...mfa }).firestore();
+      await assertSucceeds(getDoc(doc(execDb, 'broker_payout_requests/payout_fin')));
+      await assertFails(updateDoc(doc(execDb, 'broker_payout_requests/payout_fin'), { status: 'APPROVED' }));
+    }
+
+    const staffDb = testEnv.authenticatedContext('finance_staff_reader', { role: 'finance_staff', ...mfa }).firestore();
+    await assertFails(getDoc(doc(staffDb, 'broker_payout_requests/payout_fin')));
+    await assertFails(updateDoc(doc(staffDb, 'broker_payout_requests/payout_fin'), { status: 'APPROVED' }));
+  });
+
+  it('legacy payouts collection: Admin/CEO keep oversight reads but cannot client-write money records', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'payouts/payout_legacy_fin'), {
+        ownerUid: 'owner_payout_legacy',
+        amount: 500,
+        status: 'PENDING',
+      });
+    });
+
+    const mfa = { firebase: { sign_in_second_factor: 'phone' }, email_verified: true };
+    for (const role of ['ceo', 'super_admin', 'admin']) {
+      const execDb = testEnv.authenticatedContext(`payout_exec_${role}`, { role, [role === 'super_admin' ? 'super_admin' : role]: true, ...mfa }).firestore();
+      await assertSucceeds(getDoc(doc(execDb, 'payouts/payout_legacy_fin')));
+      await assertFails(updateDoc(doc(execDb, 'payouts/payout_legacy_fin'), { status: 'PAID' }));
+      await assertFails(deleteDoc(doc(execDb, 'payouts/payout_legacy_fin')));
+      await assertFails(setDoc(doc(execDb, 'payouts/payout_legacy_new'), { ownerUid: 'owner_payout_legacy', amount: 1, status: 'PAID' }));
+    }
+
+    const financeDb = testEnv.authenticatedContext('payout_finance_admin', { role: 'finance_admin', finance_admin: true, ...mfa }).firestore();
+    await assertFails(updateDoc(doc(financeDb, 'payouts/payout_legacy_fin'), { status: 'PAID' }));
+    await assertFails(setDoc(doc(financeDb, 'payouts/payout_legacy_new'), { ownerUid: 'owner_payout_legacy', amount: 1, status: 'PAID' }));
+  });
+
 });

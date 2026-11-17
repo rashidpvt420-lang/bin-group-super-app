@@ -8,7 +8,7 @@ import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-reac
 import { collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { useAuth } from '../../context/AuthContext';
-import { canSettlePayroll } from './PayrollManagementPage';
+import { claimsGrantFinanceApproverUi } from '../../security/staffAccessPolicy';
 
 type PaymentRecord = {
     id: string;
@@ -132,7 +132,7 @@ type ReceiptRepairRecord = {
 export default function PaymentApprovalsPage() {
     const { t } = useLanguage();
     const { user, mfaVerified } = useAuth();
-    const canApprovePayments = canSettlePayroll(user, mfaVerified);
+    const canApprovePayments = claimsGrantFinanceApproverUi(user, mfaVerified);
     const [rows, setRows] = React.useState<PaymentRecord[]>([]);
     const [receiptRepairs, setReceiptRepairs] = React.useState<ReceiptRepairRecord[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -361,7 +361,7 @@ export default function PaymentApprovalsPage() {
 
     const approvePayment = async () => {
         if (!canApprovePayments) {
-            setError('Payment approvals are limited to Admin, CEO and Finance Admin with a verified MFA session.');
+            setError('Payment approvals are limited to Finance Admin, Finance Manager or Finance Controller with a verified MFA session.');
             return;
         }
         if (!approvalTarget) return;
@@ -568,7 +568,7 @@ export default function PaymentApprovalsPage() {
             </Stack>
 
             <Alert severity="info" data-testid="payment-approval-gate" sx={{ mb: 3 }}>{t('fin.payment_approval_gate')}</Alert>
-            {!canApprovePayments && <Alert severity="warning" sx={{ mb: 3 }}>Approve stays off until this session is Admin, CEO or Finance Admin with MFA.</Alert>}
+            {!canApprovePayments && <Alert severity="warning" sx={{ mb: 3 }}>Approve stays off until this session is Finance Admin, Finance Manager or Finance Controller with MFA.</Alert>}
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
             {queueLimitWarnings.length > 0 && <Alert severity="warning" data-testid="admin-payment-queue-capped" sx={{ mb: 3 }}>At least one Finance queue reached its display limit ({queueLimitWarnings.join(', ')}). Older items may be hidden. Do not treat the visible rows or an empty subset as a complete queue until the full queue is reviewed.</Alert>}
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}

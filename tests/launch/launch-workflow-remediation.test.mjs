@@ -58,7 +58,7 @@ test('design detail state is isolated across request, account, and role changes'
 
 const primaryPath = 'ai_design_renders/owner1/d1/primary.jpg';
 const airyPath = 'ai_design_renders/owner1/d1/option_2.jpg';
-const roleFor = (uid = '') => uid.startsWith('owner') ? 'owner' : uid.startsWith('tenant') ? 'tenant' : uid.startsWith('tech') ? 'technician' : 'admin';
+const roleFor = (uid = '') => uid.startsWith('owner') ? 'owner' : uid.startsWith('tenant') ? 'tenant' : uid.startsWith('tech') ? 'technician' : 'finance_admin';
 
 function designRecord(tenant) {
   return {
@@ -148,7 +148,14 @@ function fixture({ tenant = false } = {}) {
   const firestore = Object.assign(() => db, { Timestamp: class Timestamp {}, FieldValue: { serverTimestamp: () => 'SERVER_TIMESTAMP' } });
   const admin = { apps: [{}], firestore, auth: () => ({ getUser: async (uid) => {
     const role = roleFor(uid);
-    return accounts.get(uid) || { disabled: false, emailVerified: true, customClaims: { role } };
+    const existing = accounts.get(uid);
+    const claims = { role, ...existing?.customClaims };
+    const financeRole = String(claims.role || claims.userRole || claims.primaryRole || '').toLowerCase();
+    if (['finance_admin', 'finance_manager', 'finance_controller'].includes(financeRole)
+      || claims.finance_admin === true || claims.finance_manager === true || claims.finance_controller === true) {
+      if (claims.financeAuthorizedAt === undefined) claims.financeAuthorizedAt = Date.now();
+    }
+    return { email: `${uid}@example.com`, disabled: false, emailVerified: true, ...existing, customClaims: claims };
   } }), storage: () => ({ bucket: () => ({ file: (path) => ({
     save: async (bytes, options) => {
       assert.equal(options.preconditionOpts.ifGenerationMatch, 0, 'Receipt cannot overwrite evidence.');

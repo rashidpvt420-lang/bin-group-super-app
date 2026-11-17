@@ -4,6 +4,7 @@ import { buildSync } from 'esbuild';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const dir = mkdtempSync(join(tmpdir(), 'age-'));
 async function load(rel, name) {
@@ -11,7 +12,7 @@ async function load(rel, name) {
   writeFileSync(entry, `export * from ${JSON.stringify(join(process.cwd(), rel))};`);
   const out = join(dir, `${name}.mjs`);
   buildSync({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'error', external: ['firebase-functions', 'firebase-functions/*', 'firebase-admin', 'firebase-admin/*'] });
-  return import(out);
+  return import(pathToFileURL(out).href);
 }
 const engines = {
   browser: await load('src/utils/calculateUaeQuote2026.ts', 'browser'),

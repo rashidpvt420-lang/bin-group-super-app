@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
-const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : new URL('../../', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+
+const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : fileURLToPath(new URL('../../', import.meta.url));
 const read = (p) => readFileSync(`${root}${p}`, 'utf8');
 const buttonTag = (src, label) => {
   const at = src.indexOf(label);

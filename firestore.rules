@@ -168,12 +168,26 @@ service cloud.firestore {
       )));
     }
 
+    // Explicit Finance identities only. CEO / Super Admin / generic Admin are not
+    // finance; grant those users oversight reads with isAdmin() where required.
+    // Money approval and mark-paid writes stay on MFA Finance Admin callables.
     function isFinance() {
-      return signedIn() && (isAdmin() || (signedIn() && (
+      return signedIn() && (
         ('role' in request.auth.token && request.auth.token.role in ['finance_admin', 'finance_staff', 'account_manager']) ||
         ('userRole' in request.auth.token && request.auth.token.userRole in ['finance_admin', 'finance_staff', 'account_manager']) ||
         ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['finance_admin', 'finance_staff', 'account_manager'])
-      )));
+      );
+    }
+
+    // Explicit Finance approver identities. CEO / Super Admin / generic Admin alone
+    // never match this helper. Used only to read server-written money records they review.
+    function isFinanceApprover() {
+      return signedIn() && isNotSuspended() && (
+        claimedRole() in ['finance_admin', 'finance_manager', 'finance_controller'] ||
+        request.auth.token.get('finance_admin', false) == true ||
+        request.auth.token.get('finance_manager', false) == true ||
+        request.auth.token.get('finance_controller', false) == true
+      );
     }
 
     function isOps() {
@@ -1692,7 +1706,7 @@ service cloud.firestore {
     }
 
     match /broker_payout_requests/{requestId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
+      allow read: if isAdmin() || isFinanceApprover() || brokerOwns(resource.data) || emailOwns(resource.data);
       allow create, update, delete: if false;
     }
 
@@ -2340,7 +2354,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || isFinanceApprover() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
       allow create, update, delete: if false;
     }
     match /contract_renewal_watch/{watchId} {
@@ -2420,10 +2434,11 @@ service cloud.firestore {
     match /payouts/{payoutId} {
       // UID ownership is authoritative for new records; verified-email matching
       // remains a read-only compatibility path for legacy payout documents.
+      // Writes are server-only. CEO / Super Admin / generic Admin keep oversight reads.
       allow read: if isAdmin() ||
         (signedIn() && resource.data.get('ownerUid', null) == request.auth.uid) ||
         emailOwns(resource.data);
-      allow write: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /payroll_entries/{entryId} {
@@ -2818,6 +2833,7 @@ service cloud.firestore {
           'owner_spending_limits',
           'emergency_spend_reviews',
           'payout_change_alerts',
+          'payouts',
           'owner_authorities',
           'owner_authority_events',
           'ticket_reopen_events',
@@ -2952,6 +2968,7 @@ service cloud.firestore {
           'owner_spending_limits',
           'emergency_spend_reviews',
           'payout_change_alerts',
+          'payouts',
           'owner_authorities',
           'owner_authority_events',
           'ticket_reopen_events',

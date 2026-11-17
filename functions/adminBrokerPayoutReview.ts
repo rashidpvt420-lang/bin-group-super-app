@@ -1,62 +1,19 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 const PENDING_STATES = new Set(["PENDING", "PENDING_ADMIN_REVIEW", "REQUESTED"]);
+const PHASE1_PAYOUT_METHODS = new Set(["CASH", "CHEQUE"]);
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
 const upper = (value: unknown, max = 120) => text(value, max).toUpperCase();
 const lower = (value: unknown, max = 120) => text(value, max).toLowerCase();
 
-function roleOf(token: Record<string, unknown> = {}) {
-  const role = lower(token.role || token.userRole || token.primaryRole);
-  if (role) return role;
-  if (token.ceo === true) return "ceo";
-  if (token.superAdmin === true || token.super_admin === true) return "super_admin";
-  if (token.admin === true || token.isAdmin === true) return "admin";
-  return "";
-}
-
-async function requireFinanceAdmin(auth: any) {
-  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
-  const token = auth.token || {};
-  const role = roleOf(token);
-  const authorized =
-    token.admin === true ||
-    token.isAdmin === true ||
-    token.superAdmin === true ||
-    token.super_admin === true ||
-    token.ceo === true ||
-    ADMIN_ROLES.has(role);
-  if (!authorized || token.suspended === true) {
-    throw new HttpsError("permission-denied", "Finance Admin authority is required.");
-  }
-  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
-    throw new HttpsError("permission-denied", "A verified Admin MFA session is required for payout review.");
-  }
-  const record = await admin.auth().getUser(auth.uid);
-  const currentClaims = record.customClaims || {};
-  const currentRole = roleOf(currentClaims);
-  const currentAuthorized =
-    currentClaims.admin === true ||
-    currentClaims.isAdmin === true ||
-    currentClaims.superAdmin === true ||
-    currentClaims.super_admin === true ||
-    currentClaims.ceo === true ||
-    ADMIN_ROLES.has(currentRole);
-  if (
-    record.disabled ||
-    !record.emailVerified ||
-    !record.email ||
-    currentClaims.suspended === true ||
-    !currentAuthorized
-  ) {
-    throw new HttpsError("permission-denied", "Current Finance/Admin authority is inactive or no longer valid.");
-  }
-  return { uid: auth.uid, email: lower(record.email, 320), role: currentRole || role };
+function roleOf(claims: Record<string, unknown> = {}) {
+  return lower(claims.role || claims.userRole || claims.primaryRole);
 }
 
 function requestState(data: FirebaseFirestore.DocumentData) {
@@ -66,11 +23,14 @@ function requestState(data: FirebaseFirestore.DocumentData) {
 export const adminReviewBrokerPayoutRequest = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    const actor = await requireFinanceAdmin(request.auth);
+    const financeActor = await requireMfaFinanceAdminActor(request);
+    const live = ((await admin.auth().getUser(financeActor.uid)).customClaims || {}) as Record<string, unknown>;
+    const actor = { uid: financeActor.uid, email: financeActor.email, role: roleOf(live) };
     const requestId = text(request.data?.requestId, 180);
     const action = upper(request.data?.action, 40);
     const reason = text(request.data?.reason || request.data?.reviewReason, 1000);
     const paymentReference = text(request.data?.paymentReference, 240);
+    const paymentMethod = upper(request.data?.paymentMethod || request.data?.method, 20);
 
     if (!requestId) throw new HttpsError("invalid-argument", "requestId is required.");
     if (!["APPROVE", "REJECT", "MARK_PAID"].includes(action)) {
@@ -103,6 +63,16 @@ export const adminReviewBrokerPayoutRequest = onCall(
       amount = Number(payout.amount || 0);
       if (!brokerId || !commissionIds.length || !Number.isFinite(amount) || amount <= 0) {
         throw new HttpsError("failed-precondition", "Payout request bindings are incomplete.");
+      }
+      const requesterId = text(payout.requestedBy || payout.brokerId || payout.brokerUid, 180);
+      if (requesterId && requesterId === actor.uid) {
+        throw new HttpsError("permission-denied", "Segregation of duties: the payout requester cannot approve, reject, or mark paid their own payout.");
+      }
+      if (action === "MARK_PAID") {
+        const method = paymentMethod || upper(payout.paymentMethod || payout.method, 20);
+        if (!PHASE1_PAYOUT_METHODS.has(method)) {
+          throw new HttpsError("invalid-argument", "Phase 1 payout settlement accepts Cash or Cheque only.");
+        }
       }
 
       const commissionRefs = commissionIds.map((id) => db.collection("broker_commissions").doc(id));
@@ -200,11 +170,13 @@ export const adminReviewBrokerPayoutRequest = onCall(
         if (state !== "APPROVED") {
           throw new HttpsError("failed-precondition", "Only an approved payout request can be marked paid.");
         }
+        const settledMethod = paymentMethod || upper(payout.paymentMethod || payout.method, 20);
         transaction.set(payoutRef, {
           status: "PAID",
           approvalStatus: "APPROVED",
           paymentStatus: "PAID",
           paymentReference,
+          paymentMethod: settledMethod,
           paidBy: actor.uid,
           paidByEmail: actor.email,
           paidAt: now,

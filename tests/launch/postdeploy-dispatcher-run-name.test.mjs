@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const SCRIPT = new URL('../../scripts/dispatch-postdeploy-external-evidence.mjs', import.meta.url).pathname;
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const SCRIPT = fileURLToPath(new URL('../../scripts/dispatch-postdeploy-external-evidence.mjs', import.meta.url));
 const SHA = 'c30a3b633cdc7b5ca1610091fcfe406a8c87948c';
 const SOURCE_RUN = '40697672228';
 
@@ -70,7 +72,7 @@ function runDispatcher(mode) {
   const dir = mkdtempSync(join(tmpdir(), 'dispatcher-'));
   const preloadPath = join(dir, 'preload.mjs');
   writeFileSync(preloadPath, preload(mode));
-  const result = spawnSync(process.execPath, ['--import', preloadPath, SCRIPT], {
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(preloadPath).href, SCRIPT], {
     cwd: dir,
     encoding: 'utf8',
     env: {

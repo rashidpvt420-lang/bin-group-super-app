@@ -44,6 +44,7 @@ import { useLanguage } from '@bin/shared';
 import { useAuth } from '../../context/AuthContext';
 import { maskIban } from '../../lib/maskIban';
 import { commissionTotalsExcludingVoid } from '../../lib/commissionVoid';
+import { claimsGrantFinanceApproverUi } from '../../security/staffAccessPolicy';
 
 type Broker = {
     id: string;
@@ -182,19 +183,15 @@ function missingKycItems(broker: Broker, summary?: BrokerKycReviewSummary) {
     ].filter((item) => item.missing).map((item) => item.label);
 }
 
-const MONEY_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
-function canSettleLike(user: any, mfaVerified: boolean): boolean {
-    const claims = user?.claims || {};
-    const role = String(user?.role || claims.role || '').trim().toLowerCase();
-    if (claims.suspended === true || mfaVerified !== true) return false;
-    return Boolean(claims.admin === true || claims.isAdmin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true || MONEY_ROLES.has(role));
-}
+export const canApproveBrokerPayout = (user: any, mfaVerified: boolean): boolean => (
+    claimsGrantFinanceApproverUi(user, mfaVerified)
+);
 
 export default function BrokerManagementPage() {
 
     const { isRTL } = useLanguage();
     const { user, mfaVerified } = useAuth();
-    const canApprovePayout = canSettleLike(user, mfaVerified);
+    const canApprovePayout = canApproveBrokerPayout(user, mfaVerified);
     const brokerConstraints = useMemo(() => [where('role', 'in', ['broker', 'BROKER'])], []);
     const brokersPage = usePagedCollection({ db, collectionName: 'users', constraints: brokerConstraints, resetKey: 'brokers' });
     const documentsPage = usePagedCollection({ db, collectionName: 'brokerDocuments', resetKey: 'broker-docs' });
@@ -302,7 +299,7 @@ export default function BrokerManagementPage() {
 
     const reviewPayout = async (request: PayoutRequest, action: 'APPROVE' | 'REJECT' | 'MARK_PAID') => {
         if (!canApprovePayout) {
-            setNotice('Payout approval is limited to Admin, CEO and Finance Admin with a verified MFA session.');
+            setNotice('Payout approval is limited to Finance Admin, Finance Manager or Finance Controller with a verified MFA session.');
             return;
         }
         const reason = action === 'REJECT'
@@ -430,12 +427,12 @@ export default function BrokerManagementPage() {
                             <Typography variant="h6" sx={{ fontWeight: 950 }}>Broker Payout Requests</Typography>
                         </Stack>
                         <Alert severity="info" sx={{ mb: 2 }} data-testid="payout-approval-gate">
-                            Payout approval is limited to Admin, CEO and Finance Admin with a verified MFA session. IBANs are masked; only the last 4 digits are shown.
+                            Payout approval is limited to Finance Admin, Finance Manager or Finance Controller with a verified MFA session. IBANs are masked; only the last 4 digits are shown.
                         </Alert>
                         <Typography variant="body2" sx={{ mb: 2 }} data-testid="commission-totals-ex-void">
                             Commission totals (VOID excluded): pending AED {commissionTotals.pending.toLocaleString()} · approved AED {commissionTotals.approved.toLocaleString()} · paid AED {commissionTotals.paid.toLocaleString()}{commissionTotals.voidCount ? ` · ${commissionTotals.voidCount} VOID row(s) left out` : ''}
                         </Typography>
-                        {!canApprovePayout && <Alert severity="warning" sx={{ mb: 2 }}>Approve and Mark paid stay off until this session is Admin, CEO or Finance Admin with MFA.</Alert>}
+                        {!canApprovePayout && <Alert severity="warning" sx={{ mb: 2 }}>Approve and Mark paid stay off until this session is Finance Admin, Finance Manager or Finance Controller with MFA.</Alert>}
                         <Stack spacing={2}>
                             {payoutRequests.map((request) => {
                                 const status = statusText(request.status);

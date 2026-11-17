@@ -8,7 +8,7 @@ const { db, lib, createUser, clearFirestore, call, expectHttpsError } = require(
 
 const { adminReviewBrokerCommission, adminSettlePayrollRecord } = lib('runtimeAll.js');
 const MFA = { firebase: { sign_in_second_factor: 'phone' } };
-const NON_FINANCE = ['operations_admin', 'manager', 'hr_admin', 'hr_manager', 'finance_staff', 'account_manager', 'dispatcher'];
+const NON_FINANCE = ['admin', 'super_admin', 'ceo', 'operations_admin', 'manager', 'hr_admin', 'hr_manager', 'finance_staff', 'account_manager', 'dispatcher', 'technician', 'owner', 'tenant', 'broker'];
 
 const actors = {};
 test.before(async () => {

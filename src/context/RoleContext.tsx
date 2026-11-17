@@ -114,6 +114,8 @@ export const FULL_ADMIN_ROLES = new Set(['admin', 'super_admin', 'ceo']);
 export const MONEY_CAPABILITIES = new Set<SovereignPermission>(['canVerifyPayments', 'canApproveExpenses', 'canManagePayroll']);
 export const ROLE_CAPABILITIES: Record<string, SovereignPermission[]> = {
     finance_admin: ['canViewPayments', 'canVerifyPayments', 'canViewFinancials', 'canManagePayroll', 'canApproveExpenses', 'canExportReports', 'canViewAuditLogs'],
+    finance_manager: ['canViewPayments', 'canVerifyPayments', 'canViewFinancials', 'canApproveExpenses', 'canExportReports', 'canViewAuditLogs'],
+    finance_controller: ['canViewPayments', 'canVerifyPayments', 'canViewFinancials', 'canApproveExpenses', 'canExportReports', 'canViewAuditLogs'],
     finance_staff: ['canViewPayments', 'canViewFinancials'],
     hr_admin: ['canViewHR', 'canViewConfidentialHR', 'canManageTechnicians'],
     hr_manager: ['canViewHR', 'canViewConfidentialHR', 'canExportReports'],
@@ -142,10 +144,14 @@ export const resolvePermission = (
     permission: SovereignPermission,
 ): boolean => {
     const r = String(role || '').trim().toLowerCase();
+    // Governance policy: MONEY_CAPABILITIES are NEVER granted to fullAdmin or FULL_ADMIN_ROLES (ceo, super_admin, admin).
+    // They are strictly restricted to explicitly authorized Finance roles.
+    if (MONEY_CAPABILITIES.has(permission)) {
+        return (ROLE_CAPABILITIES[r] || []).includes(permission);
+    }
     if (fullAdmin || FULL_ADMIN_ROLES.has(r)) return true;
     const granted = (ROLE_CAPABILITIES[r] || []).includes(permission);
     if (granted) return true;
-    if (MONEY_CAPABILITIES.has(permission)) return false;
     return profilePermissions[permission] === true;
 };
 

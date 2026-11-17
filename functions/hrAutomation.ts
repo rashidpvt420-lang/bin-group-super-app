@@ -424,6 +424,9 @@ export const adminSettlePayrollRecord = onCall(
         }
 
         const techId = safeText(payroll.techId || payroll.staffId);
+        if (techId && techId === request.auth?.uid) {
+            throw new HttpsError("permission-denied", "Segregation of duties: an employee cannot settle their own payroll record.");
+        }
         const techName = safeText(payroll.techName || payroll.displayName, techId);
         const month = safeText(payroll.month || payroll.payPeriod);
         const amount = exactPositivePayrollAmount(payroll.amount || payroll.netSalary || payroll.baseSalary || 0);

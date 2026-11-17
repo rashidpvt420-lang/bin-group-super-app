@@ -139,16 +139,17 @@ async function hasDurableOtpSignatureEvidence(
     Boolean(evidence.consumedAt);
 }
 
-// D-5: a refused approval is itself an audited payment decision.
+// D-5: a refused approval or rejection is itself an audited payment decision.
 async function auditDualControlRefusal(
   paymentId: string,
   actorId: string,
   actorEmail: string | null,
   error: PaymentDualControlError,
   stage: "PRE_CHECK" | "TRANSACTION",
+  action: "ADMIN_APPROVE_PAYMENT_REFUSED_DUAL_CONTROL" | "ADMIN_REJECT_PAYMENT_REFUSED_DUAL_CONTROL" = "ADMIN_APPROVE_PAYMENT_REFUSED_DUAL_CONTROL",
 ) {
   await db.collection("audit_logs").add({
-    action: "ADMIN_APPROVE_PAYMENT_REFUSED_DUAL_CONTROL",
+    action,
     actorId,
     actorEmail,
     targetType: "payment_transactions",
@@ -918,13 +919,37 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
   const reason = String(request.data?.reason || "Rejected by admin.").trim();
   const now = ts();
   const actorId = request.auth?.uid || "admin";
+  const actorEmail = request.auth?.token?.email || null;
+  const payerUid = String(payment.ownerUid || payment.ownerId || payment.tenantUid || payment.tenantId || payment.payerId || "").trim();
+  if (payerUid && payerUid === actorId) {
+    throw new HttpsError("permission-denied", "Dual control: a customer or payer cannot decide or reject their own payment transaction.");
+  }
+
+  // Pre-check dual control: SAME_ADMIN, SAME_PAYER, RECORDER_UNKNOWN, MALFORMED_EVIDENCE
+  try {
+    assertPaymentDualControl(payment, actorId);
+  } catch (error) {
+    if (error instanceof PaymentDualControlError) {
+      await auditDualControlRefusal(paymentId, actorId, actorEmail, error, "PRE_CHECK", "ADMIN_REJECT_PAYMENT_REFUSED_DUAL_CONTROL");
+    }
+    throw error;
+  }
 
   if (isRentCollectionPayment(payment)) {
     let rentRejectionIdempotent = false;
     await db.runTransaction(async (transaction) => {
       const freshSnap = await transaction.get(ref);
       if (!freshSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
-      const decision = rentRejectionDecision(freshSnap.data() || {});
+      const freshPayment = freshSnap.data() || {};
+      try {
+        assertPaymentDualControl(freshPayment, actorId);
+      } catch (error) {
+        if (error instanceof PaymentDualControlError) {
+          await auditDualControlRefusal(paymentId, actorId, actorEmail, error, "TRANSACTION", "ADMIN_REJECT_PAYMENT_REFUSED_DUAL_CONTROL");
+        }
+        throw error;
+      }
+      const decision = rentRejectionDecision(freshPayment);
       if (decision === "replay") {
         rentRejectionIdempotent = true;
         return;
@@ -978,6 +1003,14 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
     ]);
     if (!freshPaymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
     const freshPayment = freshPaymentSnap.data() || {};
+    try {
+      assertPaymentDualControl(freshPayment, actorId);
+    } catch (error) {
+      if (error instanceof PaymentDualControlError) {
+        await auditDualControlRefusal(paymentId, actorId, actorEmail, error, "TRANSACTION", "ADMIN_REJECT_PAYMENT_REFUSED_DUAL_CONTROL");
+      }
+      throw error;
+    }
     const freshContract = contractSnap?.data() || {};
     if (
       roleOf(freshPayment.status) === "approved" ||

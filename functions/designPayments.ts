@@ -17,6 +17,7 @@ import {
   publicLockedChoice,
   sameLockedChoice,
 } from './designExecutionBrief';
+import { claimsGrantFinanceAdmin, requireMfaFinanceAdminActor } from './financeAdminMfa';
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -27,7 +28,7 @@ const ENGINEER_ROLES = ['technician', 'engineer'];
 const now = () => admin.firestore.FieldValue.serverTimestamp();
 const text = (value: unknown, max = 300) => String(value ?? '').trim().slice(0, max);
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
-const financeRole = (token: any) => ['admin', 'super_admin', 'ceo', 'finance_admin'].includes(roleOf(token)) || token?.admin === true || token?.isAdmin === true || token?.superAdmin === true || token?.super_admin === true || token?.ceo === true;
+const financeRole = (token: any) => claimsGrantFinanceAdmin(token || {});
 const pendingStatuses = ['AI_CONCEPT_READY', 'DEPOSIT_PENDING', 'OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'PAYMENT_PENDING'];
 
 function id(value: unknown) {
@@ -37,15 +38,18 @@ function id(value: unknown) {
 }
 
 async function actor(request: any, finance = false) {
+  if (finance) {
+    const financeActor = await requireMfaFinanceAdminActor(request);
+    return { uid: financeActor.uid, role: roleOf(request.auth?.token) };
+  }
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Login required.');
   const token = request.auth.token || {};
   const record = await admin.auth().getUser(request.auth.uid);
   if (record.disabled || !record.emailVerified || token.email_verified !== true || token.suspended === true || record.customClaims?.suspended === true) {
     throw new HttpsError('permission-denied', 'An active, verified account is required.');
   }
-  if (finance ? (!financeRole(token) || !financeRole(record.customClaims) || !token.firebase?.sign_in_second_factor) :
-      (!['owner', 'tenant'].includes(roleOf(token)) || roleOf(record.customClaims) !== roleOf(token))) {
-    throw new HttpsError('permission-denied', finance ? 'An active Finance Admin MFA session is required.' : 'Owner or Tenant authority is required.');
+  if (!['owner', 'tenant'].includes(roleOf(token)) || roleOf(record.customClaims) !== roleOf(token)) {
+    throw new HttpsError('permission-denied', 'Owner or Tenant authority is required.');
   }
   return { uid: request.auth.uid as string, role: roleOf(token) };
 }

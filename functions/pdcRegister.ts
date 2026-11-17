@@ -1,6 +1,6 @@
 /**
  * Post-dated cheque (PDC) register (gap audit 2026-11-01, item 4).
- * Cheques come from rent_installments that carry a chequeNumber. Finance (admin + MFA) records the bank
+ * Cheques come from rent_installments that carry a chequeNumber. Finance Admin (MFA) records the bank
  * outcome of each cheque — DEPOSITED, CLEARED, BOUNCED or REPLACED — in pdc_cheques/{installmentId}
  * with a full history, audit row, and an EN/AR owner notice on a bounce. Owners read a register of
  * their own cheques with maturity buckets. This register never marks rent as paid and never changes
@@ -16,7 +16,10 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 if (!admin.apps.length) admin.initializeApp();
 const text = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
 export const PDC_STATUSES = ["DEPOSITED", "CLEARED", "BOUNCED", "REPLACED"] as const;
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin", "operations_admin"]);
+// Oversight / operations reads only. financeRecordPdcStatus uses requireMfaFinanceAdminActor.
+const PDC_REGISTER_READ_ROLES = new Set([
+  "admin", "super_admin", "ceo", "finance_admin", "finance_manager", "finance_controller", "operations_admin",
+]);
 const ALLOWED_FROM: Record<string, string[]> = {
   PENDING: ["DEPOSITED", "REPLACED"],
   DEPOSITED: ["CLEARED", "BOUNCED"],
@@ -86,13 +89,15 @@ export const financeRecordPdcStatus = onCall({ cors: true, region: "europe-west3
 export const getPdcRegister = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
-  const role = text(request.auth?.token?.role || request.auth?.token?.userRole, 40).toLowerCase();
-  const isAdmin = request.auth?.token?.admin === true || ADMIN_ROLES.has(role);
-  if (role !== "owner" && !isAdmin) throw new HttpsError("permission-denied", "Owner access required.");
+  const token: Record<string, any> = request.auth?.token || {};
+  const role = text(token.role || token.userRole, 40).toLowerCase();
+  const canReadAll = token.admin === true || token.finance_admin === true || token.finance_manager === true ||
+    token.finance_controller === true || PDC_REGISTER_READ_ROLES.has(role);
+  if (role !== "owner" && !canReadAll) throw new HttpsError("permission-denied", "Owner access required.");
   const propertyId = text(request.data?.propertyId, 128);
   const db = admin.firestore();
   let q: FirebaseFirestore.Query = db.collection("rent_installments");
-  if (!isAdmin) q = q.where("ownerId", "==", uid);
+  if (!canReadAll) q = q.where("ownerId", "==", uid);
   else if (propertyId) q = q.where("propertyId", "==", propertyId);
   else throw new HttpsError("invalid-argument", "Admins must choose a property.");
   const rows = (await q.get()).docs.map((d) => ({ id: d.id, ...(d.data() as any) }))

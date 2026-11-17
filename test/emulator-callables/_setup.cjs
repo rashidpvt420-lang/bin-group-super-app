@@ -21,6 +21,18 @@ function lib(moduleName) {
   return require(path.join(functionsRoot, 'lib', moduleName));
 }
 
+const FINANCE_APPROVER_ROLES = new Set(['finance_admin', 'finance_manager', 'finance_controller']);
+function withFinanceAuthorizationTtl(claims) {
+  if (!claims || typeof claims !== 'object') return claims;
+  const role = String(claims.role || claims.userRole || claims.primaryRole || '').toLowerCase();
+  const isFinance = FINANCE_APPROVER_ROLES.has(role)
+    || claims.finance_admin === true
+    || claims.finance_manager === true
+    || claims.finance_controller === true;
+  if (!isFinance || Object.prototype.hasOwnProperty.call(claims, 'financeAuthorizedAt')) return claims;
+  return { ...claims, financeAuthorizedAt: Date.now() };
+}
+
 async function createUser(uid, claims, extra = {}) {
   const email = extra.email || `${uid}@example.invalid`;
   try {
@@ -28,8 +40,9 @@ async function createUser(uid, claims, extra = {}) {
   } catch (error) {
     if (error?.code !== 'auth/uid-already-exists') throw error;
   }
-  await admin.auth().setCustomUserClaims(uid, claims);
-  return { uid, token: { ...claims, email, email_verified: true, ...(extra.tokenExtra || {}) } };
+  const nextClaims = withFinanceAuthorizationTtl(claims);
+  await admin.auth().setCustomUserClaims(uid, nextClaims);
+  return { uid, token: { ...nextClaims, email, email_verified: true, ...(extra.tokenExtra || {}) } };
 }
 
 async function clearFirestore() {

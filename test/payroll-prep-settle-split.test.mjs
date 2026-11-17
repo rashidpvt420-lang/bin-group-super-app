@@ -22,12 +22,11 @@ test('Settle button only rendered when showSettle; prepare only when showPrepare
   assert.match(page, /\{showPrepare && \(\s*<Button data-testid="payroll-prepare"/);
 });
 
-test('only admin/super_admin/ceo/finance_admin with MFA can settle', () => {
-  for (const role of ['admin', 'super_admin', 'ceo', 'finance_admin']) {
-    assert.equal(mod.canSettlePayroll({ role, claims: { role } }, true), true, role);
-    assert.equal(mod.canSettlePayroll({ role, claims: { role } }, false), false, `${role} no MFA`);
-  }
-  for (const role of ['hr_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'manager', 'operations_admin', 'finance_manager', 'payroll_admin']) {
+test('only finance_admin with MFA can settle; CEO, Super Admin and generic Admin are refused', () => {
+  assert.equal(mod.canSettlePayroll({ role: 'finance_admin', claims: { role: 'finance_admin' } }, true), true);
+  assert.equal(mod.canSettlePayroll({ role: 'finance_admin', claims: { role: 'finance_admin' } }, false), false, 'finance_admin no MFA');
+  assert.equal(mod.canSettlePayroll({ role: 'ceo', claims: { role: 'ceo', finance_admin: true } }, true), true, 'explicit finance claim still settles');
+  for (const role of ['admin', 'super_admin', 'ceo', 'hr_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'manager', 'operations_admin', 'finance_manager', 'finance_controller', 'payroll_admin']) {
     assert.equal(mod.canSettlePayroll({ role, claims: { role } }, true), false, role);
   }
   assert.equal(mod.canSettlePayroll({ role: 'finance_admin', claims: { role: 'finance_admin', suspended: true } }, true), false);
