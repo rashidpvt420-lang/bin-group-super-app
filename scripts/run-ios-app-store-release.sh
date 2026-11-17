@@ -21,6 +21,7 @@ required=(
   APPLE_PROVISIONING_PROFILE_BASE64
   APPLE_TEAM_ID
   IOS_BUILD_NUMBER
+  IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64
 )
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
@@ -51,6 +52,7 @@ cleanup() {
     security list-keychains -d user -s $original_keychains >/dev/null 2>&1 || true
   fi
   rm -f "$CERTIFICATE_PATH" "$PROFILE_PATH" "$PROFILE_PLIST" "$EXPORT_OPTIONS_PATH"
+  rm -f ios/App/App/GoogleService-Info.plist "${IOS_FIREBASE_CLIENT_ENV_PATH:-}"
   if [[ -n "${profile_uuid:-}" ]]; then
     rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${profile_uuid}.mobileprovision"
   fi
@@ -168,6 +170,24 @@ PY
 
 npm ci --include=optional --legacy-peer-deps
 npm run test:mobile-store-readiness
+
+IOS_FIREBASE_CLIENT_ENV_PATH="${RUNNER_TEMP}/ios-firebase-client.env"
+export IOS_FIREBASE_CLIENT_ENV_PATH
+rm -f "$IOS_FIREBASE_CLIENT_ENV_PATH" ios/App/App/GoogleService-Info.plist
+node scripts/inject-ios-google-service-info.mjs
+set -a
+# shellcheck disable=SC1090
+source "$IOS_FIREBASE_CLIENT_ENV_PATH"
+set +a
+if [[ "$IOS_FIREBASE_CLIENT_ENV_EXPORTED" != 'true' ]]; then
+  echo '::error::iOS Firebase client identity was not exported for the Capacitor build.'
+  exit 1
+fi
+if [[ "$VITE_FIREBASE_APP_ID" != '1:123413252227:ios:3a87d36d147cf47899f3b6' ]]; then
+  echo '::error::Capacitor iOS build is not bound to the production BIN GROUP iOS Firebase app.'
+  exit 1
+fi
+
 CI=false npm run build
 npx cap sync ios
 
@@ -247,6 +267,30 @@ if [[ "$embedded_uuid" != "$profile_uuid" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$app_path/PrivacyInfo.xcprivacy" ]]; then
+  echo "::error::Exported IPA is missing PrivacyInfo.xcprivacy."
+  exit 1
+fi
+if [[ ! -f "$app_path/GoogleService-Info.plist" ]]; then
+  echo "::error::Exported IPA is missing the injected GoogleService-Info.plist."
+  exit 1
+fi
+embedded_firebase_project="$(/usr/libexec/PlistBuddy -c 'Print :PROJECT_ID' "$app_path/GoogleService-Info.plist")"
+embedded_firebase_bundle="$(/usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$app_path/GoogleService-Info.plist")"
+embedded_firebase_app_id="$(/usr/libexec/PlistBuddy -c 'Print :GOOGLE_APP_ID' "$app_path/GoogleService-Info.plist")"
+if [[ "$embedded_firebase_project" != 'bin-group-57c60' || "$embedded_firebase_bundle" != "$EXPECTED_BUNDLE_ID" || "$embedded_firebase_app_id" != '1:123413252227:ios:3a87d36d147cf47899f3b6' ]]; then
+  echo "::error::Exported IPA Firebase iOS identity does not match ae.bingroups.superapp in bin-group-57c60."
+  exit 1
+fi
+
+entitlements_plist="${RUNNER_TEMP}/exported-ios-entitlements.plist"
+codesign -d --entitlements "$entitlements_plist" "$app_path" >/dev/null
+app_attest_env="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.devicecheck.appattest-environment' "$entitlements_plist" 2>/dev/null || true)"
+if [[ "$app_attest_env" != 'production' ]]; then
+  echo "::error::Exported IPA must include the production App Attest entitlement."
+  exit 1
+fi
+
 ipa_sha256="$(shasum -a 256 "$ipa_path" | awk '{print $1}')"
 ipa_size="$(stat -f '%z' "$ipa_path")"
 mkdir -p ios-release
@@ -293,6 +337,10 @@ result = {
     },
     'privateSigningMaterialExcludedFromArtifacts': True,
     'hardLaunchClaim': False,
+    'iosFirebaseAppId': '1:123413252227:ios:3a87d36d147cf47899f3b6',
+    'privacyManifestEmbedded': True,
+    'googleServiceInfoEmbedded': True,
+    'appAttestEnvironment': 'production',
 }
 Path(os.environ['EVIDENCE_PATH']).write_text(
     json.dumps(result, indent=2) + '\n',

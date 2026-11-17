@@ -1,5 +1,7 @@
 import UIKit
 import Capacitor
+import FirebaseAppCheck
+import FirebaseCore
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +9,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // App Check must be installed before Firebase is configured.
+        AppCheck.setAppCheckProviderFactory(BinGroupAppCheckProviderFactory())
+
+        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+            FirebaseApp.configure()
+        } else {
+            // Debug/simulator CI may omit the injected production plist.
+            // Release archives fail earlier if the file is missing. Token
+            // requests stay fail-closed when Firebase is not configured.
+            NSLog("BIN_APPCHECK: GoogleService-Info.plist is unavailable; Firebase App Check is not configured.")
+        }
         return true
     }
 

@@ -53,6 +53,7 @@ jobs:
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
       APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
 
     steps:
       - name: Enforce owner-authorized exact-main release
@@ -109,6 +110,7 @@ jobs:
             APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD
             APPLE_PROVISIONING_PROFILE_BASE64
             APPLE_TEAM_ID
+            IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64
           )
           for name in "${required[@]}"; do
             [[ -n "${!name:-}" ]] || {

@@ -159,6 +159,7 @@ test('iOS App Store release is manual, exact-main, production-protected, and dis
     'APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD',
     'APPLE_PROVISIONING_PROFILE_BASE64',
     'APPLE_TEAM_ID',
+    'IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64',
   ]) {
     assert.match(iosWorkflow, new RegExp(`secrets\\.${secret}`));
     assert.match(iosScript, new RegExp(secret));
@@ -177,6 +178,13 @@ test('iOS App Store release is manual, exact-main, production-protected, and dis
   assert.match(iosScript, /lipo -archs/);
   assert.match(iosScript, /embedded_uuid.*profile_uuid/s);
   assert.match(iosScript, /trap cleanup EXIT/);
+  assert.match(iosScript, /node scripts\/inject-ios-google-service-info\.mjs/);
+  assert.match(iosScript, /IOS_FIREBASE_CLIENT_ENV_EXPORTED/);
+  assert.match(iosScript, /1:123413252227:ios:3a87d36d147cf47899f3b6/);
+  assert.match(iosScript, /PrivacyInfo\.xcprivacy/);
+  const injectIndex = iosScript.indexOf('node scripts/inject-ios-google-service-info.mjs');
+  const buildIndex = iosScript.indexOf('CI=false npm run build');
+  assert.ok(injectIndex >= 0 && buildIndex >= 0 && injectIndex < buildIndex, 'iOS Firebase client must be injected before the Capacitor web build');
 
   assert.match(iosWorkflow, /xcrun altool[\s\S]*--validate-app/);
   assert.match(iosWorkflow, /xcrun altool[\s\S]*--upload-app/);

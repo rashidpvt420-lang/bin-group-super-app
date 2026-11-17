@@ -64,6 +64,7 @@ Apple release:
 - `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD`
 - `APPLE_PROVISIONING_PROFILE_BASE64`
 - `APPLE_TEAM_ID`
+- `IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64`
 - `APPLE_ID` and `APPLE_APP_SPECIFIC_PASSWORD` only when TestFlight upload is enabled
 
 Both platforms also require the production Firebase, App Check, Maps and notification configuration values already referenced by their store workflows.
