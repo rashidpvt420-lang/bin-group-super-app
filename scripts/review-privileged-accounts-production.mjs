@@ -12,7 +12,11 @@ import {
   claimsGrantAdminPortal,
   fetchAllAuthUsers,
   isCanonicalFounderAccount,
+  isConfiguredSecondApprover,
   isExplicitFinanceTierApprover,
+  SECOND_APPROVER_EMAIL_ENV,
+  secondApproverConfigFailures,
+  secondApproverMfaReady,
 } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
@@ -55,10 +59,20 @@ function profileActive(user) {
 
 export function summarizePrivilegedAccountReview(
   privilegedUsers,
-  { expectedFinanceEmail = '' } = {},
+  { expectedFinanceEmail = '', secondApproverEmail = '' } = {},
 ) {
   const privileged = Array.isArray(privilegedUsers) ? privilegedUsers : [];
   const normalizedFinanceEmail = lower(expectedFinanceEmail);
+  const secondApproverOptions = { secondApproverEmail: lower(secondApproverEmail), expectedFinanceEmail: normalizedFinanceEmail };
+  // The named second approver is retained only when it is present AND MFA-ready; otherwise it is
+  // treated exactly like any other unexpected privileged account, as before.
+  const secondApprovers = privileged.filter((user) =>
+    !isCanonicalFounderAccount(user) &&
+    !isConfiguredFinanceApprover(user, normalizedFinanceEmail) &&
+    isConfiguredSecondApprover(user, secondApproverOptions) &&
+    secondApproverMfaReady(user)
+  );
+  const retainedSecondApprover = secondApprovers.length === 1 ? secondApprovers[0] : null;
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
   const financeApprovers = privileged.filter((user) =>
     isConfiguredFinanceApprover(user, normalizedFinanceEmail)
@@ -66,7 +80,8 @@ export function summarizePrivilegedAccountReview(
   const targets = privileged.filter((user) =>
     !isCanonicalFounderAccount(user) &&
     !isConfiguredFinanceApprover(user, normalizedFinanceEmail) &&
-    !isExplicitFinanceTierApprover(user)
+    !isExplicitFinanceTierApprover(user) &&
+    user !== retainedSecondApprover
   );
 
   const founder = canonical.length === 1 ? canonical[0] : null;
@@ -92,6 +107,7 @@ export function summarizePrivilegedAccountReview(
   if (!normalizedFinanceEmail) {
     blockers.push('configured Finance Admin email is required');
   }
+  blockers.push(...secondApproverConfigFailures(secondApproverOptions.secondApproverEmail, { expectedFinanceEmail: normalizedFinanceEmail }));
   if (canonical.length !== 1) {
     blockers.push(`exactly one ${CANONICAL_FOUNDER_EMAIL} CEO/Super Admin account is required; found ${canonical.length}`);
   }
@@ -131,6 +147,8 @@ export function summarizePrivilegedAccountReview(
     financeApproverProfileActive,
     financeApproverEmailVerified,
     financeApproverTotpMfaReady,
+    secondApproverConfigured: Boolean(secondApproverOptions.secondApproverEmail),
+    secondApproverRetainedCount: retainedSecondApprover ? 1 : 0,
     executionEligible: canonicalFounderReady && financeApproverBootstrapReady,
     executionBlockers: blockers,
     privilegedAccountCountBefore: privileged.length,
@@ -160,6 +178,7 @@ export async function reviewPrivilegedAccountsProduction({
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
   const summary = summarizePrivilegedAccountReview(privileged, {
     expectedFinanceEmail: env.E2E_FINANCE_APPROVER_EMAIL,
+    secondApproverEmail: env[SECOND_APPROVER_EMAIL_ENV],
   });
   // Expected Finance tier approvers (finance_manager / finance_controller) are reported, never targeted.
   summary.financeTierApproverCount = enriched.filter((user) => isExplicitFinanceTierApprover(user)).length;

@@ -105,6 +105,9 @@ function requireProtectedContext({ projectId, phase, env }) {
   if (configuredEmail === CANONICAL_FOUNDER_EMAIL) {
     throw new Error('E2E_ADMIN_EMAIL must never equal the canonical Founder email.');
   }
+  if (lower(env.SECOND_APPROVER_EMAIL) && configuredEmail === lower(env.SECOND_APPROVER_EMAIL)) {
+    throw new Error('E2E_ADMIN_EMAIL must never equal the named second approver email.');
+  }
   return { configuredEmail, evidenceSha, workflow };
 }
 
@@ -119,6 +122,9 @@ export function validateEphemeralE2eAdminIdentity({ authUser, profile, configure
   }
   if (expectedEmail === CANONICAL_FOUNDER_EMAIL) {
     throw new Error('Canonical Founder protection refused the E2E Admin lifecycle operation.');
+  }
+  if (claims.designatedSecondApprover === true) {
+    throw new Error('Named second approver protection refused the E2E Admin lifecycle operation.');
   }
   if (claims.testAccount !== true || lower(claims.role) !== 'admin' || claims.admin !== true) {
     throw new Error('Configured E2E Admin lacks the exact testAccount/admin Auth markers.');

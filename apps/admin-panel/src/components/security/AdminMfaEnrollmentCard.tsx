@@ -841,13 +841,14 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                 </Stack>
                 <Alert severity={readiness.launchReady ? 'success' : 'warning'}>
                   {readiness.launchReady
-                    ? copy('The canonical Founder has phone MFA, the Finance Admin has TOTP MFA, both emails are verified, and no third privileged identity remains.', 'لدى المؤسس المعتمد مصادقة هاتف، ولدى مسؤول المالية مصادقة TOTP، والبريدان موثّقان، ولا توجد هوية مميزة ثالثة.')
-                    : copy('Production requires exactly one canonical Founder and one Finance Admin. Founder must have phone MFA; Finance Admin must have TOTP MFA. Any third privileged account remains blocked.', 'يتطلب الإنتاج مؤسساً معتمداً واحداً ومسؤول مالية واحداً. يجب أن يملك المؤسس مصادقة هاتف وأن يملك مسؤول المالية مصادقة TOTP. أي حساب مميز ثالث يظل محظوراً.')}
+                    ? copy('The canonical Founder has phone MFA, the Finance Admin has TOTP MFA, their emails are verified, and no other privileged identity remains apart from the named, MFA-ready second approver if one is configured.', 'لدى المؤسس المعتمد مصادقة هاتف، ولدى مسؤول المالية مصادقة TOTP، والبريد موثّق، ولا توجد هوية مميزة أخرى سوى المعتمد الثاني المسمّى الجاهز بالمصادقة متعددة العوامل إن وُجد.')
+                    : copy('Production requires exactly one canonical Founder and one Finance Admin. Founder must have phone MFA; Finance Admin must have TOTP MFA. Any third privileged account remains blocked unless it is the named second approver with a verified email, MFA and an active profile.', 'يتطلب الإنتاج مؤسساً معتمداً واحداً ومسؤول مالية واحداً. يجب أن يملك المؤسس مصادقة هاتف وأن يملك مسؤول المالية مصادقة TOTP. أي حساب مميز ثالث يظل محظوراً ما لم يكن المعتمد الثاني المسمّى ببريد موثّق ومصادقة متعددة العوامل وملف نشط.')}
                 </Alert>
                 {!!readiness.blockers.length && <Divider />}
                 <Stack spacing={1.25}>
                   {readiness.blockers.map((target, index) => {
                     const deleteRequired = target.blockers.includes('DELETE_REQUIRED');
+                    const secondApproverPending = target.blockers.includes('SECOND_APPROVER_MFA_REQUIRED');
                     return (
                       <Box key={`${target.emailMasked}-${target.role}-${index}`} sx={{ p: 1.75, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 }}>
                         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={1.5}>
@@ -860,7 +861,9 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                               ? <Chip size="small" color="primary" label={copy('Canonical founder', 'المؤسس المعتمد')} />
                               : target.role === 'finance_admin' && !deleteRequired
                                 ? <Chip size="small" color="success" label={copy('Finance approver', 'مسؤول الموافقة المالية')} />
-                                : <Chip size="small" color="error" label={copy('Unexpected privileged account', 'حساب مميز غير متوقع')} />}
+                                : secondApproverPending && !deleteRequired
+                                  ? <Chip size="small" color="warning" label={copy('Named second approver: MFA required before it counts', 'المعتمد الثاني المسمّى: يلزم التحقق متعدد العوامل قبل احتسابه')} />
+                                  : <Chip size="small" color="error" label={copy('Unexpected privileged account', 'حساب مميز غير متوقع')} />}
                             {deleteRequired && <Chip data-testid="admin-privileged-delete-required" size="small" color="error" label={copy('Protected cleanup required', 'التنظيف المحمي مطلوب')} />}
                             {!deleteRequired && !target.emailVerified && <Chip size="small" color="warning" label={copy('Email unverified', 'البريد غير موثق')} />}
                             {!deleteRequired && target.recoveryApprover && !target.phoneMfaEnrolled && <Chip size="small" color="warning" label={copy('Phone MFA missing', 'مصادقة الهاتف مفقودة')} />}

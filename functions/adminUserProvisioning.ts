@@ -142,7 +142,9 @@ const ROLE_ALLOWED_MODULES: Record<string, readonly string[]> = {
   admin_assistant: ["dashboard", "owners", "tenants", "tickets", "documents", "properties"],
   account_manager: ["dashboard", "owners", "contracts", "documents", "properties"],
   operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "properties", "reports"],
-  finance_admin: ["dashboard", "financials", "transactions", "reports", "audit"],
+  // "broker" is allowed (never a default) so a two-person-granted Finance Admin can open /broker for
+  // payout approval; payout decisions still require requireMfaFinanceAdminActor and the 24h grant.
+  finance_admin: ["dashboard", "financials", "transactions", "reports", "audit", "broker"],
   finance_manager: [],
   finance_controller: [],
   payroll_admin: [],

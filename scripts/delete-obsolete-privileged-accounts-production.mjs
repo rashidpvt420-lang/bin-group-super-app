@@ -12,7 +12,11 @@ import {
   claimsGrantAdminPortal,
   fetchAllAuthUsers,
   isCanonicalFounderAccount,
+  isConfiguredSecondApprover,
   isExplicitFinanceTierApprover,
+  SECOND_APPROVER_EMAIL_ENV,
+  secondApproverConfigFailures,
+  secondApproverMfaReady,
 } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
@@ -115,9 +119,12 @@ async function deleteQuery(db, collectionName, field, uid) {
   return snapshot.size;
 }
 
-async function purgePrivilegedTarget({ auth, db, target, actor }) {
+async function purgePrivilegedTarget({ auth, db, target, actor, retainedSecondApproverUid = '' }) {
   if (isExplicitFinanceTierApprover(target)) {
     throw new Error('Cleanup refused: an explicit Finance Manager/Controller approver is never a privileged-cleanup target.');
+  }
+  if (retainedSecondApproverUid && target.uid === retainedSecondApproverUid) {
+    throw new Error('Cleanup refused: the MFA-ready named second approver is never a privileged-cleanup target.');
   }
   const uid = target.uid;
   const emailHash = sha256(lower(target.email));
@@ -187,10 +194,27 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
   const expectedFinanceEmail = lower(env.E2E_FINANCE_APPROVER_EMAIL);
   const financeApprovers = privileged.filter((user) => isConfiguredFinanceApprover(user, expectedFinanceEmail));
+  const secondApproverEmail = lower(env[SECOND_APPROVER_EMAIL_ENV]);
+  const secondApproverMisconfiguration = secondApproverConfigFailures(secondApproverEmail, { expectedFinanceEmail });
+  if (secondApproverMisconfiguration.length > 0) {
+    throw new Error(`Cleanup refused: ${secondApproverMisconfiguration.join(' ')}`);
+  }
+  const isRetainedSecondApprover = (user) =>
+    !isCanonicalFounderAccount(user) &&
+    !isConfiguredFinanceApprover(user, expectedFinanceEmail) &&
+    isConfiguredSecondApprover(user, { secondApproverEmail, expectedFinanceEmail }) &&
+    secondApproverMfaReady(user);
+  // Retained only when present AND MFA-ready; a non-ready named account stays a target exactly as before.
+  const secondApprovers = privileged.filter(isRetainedSecondApprover);
+  if (secondApprovers.length > 1) {
+    throw new Error('Cleanup refused: more than one account matches the named second approver.');
+  }
+  const retainedSecondApproverUid = secondApprovers[0]?.uid || '';
   const targets = privileged.filter((user) =>
     !isCanonicalFounderAccount(user) &&
     !isConfiguredFinanceApprover(user, expectedFinanceEmail) &&
-    !isExplicitFinanceTierApprover(user)
+    !isExplicitFinanceTierApprover(user) &&
+    user.uid !== retainedSecondApproverUid
   );
 
   if (canonical.length !== 1) {
@@ -242,6 +266,8 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     financeApproverBootstrapReady: true,
     financeTierApproverCount: financeTierApprovers.length,
     financeTierApproversRetained: true,
+    secondApproverConfigured: Boolean(secondApproverEmail),
+    secondApproverRetainedCount: secondApprovers.length,
     privilegedAccountCountBefore: privileged.length,
     deletionTargetCount: targets.length,
     deletedAccountCount: 0,
@@ -279,6 +305,7 @@ export async function deleteObsoletePrivilegedAccountsProduction({
         db,
         target,
         actor: text(env.GITHUB_ACTOR) || 'protected-production-workflow',
+        retainedSecondApproverUid,
       });
       result.deletedAccountCount += 1;
       result.deletedProfileDocumentCount += deleted.deletedDocuments;
@@ -291,10 +318,11 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     const remainingUnexpected = remainingPrivileged.filter((user) =>
       !isCanonicalFounderAccount(user) &&
       !isConfiguredFinanceApprover(user, expectedFinanceEmail) &&
-      !isExplicitFinanceTierApprover(user)
+      !isExplicitFinanceTierApprover(user) &&
+      user.uid !== retainedSecondApproverUid
     );
     if (remainingFounder.length !== 1 || remainingFinance.length !== 1 || remainingUnexpected.length !== 0) {
-      throw new Error('Cleanup completed incompletely: production must retain exactly the canonical Founder and configured Finance Admin.');
+      throw new Error('Cleanup completed incompletely: production must retain exactly the canonical Founder, configured Finance Admin and, if MFA-ready, the named second approver.');
     }
     result.mutationPerformed = result.deletedAccountCount > 0;
   }

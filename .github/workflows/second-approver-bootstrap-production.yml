@@ -1,0 +1,142 @@
+name: Second Approver Bootstrap - Production
+run-name: Second approver bootstrap - ${{ inputs.execute_bootstrap && 'EXECUTE' || 'DRY RUN' }} · ${{ inputs.expected_commit_sha || github.sha }}
+
+# Owner-confirmed, one-identity bootstrap of the named second approver (a Super Admin that can request
+# and approve Finance grants but is never a Finance money approver). Only the repository owner can
+# dispatch it, and the production environment protection applies. It never prints the email, uid,
+# a password or a sign-in link.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Optional exact current main SHA for automation'
+        required: false
+        type: string
+        default: ''
+      confirmation:
+        description: 'Type exactly PROVISION_NAMED_SECOND_APPROVER_BIN_GROUP'
+        required: true
+        type: string
+      canonical_founder_email:
+        description: 'Canonical founder Firebase email'
+        required: true
+        type: string
+        default: 'ceo@bin-groups.com'
+      second_approver_email_confirmation:
+        description: 'Retype the second approver email exactly as stored in SECOND_APPROVER_EMAIL'
+        required: true
+        type: string
+      execute_bootstrap:
+        description: 'Create or promote the named account after the dry run passes'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: second-approver-bootstrap-production
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Provision the named second approver once
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      DEPLOYMENT_ENVIRONMENT: production
+      SECOND_APPROVER_EMAIL: ${{ secrets.SECOND_APPROVER_EMAIL }}
+      E2E_FINANCE_APPROVER_EMAIL: ${{ secrets.E2E_FINANCE_APPROVER_EMAIL }}
+      E2E_FINANCE_RECORDER_EMAIL: ${{ secrets.E2E_FINANCE_RECORDER_EMAIL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      SECOND_APPROVER_BOOTSTRAP_CONFIRMATION: ${{ inputs.confirmation }}
+      CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ${{ inputs.canonical_founder_email }}
+      SECOND_APPROVER_EMAIL_CONFIRMATION: ${{ inputs.second_approver_email_confirmation }}
+
+    steps:
+      - name: Enforce owner-only protected exact-main inputs
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          FOUNDER_EMAIL: ${{ inputs.canonical_founder_email }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_ACTOR" == "$REPOSITORY_OWNER" ]]
+          [[ "$CONFIRMATION" == "PROVISION_NAMED_SECOND_APPROVER_BIN_GROUP" ]]
+          [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -n "$SECOND_APPROVER_EMAIL" ]]
+          if [[ -n "$EXPECTED_COMMIT_SHA" ]]; then
+            [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          fi
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify protected cloud-authentication inputs
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Plan the second approver bootstrap without changes
+        run: node scripts/bootstrap-second-approver-production.mjs
+
+      - name: Execute the owner-confirmed second approver bootstrap
+        if: ${{ inputs.execute_bootstrap }}
+        run: node scripts/bootstrap-second-approver-production.mjs --execute
+
+      - name: Upload bootstrap evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: second-approver-bootstrap-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: launch_package/second-approver-bootstrap.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish protected bootstrap summary
+        if: ${{ always() }}
+        env:
+          EXECUTE_BOOTSTRAP: ${{ inputs.execute_bootstrap }}
+        run: |
+          {
+            echo '## BIN GROUP named second approver bootstrap'
+            echo
+            echo "- Repository: \`$GITHUB_REPOSITORY\`"
+            echo "- Exact main SHA: \`$GITHUB_SHA\`"
+            echo "- Execution requested: \`$EXECUTE_BOOTSTRAP\`"
+            echo '- Role: Super Admin (Finance grant request/approve; never a Finance money approver)'
+            echo '- Readiness counts it only after verified email, MFA and an active profile'
+            echo '- Email, uid, passwords and links: never printed'
+            echo '- Hard-launch claim: false'
+          } >> "$GITHUB_STEP_SUMMARY"

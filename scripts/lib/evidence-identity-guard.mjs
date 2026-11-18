@@ -17,11 +17,13 @@ const PROTECTED_FLAGS = [
   'finance_admin',
   'finance_manager',
   'finance_controller',
+  'designatedSecondApprover',
 ];
 const PROTECTED_EMAIL_ENV_KEYS = [
   'E2E_FINANCE_APPROVER_EMAIL',
   'E2E_FINANCE_RECORDER_EMAIL',
   'E2E_ADMIN_EMAIL',
+  'SECOND_APPROVER_EMAIL',
 ];
 
 const lower = (value) => String(value ?? '').trim().toLowerCase();

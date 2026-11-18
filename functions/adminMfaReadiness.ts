@@ -77,6 +77,30 @@ export function isExplicitFinanceTierApprover(user: { email?: string | null; cus
   return true;
 }
 
+// Named second approver (Rashid, 18 Nov 2026): one Super Admin carrying the Admin-SDK-only
+// designatedSecondApprover claim, set solely by the owner-confirmed Second Approver Bootstrap workflow
+// for the account named by the protected SECOND_APPROVER_EMAIL secret (the deploy-time scripts also
+// check that exact email). It is never a Finance money approver: any Finance/CEO/staff flag disqualifies.
+export const SECOND_APPROVER_CLAIM = "designatedSecondApprover";
+const SECOND_APPROVER_FORBIDDEN_FLAGS = [
+  "ceo", "manager", "staff", "isStaff", "technician",
+  "finance_admin", "finance_manager", "finance_controller", "finance_staff", "payroll_admin",
+];
+
+export function isDesignatedSecondApproverShape(user: { email?: string | null; customClaims?: Record<string, unknown> | null }) {
+  const claims = (user?.customClaims || {}) as Record<string, unknown>;
+  if (claims[SECOND_APPROVER_CLAIM] !== true) return false;
+  if (lower(user?.email, 320) === CANONICAL_FOUNDER_EMAIL || !lower(user?.email, 320)) return false;
+  for (const key of ["role", "userRole", "primaryRole"]) {
+    if (claims[key] !== undefined && claims[key] !== null && lower(claims[key], 80) !== "super_admin") return false;
+  }
+  if (lower(claims.role, 80) !== "super_admin" || claims.super_admin !== true) return false;
+  if (SECOND_APPROVER_FORBIDDEN_FLAGS.some((flag) => claims[flag] === true)) return false;
+  if (claims.financeAuthorizedAt !== undefined && claims.financeAuthorizedAt !== null) return false;
+  if (claims.suspended === true) return false;
+  return true;
+}
+
 function profileIsActive(profile: FirebaseFirestore.DocumentData = {}) {
   if (profile.suspended === true) return false;
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status, 80));
@@ -152,7 +176,15 @@ export function buildAdminMfaReadinessOverview(
   let unexpectedPrivilegedAccountCount = 0;
   let financeTierApproverCount = 0;
   let financeTierApproverTotpReadyCount = 0;
+  let secondApproverCount = 0;
+  let secondApproverReadyCount = 0;
   const blockers: AdminMfaReadinessTarget[] = [];
+  // Only a single designated second approver can ever be accepted; two or more are all unexpected.
+  const designatedCount = records.filter((record) =>
+    claimsGrantAdminPortal((record.user.customClaims || {}) as Record<string, unknown>) &&
+    !isCanonicalFounder(record.user, roleOf((record.user.customClaims || {}) as Record<string, unknown>, record.profile)) &&
+    isDesignatedSecondApproverShape(record.user)
+  ).length;
 
   for (const record of records) {
     const user = record.user;
@@ -174,12 +206,22 @@ export function buildAdminMfaReadinessOverview(
     const role = roleOf(claims, record.profile);
     const canonicalFounder = isCanonicalFounder(user, role);
     const financeAdmin = role === "finance_admin";
+    const secondApprover = !canonicalFounder && !financeAdmin && designatedCount === 1 && isDesignatedSecondApproverShape(user);
+    const secondApproverFactors = user.multiFactor?.enrolledFactors || [];
+    const secondApproverReady = secondApprover &&
+      record.profileExists && !user.disabled && profileIsActive(record.profile) && user.emailVerified === true &&
+      secondApproverFactors.some((factor) => ["phone", "totp"].includes(lower(factor.factorId, 80)));
     if (canonicalFounder) canonicalFounderCount += 1;
     else if (financeAdmin) financeAdminCount += 1;
-    else unexpectedPrivilegedAccountCount += 1;
+    else if (secondApprover) {
+      secondApproverCount += 1;
+      if (secondApproverReady) secondApproverReadyCount += 1;
+    } else unexpectedPrivilegedAccountCount += 1;
 
     const targetBlockers: string[] = [];
-    if (!canonicalFounder && !financeAdmin) targetBlockers.push("DELETE_REQUIRED");
+    if (!canonicalFounder && !financeAdmin && !secondApprover) targetBlockers.push("DELETE_REQUIRED");
+    // A present but not MFA-ready second approver is not accepted (cleanup would still remove it).
+    if (secondApprover && !secondApproverReady) targetBlockers.push("SECOND_APPROVER_MFA_REQUIRED");
     if (!record.profileExists) {
       missingProfileCount += 1;
       targetBlockers.push("PROFILE_MISSING");
@@ -233,8 +275,10 @@ export function buildAdminMfaReadinessOverview(
     return `${left.role}|${left.emailMasked}`.localeCompare(`${right.role}|${right.emailMasked}`);
   });
 
+  const expectedPrivilegedAccountCount = secondApproverCount === 1 && secondApproverReadyCount === 1 ? 3 : 2;
   const dualControlReady =
-    claimedAdminCount === 2 &&
+    secondApproverReadyCount === secondApproverCount &&
+    claimedAdminCount === expectedPrivilegedAccountCount &&
     canonicalFounderCount === 1 &&
     canonicalFounderReadyCount === 1 &&
     financeAdminCount === 1 &&
@@ -243,8 +287,8 @@ export function buildAdminMfaReadinessOverview(
     missingProfileCount === 0 &&
     disabledAdminCount === 0 &&
     inactiveProfileCount === 0 &&
-    activeAdminCount === 2 &&
-    emailVerifiedCount === 2;
+    activeAdminCount === expectedPrivilegedAccountCount &&
+    emailVerifiedCount === expectedPrivilegedAccountCount;
 
   return {
     status: dualControlReady ? "READY" : "BLOCKED",
@@ -265,6 +309,9 @@ export function buildAdminMfaReadinessOverview(
       unexpectedPrivilegedAccountCount,
       financeTierApproverCount,
       financeTierApproverTotpReadyCount,
+      secondApproverCount,
+      secondApproverReadyCount,
+      expectedPrivilegedAccountCount,
       dualControlReady,
       founderSingletonReady: dualControlReady,
       blockingAccountCount: blockers.length,

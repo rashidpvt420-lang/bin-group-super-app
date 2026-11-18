@@ -151,9 +151,10 @@ test('privileged-account review never targets a Finance tier approver but still 
 
 test('deploy/owner privileged cleanup explicitly excludes Finance tier approvers and refuses to purge one', async () => {
   const source = await read('scripts/delete-obsolete-privileged-accounts-production.mjs');
-  assert.match(source, /isExplicitFinanceTierApprover,\n\} from '\.\/verify-admin-mfa-production\.mjs';/);
-  assert.match(source, /!isConfiguredFinanceApprover\(user, expectedFinanceEmail\) &&\n\s+!isExplicitFinanceTierApprover\(user\)\n\s+\);\n\n\s+if \(canonical\.length !== 1\)/);
-  assert.match(source, /async function purgePrivilegedTarget\(\{ auth, db, target, actor \}\) \{\n\s+if \(isExplicitFinanceTierApprover\(target\)\) \{\n\s+throw new Error/);
+  assert.match(source, /isExplicitFinanceTierApprover,\n[^}]*\} from '\.\/verify-admin-mfa-production\.mjs';/);
+  // The only other retained identity is the MFA-ready named second approver (Rashid, 18 Nov 2026).
+  assert.match(source, /!isConfiguredFinanceApprover\(user, expectedFinanceEmail\) &&\n\s+!isExplicitFinanceTierApprover\(user\) &&\n\s+user\.uid !== retainedSecondApproverUid\n\s+\);\n\n\s+if \(canonical\.length !== 1\)/);
+  assert.match(source, /async function purgePrivilegedTarget\(\{ auth, db, target, actor, retainedSecondApproverUid = '' \}\) \{\n\s+if \(isExplicitFinanceTierApprover\(target\)\) \{\n\s+throw new Error/);
   assert.match(source, /remainingUnexpected = remainingPrivileged\.filter\(\(user\) =>[^;]*!isExplicitFinanceTierApprover\(user\)/);
   assert.match(source, /financeTierApproverCount: financeTierApprovers\.length/);
   // Founder singleton and single configured Finance Admin requirements are unchanged.
@@ -171,7 +172,9 @@ test('callable readiness overview mirrors the script classification and keeps du
   assert.match(source, /if \(isExplicitFinanceTierApprover\(user\)\) \{[^]*?financeTierApproverCount \+= 1;[^]*?continue;\n\s+\}\n\s+if \(!claimsGrantAdminPortal\(claims\)\) continue;/);
   assert.match(source, /claimsGrantAdminPortal\(\(user\.customClaims \|\| \{\}\) as Record<string, unknown>\) \|\|\n\s+isExplicitFinanceTierApprover\(user\)/);
   for (const condition of [
-    'claimedAdminCount === 2',
+    'claimedAdminCount === expectedPrivilegedAccountCount',
+    'const expectedPrivilegedAccountCount = secondApproverCount === 1 && secondApproverReadyCount === 1 ? 3 : 2;',
+    'secondApproverReadyCount === secondApproverCount',
     'canonicalFounderCount === 1',
     'financeAdminCount === 1',
     'financeAdminReadyCount === 1',
