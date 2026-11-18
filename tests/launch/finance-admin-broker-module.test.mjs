@@ -15,7 +15,10 @@ const server = fs.readFileSync('functions/adminUserProvisioning.ts', 'utf8');
 const staffPage = fs.readFileSync('apps/admin-panel/src/pages/admin/StaffAccessPage.tsx', 'utf8');
 
 const block = (source, name) => source.slice(source.indexOf(`const ${name}`), source.indexOf('};', source.indexOf(`const ${name}`)));
-const roleLine = (source, role) => (source.match(new RegExp(`\\n\\s*${role}: \\[([^\\]]*)\\]`)) || [])[1] || '';
+const roleLine = (source, role) => {
+  const line = source.split('\n').find((entry) => entry.trim().startsWith(`${role}: [`));
+  return line ? line.slice(line.indexOf('[') + 1, line.indexOf(']')) : '';
+};
 
 test('server and UI allow broker for finance_admin only, never as a default', () => {
   for (const source of [server, staffPage]) {
