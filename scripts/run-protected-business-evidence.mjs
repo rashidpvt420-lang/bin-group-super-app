@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
 
 function run(script, args = [], extraEnv = {}) {
   const result = spawnSync(process.execPath, [script, ...args], {
@@ -9,6 +10,22 @@ function run(script, args = [], extraEnv = {}) {
     stdio: 'inherit',
   });
   if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
+}
+
+// Diagnostics only: Playwright wipes test-results/ and the retry overwrites the per-suite reports,
+// so keep attempt 1 under its own folder for the uploaded diagnostics artifact. This never feeds
+// evidence recording and never turns a failed attempt into a pass.
+const ATTEMPT_ONE_DIAGNOSTICS_DIR = 'launch_package/attempt-1-diagnostics';
+function preserveAttemptOneDiagnostics() {
+  try {
+    mkdirSync(ATTEMPT_ONE_DIAGNOSTICS_DIR, { recursive: true });
+    for (const [source, target] of [['launch_package/artifacts', 'artifacts'], ['test-results', 'test-results']]) {
+      if (existsSync(source)) cpSync(source, `${ATTEMPT_ONE_DIAGNOSTICS_DIR}/${target}`, { recursive: true });
+    }
+    console.log(`[protected-business-evidence] attempt=1 diagnostics preserved under ${ATTEMPT_ONE_DIAGNOSTICS_DIR}`);
+  } catch (error) {
+    console.warn(`[protected-business-evidence] attempt=1 diagnostics could not be preserved: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function runCriticalBusinessEvidence(releaseId, attempt) {
@@ -56,6 +73,12 @@ run('scripts/patch-protected-admin-staff-access-interaction.mjs');
 // before any callable with enforceAppCheck can become an opaque E2E failure.
 run('scripts/ensure-protected-appcheck-debug-tokens.mjs');
 
+// Read-only Finance pre-flight: CEO / Super Admin / Admin hold no money authority, so the Admin
+// payment and broker payout steps and the Owner 15% receipt need two distinct Finance identities
+// whose live financeAuthorizedAt grant is younger than 24h. Fail fast (BLOCKED) here instead of
+// timing out deep inside the browser proof. Never refreshes a grant or relaxes the TTL.
+run('scripts/verify-finance-evidence-accounts.mjs');
+
 // Apply run-time-only hardening after the legacy compatibility patches so the
 // committed tests stay representative while production replay gets deterministic
 // listener convergence, stale synthetic correction cleanup, and exact callable
@@ -72,6 +95,7 @@ run('scripts/verify-phase1-manual-payment-proof.mjs', [], { RELEASE_ID: releaseI
 let exitCode = runCriticalBusinessEvidence(releaseId, 1);
 if (exitCode !== 0) {
   console.warn(`[protected-business-evidence] attempt=1 failed exit_code=${exitCode}; rebuilding protected fixtures and performing one fresh real evidence retry.`);
+  preserveAttemptOneDiagnostics();
   run('scripts/prepare-protected-business-fixtures.mjs', [], { RELEASE_ID: releaseId });
   run('scripts/verify-phase1-manual-payment-proof.mjs', [], { RELEASE_ID: releaseId });
   exitCode = runCriticalBusinessEvidence(releaseId, 2);

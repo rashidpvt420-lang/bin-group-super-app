@@ -9,6 +9,7 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
 import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
 import { signInFinanceApproverMfa } from './lib/finance-approver-mfa.mjs';
+import { requireFreshFinanceEvidenceAccounts } from './lib/finance-evidence-preflight.mjs';
 import { cleanupBrokerCommissionsForContracts, collectOwnerContractIds } from './lib/e2e-contract-commission-cleanup.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
@@ -44,6 +45,14 @@ const founderTotpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
 const approverEmail = text(process.env.E2E_FINANCE_APPROVER_EMAIL).toLowerCase();
 const approverPassword = text(process.env.E2E_FINANCE_APPROVER_PASSWORD);
 const approverTotpSecret = text(process.env.E2E_FINANCE_APPROVER_TOTP_SECRET);
+// Finance identity A (records the 15% receipt) must be a different person from Finance
+// identity B (E2E_FINANCE_APPROVER_*, approves it). CEO / Super Admin never hold money authority.
+// Use finance_manager or finance_controller for A: a second finance_admin is removed by the
+// protected deploy's privileged-account cleanup.
+const recorderEmail = text(process.env.E2E_FINANCE_RECORDER_EMAIL).toLowerCase();
+const recorderPassword = text(process.env.E2E_FINANCE_RECORDER_PASSWORD);
+const recorderTotpSecret = text(process.env.E2E_FINANCE_RECORDER_TOTP_SECRET);
+const FINANCE_RECORDER_SECRET_NAMES = ['E2E_FINANCE_RECORDER_EMAIL', 'E2E_FINANCE_RECORDER_PASSWORD', 'E2E_FINANCE_RECORDER_TOTP_SECRET'];
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 
 for (const [name, value] of Object.entries({
@@ -60,6 +69,12 @@ for (const [name, value] of Object.entries({
 })) {
   assert(value, `${name} is required for inspection-first Owner production evidence.`);
 }
+const missingRecorderSecrets = FINANCE_RECORDER_SECRET_NAMES.filter((name) => !text(process.env[name]));
+if (missingRecorderSecrets.length) {
+  throw new Error(`BLOCKED: Owner 15% dual-control evidence needs a second, distinct Finance identity to record the receipt. Missing repository secret(s): ${missingRecorderSecrets.join(', ')}. Add a separate finance_manager or finance_controller tester with TOTP MFA and a fresh two-person Finance authorization; nothing was changed.`);
+}
+assert(recorderEmail !== approverEmail, 'BLOCKED: E2E_FINANCE_RECORDER_EMAIL must be a different person from E2E_FINANCE_APPROVER_EMAIL (dual control).');
+assert(recorderEmail !== founderEmail && recorderEmail !== ownerEmail, 'BLOCKED: the Finance receipt recorder must not be the Founder or the Owner.');
 assert(approverEmail !== founderEmail && approverEmail !== ownerEmail, 'Payment approver must be a distinct Finance Admin account.');
 assert(ownerEmail === ownerMailboxEmail, 'The Owner evidence account must be the protected Owner mailbox.');
 assert(founderEmail === CANONICAL_FOUNDER_EMAIL, `E2E_FOUNDER_EMAIL must be ${CANONICAL_FOUNDER_EMAIL}.`);
@@ -362,6 +377,16 @@ async function main() {
   const expectedPropertyId = `${intakeId}_property_1`;
   const appCheckToken = await exchangeAppCheckToken();
 
+  // Read-only: both Finance identities must pass the live server money gate (explicit Finance
+  // role, TOTP, financeAuthorizedAt younger than 24h with margin) before any record changes.
+  await requireFreshFinanceEvidenceAccounts({
+    auth,
+    accounts: [
+      { label: 'Finance receipt recorder (E2E_FINANCE_RECORDER_EMAIL)', email: recorderEmail, allowedRoles: new Set(['finance_manager', 'finance_controller']) },
+      { label: 'Finance payment approver (E2E_FINANCE_APPROVER_EMAIL)', email: approverEmail, allowedRoles: new Set(['finance_admin']) },
+    ],
+  });
+
   const founderSession = await signInWithRequiredTotpMfa({
     apiKey: API_KEY,
     email: founderEmail,
@@ -369,10 +394,15 @@ async function main() {
     totpSecret: founderTotpSecret,
     referer: ADMIN_REFERER,
   });
+  const recorderSession = await signInFinanceApproverMfa({
+    apiKey: API_KEY, email: recorderEmail, password: recorderPassword,
+    totpSecret: recorderTotpSecret, recorderUid: founderSession.uid, referer: ADMIN_REFERER,
+  });
   const approverSession = await signInFinanceApproverMfa({
     apiKey: API_KEY, email: approverEmail, password: approverPassword,
-    totpSecret: approverTotpSecret, recorderUid: founderSession.uid, referer: ADMIN_REFERER,
+    totpSecret: approverTotpSecret, recorderUid: recorderSession.uid, referer: ADMIN_REFERER,
   });
+  assert(approverSession.uid !== founderSession.uid && recorderSession.uid !== founderSession.uid, 'Finance identities must be distinct from the Founder.');
 
   // Verify both MFA identities before creating or resetting evidence records.
   await resetOwnerAccount();
@@ -616,14 +646,14 @@ async function main() {
     filename: 'mobilisation-cash-receipt.pdf',
     contentType: 'application/pdf',
     encodedDocument: receiptBytes.toString('base64'),
-  }, appCheckToken, founderSession.idToken);
-  assert(recordedPayment.status === 'RECORDED' && recordedPayment.method === 'CASH', 'Admin did not record Phase 1 Cash evidence.');
+  }, appCheckToken, recorderSession.idToken);
+  assert(recordedPayment.status === 'RECORDED' && recordedPayment.method === 'CASH', 'The Finance receipt recorder did not record Phase 1 Cash evidence.');
   assert(recordedPayment.receiptHash === receiptHash && text(recordedPayment.generation), 'Recorded 15% receipt hash or generation is invalid.');
 
   const paymentWithEvidence = (await db.collection('payment_transactions').doc(intakeId).get()).data() || {};
   assert(text(paymentWithEvidence.paymentConfigVersion) === text(configuration.version), 'Payment evidence did not persist the active configuration version.');
   assert(text(paymentWithEvidence.paymentConfigHash) === text(configuration.configHash), 'Payment evidence did not persist the active configuration hash.');
-  assert(text(paymentWithEvidence.paymentEvidenceRecordedBy) === founderSession.uid, 'Payment receipt is not bound to the recording Founder.');
+  assert(text(paymentWithEvidence.paymentEvidenceRecordedBy) === recorderSession.uid, 'Payment receipt is not bound to the recording Finance identity.');
   assert(paymentWithEvidence.paymentManifest?.selectedMethod === 'CASH', 'Payment manifest did not bind the selected Phase 1 method.');
   assert(text(paymentWithEvidence.paymentProofHash) === receiptHash && text(paymentWithEvidence.paymentProofGeneration), 'Payment transaction is missing immutable receipt evidence.');
 
@@ -645,7 +675,7 @@ async function main() {
     (value) => upper(value.status) === 'APPROVED' && value.paymentVerified === true && value.unlocksDashboard === true,
     'approved inspection-first Owner activation',
   );
-  assert(text(activatedPayment.paymentDualControl?.evidenceRecordedBy) === founderSession.uid && text(activatedPayment.approvedBy) === approverSession.uid, 'Activation does not prove distinct receipt recorder and approver.');
+  assert(text(activatedPayment.paymentDualControl?.evidenceRecordedBy) === recorderSession.uid && text(activatedPayment.approvedBy) === approverSession.uid && recorderSession.uid !== approverSession.uid, 'Activation does not prove distinct receipt recorder and approver.');
   const activatedContract = (await db.collection('contracts').doc(intakeId).get()).data() || {};
   const activatedUser = (await db.collection('users').doc(ownerUid).get()).data() || {};
   const activatedProperty = (await db.collection('properties').doc(expectedPropertyId).get()).data() || {};
@@ -654,7 +684,7 @@ async function main() {
   const invoice = (await db.collection('invoices').doc(invoiceId).get()).data() || {};
 
   assert(upper(activatedContract.status) === 'ACTIVE' && activatedContract.adminApproved === true, 'Contract was not activated after verified visits and exact 15% payment.');
-  assert(activatedUser.dashboardUnlocked === true && activatedUser.dashboardLocked === false, 'Owner dashboard did not unlock after Founder MFA approval.');
+  assert(activatedUser.dashboardUnlocked === true && activatedUser.dashboardLocked === false, 'Owner dashboard did not unlock after independent Finance MFA approval.');
   assert(activatedUser.paymentVerified === true && activatedUser.adminApproved === true, 'Owner final activation flags are incomplete.');
   assert(upper(activatedProperty.status) === 'ACTIVE' && upper(activatedProperty.activationStatus) === 'ACTIVE', 'Server-generated property is not active.');
   assert(upper(inspection.status) === 'COMPLETED' && upper(inspection.evidenceStatus) === 'VERIFIED', 'Evidence-backed property inspection is not complete.');
@@ -730,7 +760,9 @@ async function main() {
       mfaSecondFactorIdentifierPresent: Boolean(founderSession.secondFactorIdentifier),
       dualControl: {
         policy: 'D5_RECORDER_IS_NOT_APPROVER',
-        distinctActorsVerified: founderSession.uid !== approverSession.uid,
+        distinctActorsVerified: recorderSession.uid !== approverSession.uid && founderSession.uid !== approverSession.uid,
+        recorderMfaSecondFactorType: recorderSession.secondFactorType,
+        recorderMfaSecondFactorIdentifierPresent: Boolean(recorderSession.secondFactorIdentifier),
         approverMfaSecondFactorType: approverSession.secondFactorType,
         approverMfaSecondFactorIdentifierPresent: Boolean(approverSession.secondFactorIdentifier),
       },

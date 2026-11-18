@@ -5,16 +5,25 @@
  * Admin responsibility chain. All fixtures are run-scoped synthetic records
  * and are removed after the run.
  */
-import { test, expect, type Page, type Response } from '@playwright/test';
+import { test, expect, type Browser, type Page, type Response } from '@playwright/test';
 import admin from 'firebase-admin';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { createBusinessEvidenceRunScope } from '../../scripts/lib/business-evidence-run-scope.mjs';
+import { requireFreshFinanceEvidenceAccounts } from '../../scripts/lib/finance-evidence-preflight.mjs';
 
 const EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
 const PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
 const REAL_MFA_CODE = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
 const FOUNDER_TOTP_SECRET = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').toUpperCase().replace(/[\s=-]/g, '');
+// Money decisions (payment approve / return, broker payout approve / mark paid / reject) belong to
+// an explicit MFA Finance Admin, never to the Founder (CEO / Super Admin). The Founder keeps every
+// non-money responsibility and proves the money controls stay disabled for that session.
+const FINANCE_EMAIL = String(process.env.E2E_FINANCE_APPROVER_EMAIL || '').trim().toLowerCase();
+const FINANCE_PASSWORD = String(process.env.E2E_FINANCE_APPROVER_PASSWORD || '').trim();
+const FINANCE_TOTP_SECRET = String(process.env.E2E_FINANCE_APPROVER_TOTP_SECRET || '').toUpperCase().replace(/[\s=-]/g, '');
+const FINANCE_ONLY_PAYMENT_WARNING = 'Approve stays off until this session is Finance Admin, Finance Manager or Finance Controller with MFA.';
+const FINANCE_ONLY_PAYOUT_WARNING = 'Approve and Mark paid stay off until this session is Finance Admin, Finance Manager or Finance Controller with MFA.';
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
 const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'bin-group-57c60.firebasestorage.app';
@@ -86,6 +95,34 @@ function requireLaunchCredentials() {
   if (EMAIL !== 'ceo@bin-groups.com') {
     throw new Error('The full Admin business proof requires the canonical Founder account because Owner property approval is Founder-only.');
   }
+  const missingFinance = [
+    !FINANCE_EMAIL ? 'E2E_FINANCE_APPROVER_EMAIL' : '',
+    !FINANCE_PASSWORD ? 'E2E_FINANCE_APPROVER_PASSWORD' : '',
+    !/^[A-Z2-7]{16,}$/.test(FINANCE_TOTP_SECRET) ? 'E2E_FINANCE_APPROVER_TOTP_SECRET' : '',
+  ].filter(Boolean);
+  if (missingFinance.length) {
+    throw new Error(`BLOCKED: the Admin money steps need a distinct MFA Finance Admin session. Missing or invalid ${missingFinance.join(', ')}. Admin business proof cannot be skipped.`);
+  }
+  if (FINANCE_EMAIL === EMAIL) {
+    throw new Error('BLOCKED: E2E_FINANCE_APPROVER_EMAIL must be a different person from the canonical Founder.');
+  }
+}
+
+function totpCodeFor(secret: string) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const character of secret) bits += alphabet.indexOf(character).toString(2).padStart(5, '0');
+  const key = Buffer.from(Array.from({ length: Math.floor(bits.length / 8) }, (_, index) =>
+    Number.parseInt(bits.slice(index * 8, index * 8 + 8), 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  const digest = createHmac('sha1', key).update(counter).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, '0');
 }
 
 // Keep the TOTP derivation in this protected proof as well as the shared
@@ -283,6 +320,68 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
     const evidence = await diagnostics(authResponse);
     throw new Error(`${error instanceof Error ? error.message : String(error)}\nAdmin auth diagnostics:\n${JSON.stringify(evidence, null, 2)}`);
   }
+}
+
+// Second, independent browser session: the configured Finance Admin signs in with its own password
+// and enrolled TOTP factor. Nothing about this session is shared with the Founder session.
+async function openFinanceAdminSession(browser: Browser) {
+  const context = await browser.newContext();
+  const financePage = await context.newPage();
+  const financeDiagnostics = await collectDiagnostics(financePage);
+  const financeMonitor = await attachAuthenticatedAppCheckMonitor(financePage);
+  await financeMonitor.assertTokenFingerprint();
+  let authResponse: Response | null = null;
+  try {
+    await financePage.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
+    await expect(financePage.getByTestId('admin-login-email')).toBeVisible({ timeout: 20_000 });
+    const responsePromise = financePage.waitForResponse(isFirebasePasswordResponse, { timeout: 30_000 });
+    await financePage.getByTestId('admin-login-email').fill(FINANCE_EMAIL);
+    await financePage.getByTestId('admin-login-password').fill(FINANCE_PASSWORD);
+    await financePage.getByTestId('admin-login-submit').click();
+    authResponse = await responsePromise;
+    expect(authResponse.status(), 'Finance Admin password sign-in returned an error status.').toBeLessThan(400);
+
+    await expect(financePage.getByTestId('admin-mfa-signin-challenge'), 'the Finance Admin must receive its enrolled TOTP challenge').toBeVisible({ timeout: 30_000 });
+    const factorSelect = financePage.getByTestId('admin-mfa-factor-select');
+    if (await factorSelect.isVisible().catch(() => false)) {
+      for (const option of await factorSelect.locator('option').all()) {
+        if (/authenticator/i.test(await option.innerText())) {
+          const value = await option.getAttribute('value');
+          if (value) await factorSelect.selectOption(value);
+          break;
+        }
+      }
+    }
+    await expect(financePage.getByTestId('admin-mfa-totp-selected'), 'the Finance Admin proof requires the enrolled TOTP factor').toBeVisible({ timeout: 15_000 });
+    await financePage.getByTestId('admin-mfa-send-signin-code').click();
+    await expect(financePage.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
+    await waitForFreshTotpWindow(financePage);
+    await financePage.getByTestId('admin-mfa-signin-code').fill(totpCodeFor(FINANCE_TOTP_SECRET));
+    const firstMfaResponse = await submitMfaCode(financePage);
+    if (firstMfaResponse && !firstMfaResponse.ok()) {
+      const firstError = await visibleMfaError(financePage);
+      if (!/incorrect|expired/i.test(firstError)) {
+        throw new Error(`Finance Admin TOTP sign-in failed with Firebase status ${firstMfaResponse.status()}.`);
+      }
+      await waitForNextTotpWindow(financePage);
+      await financePage.getByTestId('admin-mfa-signin-code').fill(totpCodeFor(FINANCE_TOTP_SECRET));
+      const retryMfaResponse = await submitMfaCode(financePage);
+      if (retryMfaResponse && !retryMfaResponse.ok()) {
+        throw new Error('Finance Admin TOTP was rejected in two consecutive windows. Reconcile E2E_FINANCE_APPROVER_TOTP_SECRET with the enrolled factor.');
+      }
+    }
+    await financePage.waitForURL((url) => !/\/login\/?$/.test(url.pathname), { timeout: 45_000 });
+    await waitForLoader(financePage);
+    await expect(financePage.locator('body')).not.toContainText(
+      /missing or insufficient permissions|application error|minified react error|admin console could not start/i,
+      { timeout: 10_000 },
+    );
+  } catch (error) {
+    const evidence = await financeDiagnostics(authResponse);
+    await context.close().catch(() => undefined);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nFinance Admin auth diagnostics:\n${JSON.stringify({ ...evidence, bodyText: undefined }, null, 2)}`);
+  }
+  return { financePage, financeMonitor, financeContext: context };
 }
 
 async function findAuthUser(email: string) {
@@ -850,6 +949,18 @@ test.describe('Admin protected operational business workflow', () => {
   test.beforeAll(async () => {
     requireLaunchCredentials();
     initializeAdminSdk();
+    // Read-only: fail fast (BLOCKED) unless the Finance Admin can pass the live server money gate,
+    // including a financeAuthorizedAt grant younger than 24h. Never refreshes the grant.
+    await requireFreshFinanceEvidenceAccounts({
+      auth: admin.auth(),
+      db: admin.firestore(),
+      accounts: [{
+        label: 'Finance payment approver (E2E_FINANCE_APPROVER_EMAIL)',
+        email: FINANCE_EMAIL,
+        allowedRoles: new Set(['finance_admin']),
+        requiredModules: ['transactions', 'broker'],
+      }],
+    });
     await cleanupOperationalFixtures().catch(() => undefined);
     await seedOperationalFixtures();
   });
@@ -859,8 +970,10 @@ test.describe('Admin protected operational business workflow', () => {
     await cleanupOperationalFixtures();
   });
 
-  test('real MFA session proves Admin hard-launch responsibilities end to end', async ({ page }) => {
+  test('real MFA session proves Admin hard-launch responsibilities end to end', async ({ page: founderPage, browser }) => {
     test.setTimeout(720_000);
+    // `page` is the acting session: the Founder for non-money steps, the Finance Admin for money steps.
+    let page = founderPage;
     const diagnostics = await collectDiagnostics(page);
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
     await monitor.assertTokenFingerprint();
@@ -961,9 +1074,21 @@ test.describe('Admin protected operational business workflow', () => {
     expect(propertyApprovalAudits.docs.filter((doc) => doc.data().action === 'APPROVE_PROPERTY')).toHaveLength(1);
     expect(propertyRejectionAudits.docs.filter((doc) => doc.data().action === 'REJECT_PROPERTY')).toHaveLength(1);
 
-    // Payment approval, rejection and exactly-once activation.
+    // The Founder (CEO / Super Admin) sees the payment queue but can never approve money.
     await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
+    const founderActivationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
+    await expect(founderActivationRow).toBeVisible({ timeout: 35_000 });
+    await expect(founderActivationRow.getByTestId('admin-payment-approve'), 'Founder session must not be able to approve a payment').toBeDisabled({ timeout: 15_000 });
+    await expect(page.getByText(FINANCE_ONLY_PAYMENT_WARNING, { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('payment-approval-gate')).not.toContainText(/limited to Admin, CEO/i);
+
+    // Payment approval, rejection and exactly-once activation run in the independent Finance Admin session.
+    const { financePage, financeMonitor, financeContext } = await openFinanceAdminSession(browser);
+    page = financePage;
+    await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
+    await waitForLoader(page);
+    await expect(page.getByText(FINANCE_ONLY_PAYMENT_WARNING, { exact: true })).toHaveCount(0);
     const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
     await expect(activationRow).toBeVisible({ timeout: 35_000 });
     await activationRow.getByTestId('admin-payment-approve').click();
@@ -1017,7 +1142,8 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectPaymentDialog.getByRole('button', { name: /Return \/ Reject/i }).click();
     await expect.poll(async () => (await db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
 
-    // adminReviewBrokerKyc and adminReviewBrokerPayoutRequest settlement chain.
+    // adminReviewBrokerKyc (Founder) and adminReviewBrokerPayoutRequest settlement chain (Finance Admin).
+    page = founderPage;
     await page.goto(adminUrl('/broker'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     const approveBrokerRow = page.getByRole('row').filter({ hasText: BROKER_APPROVE_NAME }).first();
@@ -1042,6 +1168,13 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectKycDialog.getByRole('button', { name: 'Reject', exact: true }).click();
     await expect.poll(async () => (await db.collection('users').doc(BROKER_REJECT_ID).get()).data()?.brokerKycStatus, { timeout: 45_000 }).toBe('REJECTED');
 
+    const founderPayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
+    await expect(founderPayoutCard.getByRole('button', { name: 'Approve', exact: true }), 'Founder session must not be able to approve a broker payout').toBeDisabled({ timeout: 35_000 });
+    await expect(page.getByText(FINANCE_ONLY_PAYOUT_WARNING, { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    page = financePage;
+    await page.goto(adminUrl('/broker'), { waitUntil: 'domcontentloaded' });
+    await waitForLoader(page);
     let approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     await expect(approvePayoutCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
     await approvePayoutCard.getByRole('button', { name: 'Approve', exact: true }).click();
@@ -1061,7 +1194,12 @@ test.describe('Admin protected operational business workflow', () => {
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
     expect((await db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).get()).data()?.payoutStatus).toBe('AVAILABLE');
 
-    // adminAssignTechnician assignment and active-ticket re-dispatch.
+    financeMonitor.assertClean(`${test.info().title} (Finance Admin session)`);
+    financeMonitor.assertAuthenticatedFirebaseRead(`${test.info().title} (Finance Admin session)`);
+    await financeContext.close();
+
+    // adminAssignTechnician assignment and active-ticket re-dispatch (Founder).
+    page = founderPage;
     await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     let ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
