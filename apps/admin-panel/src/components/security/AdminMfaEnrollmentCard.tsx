@@ -56,6 +56,8 @@ type ReadinessOverview = {
     totpMfaEnrolledCount: number;
     canonicalFounderReadyCount: number;
     financeAdminReadyCount: number;
+    financeTierApproverCount?: number;
+    financeTierApproverTotpReadyCount?: number;
     unexpectedPrivilegedAccountCount: number;
     dualControlReady: boolean;
     founderSingletonReady: boolean;
@@ -99,10 +101,27 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
   // The role is server-derived by AdminSecurityProfilePage; this component never grants claims.
   const isFounder = auth.currentUser?.email?.toLowerCase() === 'ceo@bin-groups.com';
   const normalizedRole = String(currentRole || '').trim().toLowerCase();
+  // Explicit Finance approver roles only (mirrors FINANCE_APPROVER_ROLES on the server). finance_staff,
+  // payroll_admin and every other Admin role still cannot self-enroll TOTP here.
   const isFinanceAdmin = normalizedRole === 'finance_admin';
-  const canEnrollTotp = isFounder || isFinanceAdmin;
-  const totpActorLabel = isFounder ? 'Founder' : 'Finance Admin';
-  const totpActorLabelAr = isFounder ? 'المؤسس' : 'مسؤول المالية';
+  const isFinanceManager = normalizedRole === 'finance_manager';
+  const isFinanceController = normalizedRole === 'finance_controller';
+  const isFinanceApprover = isFinanceAdmin || isFinanceManager || isFinanceController;
+  const canEnrollTotp = isFounder || isFinanceApprover;
+  const totpActorLabel = isFounder
+    ? 'Founder'
+    : isFinanceManager
+      ? 'Finance Manager'
+      : isFinanceController
+        ? 'Finance Controller'
+        : 'Finance Admin';
+  const totpActorLabelAr = isFounder
+    ? 'المؤسس'
+    : isFinanceManager
+      ? 'مدير المالية'
+      : isFinanceController
+        ? 'المراقب المالي'
+        : 'مسؤول المالية';
   const enrolledFactors = auth.currentUser ? multiFactor(auth.currentUser).enrolledFactors : [];
   const hasPhone = enrolledFactors.some((f) => f.factorId === PhoneMultiFactorGenerator.FACTOR_ID);
   const hasTotp = enrolledFactors.some((f) => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
@@ -414,7 +433,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
       return;
     }
     if (!canEnrollTotp) {
-      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or signed-in Finance Admin.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية المسجل دخوله.') });
+      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or a signed-in Finance Admin, Finance Manager or Finance Controller.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية أو مدير المالية أو المراقب المالي المسجل دخوله.') });
       return;
     }
 
@@ -471,7 +490,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
       return;
     }
     if (!canEnrollTotp) {
-      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or signed-in Finance Admin.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية المسجل دخوله.') });
+      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or a signed-in Finance Admin, Finance Manager or Finance Controller.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية أو مدير المالية أو المراقب المالي المسجل دخوله.') });
       return;
     }
     if (!totpChallengeUid || totpChallengeUid !== user.uid) {
@@ -807,6 +826,16 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                   <Chip label={copy(`Privileged: ${readiness.summary.activeAdminCount}`, `الحسابات المميزة: ${readiness.summary.activeAdminCount}`)} />
                   <Chip color={readiness.summary.canonicalFounderReadyCount === 1 ? 'success' : 'warning'} label={copy(`Founder ready: ${readiness.summary.canonicalFounderReadyCount}/1`, `المؤسس جاهز: ${readiness.summary.canonicalFounderReadyCount}/1`)} />
                   <Chip color={readiness.summary.financeAdminReadyCount === 1 ? 'success' : 'warning'} label={copy(`Finance ready: ${readiness.summary.financeAdminReadyCount}/1`, `مسؤول المالية جاهز: ${readiness.summary.financeAdminReadyCount}/1`)} />
+                  {Number(readiness.summary.financeTierApproverCount || 0) > 0 && (
+                    <Chip
+                      data-testid="admin-finance-tier-approver-readiness"
+                      color={readiness.summary.financeTierApproverTotpReadyCount === readiness.summary.financeTierApproverCount ? 'success' : 'warning'}
+                      label={copy(
+                        `Finance Manager/Controller TOTP: ${Number(readiness.summary.financeTierApproverTotpReadyCount || 0)}/${Number(readiness.summary.financeTierApproverCount || 0)}`,
+                        `مصادقة TOTP لمدير المالية/المراقب المالي: ${Number(readiness.summary.financeTierApproverTotpReadyCount || 0)}/${Number(readiness.summary.financeTierApproverCount || 0)}`,
+                      )}
+                    />
+                  )}
                   <Chip color={readiness.summary.unexpectedPrivilegedAccountCount === 0 ? 'success' : 'error'} label={copy(`Unexpected privileged: ${readiness.summary.unexpectedPrivilegedAccountCount}`, `حسابات مميزة غير متوقعة: ${readiness.summary.unexpectedPrivilegedAccountCount}`)} />
                   <Chip color={readiness.summary.recoveryQuorumReady ? 'success' : 'error'} label={copy(`Dual control ready: ${readiness.summary.recoveryQuorumReady ? 'yes' : 'no'}`, `التحكم المزدوج جاهز: ${readiness.summary.recoveryQuorumReady ? 'نعم' : 'لا'}`)} />
                 </Stack>

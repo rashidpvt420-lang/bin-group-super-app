@@ -12,6 +12,7 @@ import {
   claimsGrantAdminPortal,
   fetchAllAuthUsers,
   isCanonicalFounderAccount,
+  isExplicitFinanceTierApprover,
 } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
@@ -115,6 +116,9 @@ async function deleteQuery(db, collectionName, field, uid) {
 }
 
 async function purgePrivilegedTarget({ auth, db, target, actor }) {
+  if (isExplicitFinanceTierApprover(target)) {
+    throw new Error('Cleanup refused: an explicit Finance Manager/Controller approver is never a privileged-cleanup target.');
+  }
   const uid = target.uid;
   const emailHash = sha256(lower(target.email));
 
@@ -177,12 +181,16 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   const users = await fetchAllAuthUsers({ authClient: auth });
   const enriched = await attachAdminProfiles(users, { firestoreClient: db });
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
+  // Explicit finance_manager / finance_controller accounts are expected Finance approvers (second
+  // evidence tester, painting approvers). They hold no Admin-portal authority and are never targets.
+  const financeTierApprovers = enriched.filter((user) => isExplicitFinanceTierApprover(user));
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
   const expectedFinanceEmail = lower(env.E2E_FINANCE_APPROVER_EMAIL);
   const financeApprovers = privileged.filter((user) => isConfiguredFinanceApprover(user, expectedFinanceEmail));
   const targets = privileged.filter((user) =>
     !isCanonicalFounderAccount(user) &&
-    !isConfiguredFinanceApprover(user, expectedFinanceEmail)
+    !isConfiguredFinanceApprover(user, expectedFinanceEmail) &&
+    !isExplicitFinanceTierApprover(user)
   );
 
   if (canonical.length !== 1) {
@@ -232,6 +240,8 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     canonicalFounderReady: true,
     financeApproverCandidateCount: financeApprovers.length,
     financeApproverBootstrapReady: true,
+    financeTierApproverCount: financeTierApprovers.length,
+    financeTierApproversRetained: true,
     privilegedAccountCountBefore: privileged.length,
     deletionTargetCount: targets.length,
     deletedAccountCount: 0,
@@ -280,7 +290,8 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     const remainingFinance = remainingPrivileged.filter((user) => isConfiguredFinanceApprover(user, expectedFinanceEmail));
     const remainingUnexpected = remainingPrivileged.filter((user) =>
       !isCanonicalFounderAccount(user) &&
-      !isConfiguredFinanceApprover(user, expectedFinanceEmail)
+      !isConfiguredFinanceApprover(user, expectedFinanceEmail) &&
+      !isExplicitFinanceTierApprover(user)
     );
     if (remainingFounder.length !== 1 || remainingFinance.length !== 1 || remainingUnexpected.length !== 0) {
       throw new Error('Cleanup completed incompletely: production must retain exactly the canonical Founder and configured Finance Admin.');

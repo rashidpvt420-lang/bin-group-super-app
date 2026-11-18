@@ -162,6 +162,38 @@ describe('AdminMfaEnrollmentCard - Founder TOTP Enrollment Flow', () => {
     expect(screen.getByText(/Enroll Finance Admin TOTP Authenticator/i)).toBeInTheDocument();
   });
 
+  test('Finance Manager and Finance Controller may enroll their own TOTP with role-correct EN/AR labels', () => {
+    auth.currentUser!.email = 'finance.manager@bin-groups.com';
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="finance_manager" isRTL={false} />);
+    expect(screen.getByText(/Enroll Finance Manager TOTP Authenticator/i)).toBeInTheDocument();
+    expect(screen.getByTestId('admin-totp-generate')).toBeInTheDocument();
+
+    cleanup();
+
+    auth.currentUser!.email = 'finance.controller@bin-groups.com';
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="finance_controller" isRTL={false} />);
+    expect(screen.getByText(/Enroll Finance Controller TOTP Authenticator/i)).toBeInTheDocument();
+
+    cleanup();
+
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="finance_manager" isRTL />);
+    expect(screen.getByText('تسجيل مصادقة TOTP لـمدير المالية')).toBeInTheDocument();
+
+    cleanup();
+
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="finance_controller" isRTL />);
+    expect(screen.getByText('تسجيل مصادقة TOTP لـالمراقب المالي')).toBeInTheDocument();
+  });
+
+  test('finance_staff and payroll_admin still cannot self-enroll TOTP', () => {
+    for (const role of ['finance_staff', 'payroll_admin']) {
+      auth.currentUser!.email = `${role}@bin-groups.com`;
+      render(<AdminMfaEnrollmentCard enrolled={false} currentRole={role} isRTL={false} />);
+      expect(screen.queryByTestId('admin-totp-enrollment-card')).toBeNull();
+      cleanup();
+    }
+  });
+
   test('disabled generate TOTP secret button when email is unverified', () => {
     auth.currentUser!.emailVerified = false;
     render(<AdminMfaEnrollmentCard enrolled={false} isRTL={false} />);

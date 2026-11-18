@@ -11,6 +11,7 @@ import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
 import { signInFinanceApproverMfa } from './lib/finance-approver-mfa.mjs';
 import { requireFreshFinanceEvidenceAccounts } from './lib/finance-evidence-preflight.mjs';
 import { cleanupBrokerCommissionsForContracts, collectOwnerContractIds } from './lib/e2e-contract-commission-cleanup.mjs';
+import { assertResettableEvidenceIdentity } from './lib/evidence-identity-guard.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
@@ -196,6 +197,7 @@ async function deleteOwnerScopedRecords(uid) {
 async function resetOwnerAccount() {
   try {
     const existing = await auth.getUserByEmail(ownerEmail);
+    assertResettableEvidenceIdentity(existing, { label: 'owner evidence account' });
     await deleteOwnerScopedRecords(existing.uid);
     await auth.deleteUser(existing.uid);
   } catch (error) {

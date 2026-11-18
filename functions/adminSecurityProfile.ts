@@ -23,6 +23,12 @@ const ADMIN_ROLES = new Set([
   "operations_manager",
 ]);
 
+// Explicit Finance tier approvers (finance_manager / finance_controller) sign in to the Admin panel only
+// for their Finance pages and their own Personal Security Profile. They may use these self-scoped
+// security callables (register own session, read own profile, revoke own sessions, lock own account) so
+// they can enroll and manage their own TOTP factor. This grants no Admin, module or money authority.
+const FINANCE_TIER_SELF_SERVICE_ROLES = new Set(["finance_manager", "finance_controller"]);
+
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_ACTIVE_SESSIONS = 20;
 
@@ -57,7 +63,8 @@ async function requireAdmin(auth: any): Promise<AdminActor> {
     token.super_admin === true ||
     token.superAdmin === true ||
     token.ceo === true ||
-    ADMIN_ROLES.has(role);
+    ADMIN_ROLES.has(role) ||
+    (FINANCE_TIER_SELF_SERVICE_ROLES.has(role) && token[role] === true);
   if (!hasAdminAuthority || token.suspended === true) {
     throw new HttpsError("permission-denied", "Approved Admin authority is required.");
   }

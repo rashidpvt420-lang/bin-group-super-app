@@ -12,6 +12,7 @@ import {
   claimsGrantAdminPortal,
   fetchAllAuthUsers,
   isCanonicalFounderAccount,
+  isExplicitFinanceTierApprover,
 } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
@@ -64,7 +65,8 @@ export function summarizePrivilegedAccountReview(
   );
   const targets = privileged.filter((user) =>
     !isCanonicalFounderAccount(user) &&
-    !isConfiguredFinanceApprover(user, normalizedFinanceEmail)
+    !isConfiguredFinanceApprover(user, normalizedFinanceEmail) &&
+    !isExplicitFinanceTierApprover(user)
   );
 
   const founder = canonical.length === 1 ? canonical[0] : null;
@@ -159,6 +161,8 @@ export async function reviewPrivilegedAccountsProduction({
   const summary = summarizePrivilegedAccountReview(privileged, {
     expectedFinanceEmail: env.E2E_FINANCE_APPROVER_EMAIL,
   });
+  // Expected Finance tier approvers (finance_manager / finance_controller) are reported, never targeted.
+  summary.financeTierApproverCount = enriched.filter((user) => isExplicitFinanceTierApprover(user)).length;
   const result = {
     schemaVersion: 3,
     status: 'dry-run',
