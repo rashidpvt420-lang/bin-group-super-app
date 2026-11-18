@@ -155,6 +155,71 @@ for (const method of ['CASH', 'CHEQUE']) {
   });
 }
 
+for (const pauseStage of ['before upload', 'after upload']) {
+  test(`a delayed missing-invoice repair (${pauseStage}) preserves PAID and its PDF generation`, { timeout: 120_000 }, async (context) => {
+    stubSignedUrl(context);
+    const id = crypto.randomUUID();
+    await submit(id);
+    await advanceToFinalSigned(id);
+    await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+
+    const pdfEngine = lib('pdfEngine.js');
+    const original = pdfEngine.generateMobilizationUnpaidInvoicePdfArtifact;
+    let releaseRepair;
+    let notifyRepair;
+    const blocked = new Promise((resolve) => { releaseRepair = resolve; });
+    const reachedRepair = new Promise((resolve) => { notifyRepair = resolve; });
+    let firstRepair = true;
+    pdfEngine.generateMobilizationUnpaidInvoicePdfArtifact = async (...args) => {
+      // Both requests observe a missing invoice. Hold the first repair until the second
+      // commits PAID; cover both a delayed PDF upload and a delayed Firestore write.
+      const shouldPause = firstRepair;
+      firstRepair = false;
+      if (shouldPause && pauseStage === 'before upload') {
+        notifyRepair();
+        await blocked;
+      }
+      const artifact = await original(...args);
+      if (shouldPause && pauseStage === 'after upload') {
+        notifyRepair();
+        await blocked;
+      }
+      return artifact;
+    };
+    context.after(() => {
+      releaseRepair();
+      pdfEngine.generateMobilizationUnpaidInvoicePdfArtifact = original;
+    });
+
+    const delayed = call(secureApprovePayment, financeB, { paymentId: id });
+    // Surface an early failure instead of waiting indefinitely for the paused repair.
+    try {
+      await Promise.race([reachedRepair, delayed.then(() => { throw new Error('Expected the first repair to pause'); })]);
+      await call(secureApprovePayment, financeB, { paymentId: id });
+      const approvedPayment = (await db.doc(`payment_transactions/${id}`).get()).data();
+      assert.equal((await db.doc(`invoices/${approvedPayment.invoiceId}`).get()).get('status'), 'PAID');
+    } finally {
+      releaseRepair();
+      await delayed;
+    }
+
+    const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+    const invoice = await db.doc(`invoices/${payment.invoiceId}`).get();
+    assert.equal(invoice.get('status'), 'PAID');
+    assert.equal(invoice.get('paymentStatus'), 'PAID');
+    assert.equal(invoice.get('amountPaid'), invoice.get('amount'));
+    const file = admin.storage().bucket().file(invoice.get('storagePath'));
+    const [pdf] = await file.download();
+    const [metadata] = await file.getMetadata();
+    assert.equal(crypto.createHash('sha256').update(pdf).digest('hex'), invoice.get('pdfSha256'));
+    assert.equal(String(metadata.generation), invoice.get('pdfGeneration'), 'a late repair cannot overwrite the referenced PDF');
+    assert.equal(await isActive(id), true);
+    const decisions = (await db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').get()).docs
+      .filter((d) => [d.get('targetId'), d.get('paymentId')].includes(id));
+    assert.equal(decisions.length, 1, 'a delayed repair cannot create another financial decision');
+  });
+}
+
 test('owner application decisions: request-changes retry and reject retry write one audit each and never activate', async () => {
   const id = crypto.randomUUID();
   await submit(id);

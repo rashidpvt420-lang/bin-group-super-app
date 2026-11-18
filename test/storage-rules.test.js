@@ -260,13 +260,14 @@ describe('Storage Security Rules', () => {
   });
 
   it('invoice evidence is server/Admin-authored and participant reads remain scoped', async () => {
+    const paths = ['invoices/invoice_owner_a/invoice.pdf', 'invoices/invoice_owner_a/repairs/attempt.pdf'];
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'invoices/invoice_owner_a'), {
         ownerId: 'owner_a',
         amount: 100,
       });
-      await uploadString(
-        ref(context.storage(), 'invoices/invoice_owner_a/invoice.pdf'),
+      for (const path of paths) await uploadString(
+        ref(context.storage(), path),
         'invoice',
         'raw',
         { contentType: 'application/pdf' },
@@ -277,12 +278,20 @@ describe('Storage Security Rules', () => {
     const ownerBStorage = testEnv.authenticatedContext('owner_b', { role: 'owner' }).storage();
     const unauthStorage = testEnv.unauthenticatedContext().storage();
 
-    await assertSucceeds(getBytes(ref(ownerAStorage, 'invoices/invoice_owner_a/invoice.pdf')));
-    await assertFails(getBytes(ref(ownerBStorage, 'invoices/invoice_owner_a/invoice.pdf')));
-    await assertFails(getBytes(ref(unauthStorage, 'invoices/invoice_owner_a/invoice.pdf')));
+    for (const path of paths) {
+      await assertSucceeds(getBytes(ref(ownerAStorage, path)));
+      await assertFails(getBytes(ref(ownerBStorage, path)));
+      await assertFails(getBytes(ref(unauthStorage, path)));
+      await assertFails(uploadString(
+        ref(ownerAStorage, path),
+        'forged invoice',
+        'raw',
+        { contentType: 'application/pdf' },
+      ));
+    }
     await assertFails(uploadString(
-      ref(ownerAStorage, 'invoices/invoice_owner_a/forged.pdf'),
-      'invoice',
+      ref(ownerAStorage, 'invoices/invoice_owner_a/repairs/forged.pdf'),
+      'forged invoice',
       'raw',
       { contentType: 'application/pdf' },
     ));

@@ -97,7 +97,7 @@ export async function generatePredictiveIntelligence(context: HistoricalContext)
     current.count += 1;
     groups.set(key, current);
   }
-  const recurring = [...groups.values()].filter((group) => group.count >= 3).sort((a, b) => b.count - a.count).map((group) => ({
+  const recurring = Array.from(groups.values()).filter((group) => group.count >= 3).sort((a, b) => b.count - a.count).map((group) => ({
     propertyId: group.propertyId,
     assetCategory: group.category,
     evidenceCount: group.count,

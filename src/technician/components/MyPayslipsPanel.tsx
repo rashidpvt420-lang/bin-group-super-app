@@ -58,7 +58,7 @@ export default function MyPayslipsPanel() {
         {ht('Only your official payslips are listed. Other people\'s payslips are not shown.')}
       </Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {loading ? <CircularProgress size={22} sx={{ color: binThemeTokens.gold }} /> : null}
+      {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : null}
       {!loading && rows.length === 0 && !error && (
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>{ht('No payslips yet. HR issues them from payroll.')}</Typography>
       )}
@@ -66,8 +66,8 @@ export default function MyPayslipsPanel() {
         {rows.map((row) => (
           <Stack key={row.reportId} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} justifyContent="space-between" data-testid="my-payslip-row">
             <BoxLabel period={row.monthPeriod} status={row.status} />
-            <Button variant="outlined" disabled={opening === row.reportId} onClick={() => void download(row.reportId)} sx={{ color: binThemeTokens.gold, borderColor: 'rgba(198,167,94,0.45)', fontWeight: 900 }}>
-              {opening === row.reportId ? <CircularProgress size={18} sx={{ color: binThemeTokens.gold }} /> : ht('Download payslip')}
+            <Button variant="outlined" disabled={opening === row.reportId} onClick={() => void download(row.reportId)} sx={{ color: '#fff', borderColor: 'rgba(198,167,94,0.45)', fontWeight: 900 }}>
+              {opening === row.reportId ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : ht('Download payslip')}
             </Button>
           </Stack>
         ))}

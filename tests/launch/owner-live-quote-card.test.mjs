@@ -20,7 +20,13 @@ test.before(async () => {
   dir = mkdtempSync(join(resolve('.'), '.tmp-live-quote-'));
   const shim = join(dir, 'shared.ts');
   writeFileSync(shim, ["calculateUaeQuote2026", "uaePricingMatrix2026", "aedMoney"].map((f) => `export * from '${resolve('packages/shared/src/pricing', f)}';`).join('\n'));
-  const alias = { '@bin/shared': shim };
+  // The Owner app has its own install; renderer and card must resolve one React instance,
+  // including automatic JSX imports, whether or not its node_modules is present.
+  const alias = {
+    '@bin/shared': shim,
+    react: resolve('node_modules/react'),
+    'react-dom': resolve('node_modules/react-dom'),
+  };
   m.model = await bundle(`${D}/liveQuoteModel.ts`, 'model', alias);
   const entry = join(dir, 'render.tsx');
   writeFileSync(entry, `import React from 'react';\nimport { renderToString } from 'react-dom/server';\nimport Card from '${resolve(D, 'LiveQuoteCard.tsx')}';\nexport const render = (props) => renderToString(React.createElement(Card, props));\n`);

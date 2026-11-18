@@ -10,7 +10,7 @@ import {
 import { 
     TrendingUp, Zap, ShieldCheck, Building2, Globe, 
     Activity, Timer, CreditCard, PieChart, Download,
-    AlertCircle, BarChart3, LineChart as LineIcon, Map,
+    AlertCircle, BarChart3, LineChart as LineIcon,
     History, ShieldAlert, Key, Landmark
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';

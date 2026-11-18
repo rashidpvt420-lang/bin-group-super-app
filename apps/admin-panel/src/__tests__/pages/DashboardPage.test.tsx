@@ -1,7 +1,7 @@
 // admin-panel/src/__tests__/pages/DashboardPage.test.tsx
 // DashboardPage renders the route-safe Admin command centre (AdminSimpleDashboardPage). It has no
 // data source: every action must go to a registered route, the SLA ladder must match the canonical
-// policy, and pilot metrics must say "Not measured" instead of showing invented KPIs.
+// policy, and pilot metrics must disclose missing data instead of showing invented KPIs.
 // (The previous version mocked a REST financial API the page no longer calls and rendered it
 // outside a Router, so every case failed.)
 import React from 'react';
@@ -9,6 +9,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import DashboardPage from '../../pages/dashboard/DashboardPage';
+
+// This page only consumes language state. Keep its unit test independent of the shared
+// package barrel, which initializes Firebase Auth/Messaging and contains Vite-only modules.
+jest.mock('@bin/shared', () => ({
+  useLanguage: () => ({ lang: 'en', isRTL: false }),
+}));
 
 function LocationProbe() {
   const location = useLocation();
@@ -52,8 +58,8 @@ test('shows the canonical SLA ladder', () => {
   for (const key of ['EMERGENCY', 'HIGH', 'MEDIUM', 'STANDARD', 'LOW']) expect(screen.getByText(key)).toBeInTheDocument();
 });
 
-test('pilot metrics are reported as not measured, never as invented values', () => {
+test('pilot metrics disclose missing data without showing invented progress', () => {
   renderDashboard();
-  expect(screen.getAllByText('Not measured')).toHaveLength(6);
-  for (const bar of screen.getAllByRole('progressbar')) expect(bar).toHaveAttribute('aria-valuenow', '0');
+  expect(screen.getAllByText('No data source yet')).toHaveLength(6);
+  expect(screen.queryAllByRole('progressbar')).toHaveLength(0);
 });
