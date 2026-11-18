@@ -3,7 +3,10 @@ import { generateTotp } from './totp.mjs';
 
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
-const FINANCE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
+// Mirrors FINANCE_ADMIN_ROLES in functions/financeAdminMfa.ts exactly. CEO, Super Admin and
+// generic Admin never carry money authority, so this helper never accepts them either.
+export const FINANCE_APPROVER_ROLES = new Set(['finance_admin', 'finance_manager', 'finance_controller']);
+const FINANCE_APPROVER_FLAGS = ['finance_admin', 'finance_manager', 'finance_controller'];
 
 // Include only recognized provider codes, never arbitrary response text or credentials.
 const providerCode = (payload) => {
@@ -66,7 +69,7 @@ export async function signInFinanceApproverMfa({
   catch { throw new Error('Firebase rejected the Finance Admin MFA ID token.'); }
   const uid = text(decoded?.uid || decoded?.sub);
   const role = lower(decoded?.role || decoded?.userRole || decoded?.primaryRole);
-  const authorized = FINANCE_ROLES.has(role) || ['admin', 'isAdmin', 'superAdmin', 'super_admin', 'ceo'].some((key) => decoded?.[key] === true);
+  const authorized = FINANCE_APPROVER_ROLES.has(role) || FINANCE_APPROVER_FLAGS.some((key) => decoded?.[key] === true);
   if (!uid || uid === text(recorderUid)) throw new Error('Payment approval requires a different Finance Admin UID.');
   if (lower(decoded?.email) !== expectedEmail || decoded?.email_verified !== true || decoded?.suspended === true || !authorized) {
     throw new Error('Finance Admin token lacks verified identity or Finance Admin authority.');
