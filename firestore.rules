@@ -1427,7 +1427,7 @@ service cloud.firestore {
     }
 
     match /payment_transactions/{paymentId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', [])) || canManageContracts();
+      allow read: if (claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', []) && isNotSuspended()) || participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();
       // Financial evidence is always created by a validated Cloud Function.
       // A pending client-authored row could otherwise choose a privileged
       // transaction type and enter a weaker admin approval path.
@@ -1729,7 +1729,7 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || isAdmin();
+      allow read: if (claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', []) && isNotSuspended()) || participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || isAdmin();
       allow create, update, delete: if false;
     }
 
