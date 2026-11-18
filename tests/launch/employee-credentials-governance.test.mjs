@@ -26,9 +26,11 @@ const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
 
 function setFromSource(name) {
-  const match = uiPolicy.match(new RegExp(`export const ${name} = new Set\\(\\[([^\\]]*)\\]`));
-  assert.ok(match, `${name} not found in staffAccessPolicy`);
-  return [...match[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+  const marker = `export const ${name} = new Set([`;
+  const start = uiPolicy.indexOf(marker);
+  assert.notEqual(start, -1, `${name} not found in staffAccessPolicy`);
+  const body = uiPolicy.slice(start + marker.length, uiPolicy.indexOf(']', start + marker.length));
+  return [...body.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 }
 
 test('eligible staff = every Admin-panel role from staffAccessPolicy (technicians and customers excluded)', () => {
@@ -130,7 +132,7 @@ test('card QR carries only a random card id; expiry is bounded and honest', () =
 
 test('audit trail: generation, opening and verification are all logged', () => {
   for (const action of ['EMPLOYEE_ID_CARD_GENERATED', 'EMPLOYMENT_CONTRACT_DRAFT_GENERATED', 'EMPLOYEE_DOCUMENT_OPENED', 'EMPLOYEE_CARD_VERIFIED']) {
-    assert.match(server, new RegExp(action), action);
+    assert.ok(server.includes(action), action);
   }
   assert.match(server, /generatedBy: actor\.uid/);
   assert.match(server, /generatedByRole: actor\.role/);
