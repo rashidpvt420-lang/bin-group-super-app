@@ -106,7 +106,7 @@ test('pre-flight CLI names missing secrets only and wires the two Finance roles'
   assert.ok(runner.indexOf("run('scripts/verify-finance-evidence-accounts.mjs');") < runner.indexOf('runCriticalBusinessEvidence(releaseId, 1)'));
   const workflow = read('.github/workflows/firebase-production-deploy.yml');
   for (const name of ['E2E_FINANCE_RECORDER_EMAIL', 'E2E_FINANCE_RECORDER_PASSWORD', 'E2E_FINANCE_RECORDER_TOTP_SECRET']) {
-    assert.match(workflow, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    assert.ok(workflow.includes(`${name}: \${{ secrets.${name} }}`), name);
   }
 });
 
