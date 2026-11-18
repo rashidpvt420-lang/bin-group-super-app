@@ -65,7 +65,7 @@ export default function MyHoursPanel() {
         Overtime is paid only when it is on the clock (max 2 hours a day) and HR approves it. Times are Dubai time (GST).
       </Typography>
       <Table size="small">
-        <TableHead><TableRow>{['DATE', 'IN', 'OUT', 'WORKED', 'OVERTIME', 'NOTE'].map((h) => <TableCell key={h} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{h}</TableCell>)}</TableRow></TableHead>
+        <TableHead><TableRow>{['DATE', 'IN', 'OUT', 'WORKED', 'OVERTIME', 'NOTE'].map((h) => <TableCell key={h} sx={{ color: '#fff', fontWeight: 900 }}>{h}</TableCell>)}</TableRow></TableHead>
         <TableBody>
           {(data?.days || []).length === 0 && <TableRow><TableCell colSpan={6} sx={{ color: 'rgba(255,255,255,0.5)' }}>{ht('No shifts this month.')}</TableCell></TableRow>}
           {(data?.days || []).map((d: any) => (

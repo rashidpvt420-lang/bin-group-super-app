@@ -1042,7 +1042,10 @@ function renderPaymentScheduleClauses(doc: any) {
     );
 }
 
-export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
+export async function generateMobilizationUnpaidInvoicePdfArtifact(
+    data: any,
+    options: { uniqueArtifact?: boolean } = {},
+): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     const invoiceId = textValue(data.invoiceId);
     const ownerId = textValue(data.ownerId || data.ownerUid, '');
@@ -1052,6 +1055,11 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
     if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical unpaid invoice fields are incomplete.');
     }
+    // Approval repairs race with each other. An attempt must never overwrite the PDF
+    // generation already referenced by the winning invoice, even when its DB write is skipped.
+    const artifactPath = options.uniqueArtifact
+        ? `invoices/${invoiceId}/repairs/${crypto.randomUUID()}.pdf`
+        : `invoices/${invoiceId}/mobilization-invoice.pdf`;
     const invoiceFont = await getCairoFont();
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Mobilisation Invoice ${invoiceId}`, Author: 'BIN GROUP Super App' } });
@@ -1065,7 +1073,7 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
             try {
                 const buffer = Buffer.concat(chunks);
                 const documentHash = crypto.createHash('sha256').update(JSON.stringify({ invoiceId, contractId, ownerId, amount, proofHash, status: 'PENDING' })).digest('hex');
-                resolve(await savePdf(buffer, `invoices/${invoiceId}/mobilization-invoice.pdf`, {
+                resolve(await savePdf(buffer, artifactPath, {
                     invoiceId, contractId, ownerId, documentType: 'mobilization_deposit_invoice',
                     language: 'en-ar', documentHash, proofHash, status: 'PENDING'
                 }));

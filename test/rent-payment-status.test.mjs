@@ -52,7 +52,8 @@ test('rent approval and rejection re-check the fresh ledger row inside the trans
 
   assert.match(approveBlock, /const decision = rentApprovalDecision\(freshSnap\.data\(\) \|\| \{\}\)/);
   assert.match(approveBlock, /idempotent: rentApprovalIdempotent/);
-  assert.match(rejectBlock, /const decision = rentRejectionDecision\(freshSnap\.data\(\) \|\| \{\}\)/);
+  assert.match(rejectBlock, /const freshPayment = freshSnap\.data\(\) \|\| \{\}/);
+  assert.match(rejectBlock, /const decision = rentRejectionDecision\(freshPayment\)/);
   assert.match(rejectBlock, /An approved rent payment cannot be rejected/);
   assert.match(rejectBlock, /idempotent: rentRejectionIdempotent/);
   assert.match(approval, /An activated payment cannot be rejected/);
