@@ -5,13 +5,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 
-const load = async (file) => {
-  const src = fs.readFileSync(file, 'utf8');
+const load = async (src) => {
   const { outputText } = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } });
   return import('data:text/javascript,' + encodeURIComponent(outputText));
 };
-const policy = await load('apps/admin-panel/src/security/staffAccessPolicy.ts');
-const view = await load('apps/admin-panel/src/pages/financials/financeGrantView.ts');
+const policy = await load(fs.readFileSync('apps/admin-panel/src/security/staffAccessPolicy.ts', 'utf8'));
+const view = await load(fs.readFileSync('apps/admin-panel/src/pages/financials/financeGrantView.ts', 'utf8'));
 const t = (en) => en;
 const NOW = 1_800_000_000_000;
 const HOUR = 60 * 60 * 1000;
