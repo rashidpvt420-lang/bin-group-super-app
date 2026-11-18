@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -482,6 +483,8 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       onboardingStage: "INVITED", onboardingChecklist, onboardingComplete: false,
       invitationStatus: "QUEUED", createdAt: now, updatedAt: now, createdBy: actorId,
       provisionedBy: actorId, provisionedVia: "adminCreateUser",
+      staffNumber: 0,
+      staffNumberStr: "",
       ...(isFinanceApprover ? { financeApprovalStatus: "PENDING_INDEPENDENT_APPROVAL", financeApprovalRequired: true } : {}),
     };
     const scheduleProfile = {
@@ -530,11 +533,9 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         updatedAt: now,
       }, { merge: true });
 
-      tx.create(db.collection("users").doc(uid), {
-        ...operationalProfile,
-        staffNumber,
-        staffNumberStr: String(staffNumber),
-      });
+      operationalProfile.staffNumber = staffNumber;
+      operationalProfile.staffNumberStr = String(staffNumber);
+      tx.create(db.collection("users").doc(uid), operationalProfile);
       tx.create(db.collection("staffAccess").doc(uid), {
         uid, role, active: false, suspended: true, status: "INVITED", onboardingStage: "INVITED",
         modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now,
