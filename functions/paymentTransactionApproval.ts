@@ -446,25 +446,31 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       dueAt: mobilizationDueAt(Date.now()).toISOString(),
       ...invoiceSnapshot,
       ownerId: ownerUid,
+    }, { uniqueArtifact: true });
+    // A second approval may have created and paid the invoice while the PDF was generated.
+    // The existence check and creation must be atomic so a late repair never resets PAID.
+    await db.runTransaction(async (transaction) => {
+      const existingInvoice = await transaction.get(invoiceRef);
+      if (existingInvoice.exists) return;
+      transaction.create(invoiceRef, {
+        ...invoiceSnapshot,
+        ownerId: ownerUid,
+        ownerEmail: String(payment.ownerEmail || contractData.ownerEmail || "").trim() || null,
+        amountPaid: 0,
+        status: "PENDING",
+        paymentStatus: "UNPAID",
+        documentState: "AWAITING_PAYMENT",
+        pdfUrl: unpaidInvoicePdf.pdfUrl,
+        storagePath: unpaidInvoicePdf.storagePath,
+        pdfSha256: unpaidInvoicePdf.pdfSha256,
+        pdfGeneration: unpaidInvoicePdf.generation,
+        canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
+        issuedAt: ts(),
+        dueAt: mobilizationDueAt(Date.now()).toISOString(),
+        createdAt: ts(),
+        updatedAt: ts(),
+      });
     });
-    await invoiceRef.set({
-      ...invoiceSnapshot,
-      ownerId: ownerUid,
-      ownerEmail: String(payment.ownerEmail || contractData.ownerEmail || "").trim() || null,
-      amountPaid: 0,
-      status: "PENDING",
-      paymentStatus: "UNPAID",
-      documentState: "AWAITING_PAYMENT",
-      pdfUrl: unpaidInvoicePdf.pdfUrl,
-      storagePath: unpaidInvoicePdf.storagePath,
-      pdfSha256: unpaidInvoicePdf.pdfSha256,
-      pdfGeneration: unpaidInvoicePdf.generation,
-      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
-      issuedAt: ts(),
-      dueAt: mobilizationDueAt(Date.now()).toISOString(),
-      createdAt: ts(),
-      updatedAt: ts(),
-    }, { merge: false });
     if (!String(contractData.invoiceId || "").trim()) {
       await contractRef.set({ invoiceId, updatedAt: ts() }, { merge: true });
     }

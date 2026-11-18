@@ -9,6 +9,7 @@ import {
   startAfter,
   where,
   type Firestore,
+  type Query,
   type QueryConstraint,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
@@ -22,7 +23,7 @@ async function loadPages(db: Firestore, collectionName: string, constraints: Que
   const size = REPORTING_PAGE_SIZE;
   while (rows.length < cap) {
     const base = query(collection(db, collectionName), ...constraints, orderBy(documentId()));
-    const page = cursor ? query(base, startAfter(cursor), limit(size)) : query(base, limit(size));
+    const page: Query = cursor ? query(base, startAfter(cursor), limit(size)) : query(base, limit(size));
     const snap = await getDocs(page);
     if (!snap.docs.length) break;
     for (const item of snap.docs) rows.push({ id: item.id, ...item.data() });
@@ -49,7 +50,7 @@ export async function loadReportingCollection(db: Firestore, collectionName: str
     for (const row of [...byId.rows, ...byUid.rows]) merged.set(String(row.id), row);
     const total = Math.max(countById.data().count, countByUid.data().count, merged.size);
     return {
-      rows: [...merged.values()],
+      rows: Array.from(merged.values()),
       total,
       truncated: byId.truncated || byUid.truncated || merged.size < total,
     };

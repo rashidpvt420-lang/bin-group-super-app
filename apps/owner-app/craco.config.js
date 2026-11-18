@@ -4,6 +4,11 @@ module.exports = {
   webpack: {
     alias: {
       "@bin/shared": path.resolve(__dirname, "../../packages/shared/src"),
+      // Shared workspace source and the Owner app must use the same React instance.
+      react: path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
+      "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
     },
     configure: (webpackConfig) => {
       // 1. Remove ModuleScopePlugin to allow imports from outside src/
