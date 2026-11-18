@@ -10,6 +10,8 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import StaffAccessPage from './StaffAccessPage';
+import EmployeeCredentialsPanel from './EmployeeCredentialsPanel';
+import EmployeeCardVerifyDialog from './EmployeeCardVerifyDialog';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 import OvertimeClaimsReviewPanel from './OvertimeClaimsReviewPanel';
@@ -113,6 +115,13 @@ export default function HRManagementPage() {
     );
 
     const selectedStaffUid = searchParams.get('staff') || '';
+    // QR on an employee ID card opens /hr?verifyCard=card_... (sign-in required; server checks HR / Founder MFA).
+    const verifyCardId = searchParams.get('verifyCard') || '';
+    const closeCardVerify = () => {
+        const next = new URLSearchParams(searchParams);
+        next.delete('verifyCard');
+        setSearchParams(next, { replace: true });
+    };
 
     const loadProtectedHr = useCallback(async () => {
         setRefreshing(true);
@@ -343,6 +352,7 @@ export default function HRManagementPage() {
                         <Tab label="PAYROLL HANDOFF" disabled={!isHRManager} />
                         <Tab label="HR DOCUMENTS" disabled={!isHRManager} />
                         <Tab label="STAFF ACCESS" disabled={!isProvisioningAdmin} />
+                        <Tab label="ID CARDS & CONTRACTS" disabled={!isHRManager} data-testid="hr-tab-employee-credentials" />
                     </Tabs>
 
                     {tab === 0 && (
@@ -387,6 +397,7 @@ export default function HRManagementPage() {
                     <HrDocumentVerifyDialog document={verifyDocument} onClose={() => setVerifyDocument(null)} onSaved={async (message) => { setNotice({ type: 'success', message }); await loadProtectedHr(); }} />
 
                     {tab === 4 && isProvisioningAdmin && <StaffAccessPage />}
+                    {tab === 5 && isHRManager && <EmployeeCredentialsPanel />}
                 </Stack>
             </Container>
 
@@ -402,6 +413,7 @@ export default function HRManagementPage() {
                 </DialogActions>
             </Dialog>
             <StaffRosterEditorDialog staff={rosterStaff} onClose={() => setRosterStaff(null)} onSaved={(message) => setNotice({ type: 'success', message })} />
+            <EmployeeCardVerifyDialog cardId={verifyCardId} onClose={closeCardVerify} />
             <StaffLifecycleDetailsDialog uid={selectedStaffUid} open={Boolean(selectedStaffUid)} onClose={closeProfile} onChanged={loadProtectedHr} />
         </Box>
     );

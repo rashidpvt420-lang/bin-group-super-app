@@ -201,3 +201,23 @@ export function claimsGrantPayrollSettleUi(
   if (claims.suspended === true || mfaVerified !== true) return false;
   return role === 'finance_admin' || claims.finance_admin === true;
 }
+
+/**
+ * Employee ID cards + employment contract drafts (Rashid, 18 Nov 2026). UI mirror of
+ * functions/employeeCredentialPolicy.ts: only the HR manager tier and the Founder (CEO / Super Admin)
+ * generate, with a verified MFA session. The server re-checks live claims; this only hides buttons.
+ */
+export const EMPLOYEE_CREDENTIAL_GENERATOR_ROLES = new Set(['hr_admin', 'hr_manager', 'ceo', 'super_admin']);
+
+export function canGenerateEmployeeCredentialsUi(
+  user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined,
+  mfaVerified: boolean,
+): boolean {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+  if (claims.suspended === true || mfaVerified !== true) return false;
+  return EMPLOYEE_CREDENTIAL_GENERATOR_ROLES.has(role) ||
+    claims.ceo === true ||
+    claims.super_admin === true ||
+    claims.superAdmin === true;
+}
