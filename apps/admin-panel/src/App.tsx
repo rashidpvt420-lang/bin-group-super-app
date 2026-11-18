@@ -218,7 +218,7 @@ function Layout() {
                 <BrandWatermark opacity={0.035} />
                 <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100 }}>
                     <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>{shellText('COMMAND · UAE 🇦🇪', 'القيادة · الإمارات 🇦🇪')}</Box>
+                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>{shellText('COMMAND · UAE', 'القيادة · الإمارات')}</Box>
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <LanguageSwitcher />
@@ -251,7 +251,7 @@ function Layout() {
                     <Box sx={{ flexGrow: 1 }}><Outlet /></Box>
                     <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
                         <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | {shellText('MADE IN UAE 🇦🇪', 'صُنع في الإمارات 🇦🇪')}
+                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | {shellText('MADE IN UAE', 'صُنع في الإمارات')}
                         </Typography>
                     </Box>
                 </Box>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Button, Card, CardContent, Container,
     Divider, IconButton, TextField, Typography, InputAdornment,
-    Alert, CircularProgress, Stack, Grid, alpha
+    Alert, CircularProgress, Stack, alpha
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -10,7 +10,7 @@ import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, signInWithPopup } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
-import { Mail, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle, ArrowLeft, Key } from 'lucide-react';
+import { Mail, Eye, EyeOff, UserCircle, ArrowLeft, Key } from 'lucide-react';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -266,11 +266,6 @@ const LoginPage: React.FC = () => {
                     </CardContent>
                 </Card>
 
-                <Grid container spacing={3} sx={{ mt: 6 }}>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Shield size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>ISO 27001</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><TrendingUp size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>INST-GRADE</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Building size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>UAE-SOV</Typography></Box></Grid>
-                </Grid>
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.15)', letterSpacing: 1, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>
             </Container>
         </Box>

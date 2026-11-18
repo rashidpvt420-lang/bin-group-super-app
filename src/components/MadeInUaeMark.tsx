@@ -6,9 +6,9 @@ export const MADE_IN_UAE_EN = 'Made in UAE';
 export const MADE_IN_UAE_AR = 'صُنع في الإمارات';
 
 /**
- * Small "Made in UAE 🇦🇪" mark rendered once by the App root, so every public,
+ * Small "Made in UAE" / "صُنع في الإمارات" mark rendered once by the App root, so every public,
  * auth, profile (Owner, Tenant, Technician, Broker) and Staff/Admin page shows it.
- * The flag emoji is decorative; the text is the accessible label.
+ * The text is the accessible label. No flag emoji or state symbol is used.
  */
 /** Profile portals render the mark inside their own shell footer (see MadeInUaeInline). */
 export const PROFILE_SHELL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker'];
@@ -23,9 +23,8 @@ export function MadeInUaeInline() {
   const text = lang === 'ar' ? MADE_IN_UAE_AR : MADE_IN_UAE_EN;
   return (
     <Box component="span" data-testid="made-in-uae-mark" aria-label={text} lang={lang === 'ar' ? 'ar' : 'en'}
-      sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75, mt: 0.75, fontSize: '0.75rem', fontWeight: 800, letterSpacing: 0.5, color: 'inherit', opacity: 0.85 }}>
+      sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 0.75, fontSize: '0.75rem', fontWeight: 800, letterSpacing: 0.5, color: 'inherit', opacity: 0.85 }}>
       <span>{text}</span>
-      <span aria-hidden="true">🇦🇪</span>
     </Box>
   );
 }
@@ -44,7 +43,7 @@ export default function MadeInUaeMark() {
       dir={isRTL ? 'rtl' : 'ltr'}
       lang={lang === 'ar' ? 'ar' : 'en'}
       sx={{
-        display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75,
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
         flexWrap: 'wrap', textAlign: 'center',
         px: 2, pt: 1.25, pb: 'calc(10px + env(safe-area-inset-bottom, 0px))',
         mb: { xs: 9, lg: 0 },
@@ -53,7 +52,6 @@ export default function MadeInUaeMark() {
       }}
     >
       <span>{text}</span>
-      <span aria-hidden="true">🇦🇪</span>
     </Box>
   );
 }

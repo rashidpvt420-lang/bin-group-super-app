@@ -144,11 +144,6 @@ const RoleGatewayPage: React.FC = () => {
                     ))}
                 </Grid>
 
-                <Box sx={{ mt: 15, textAlign: 'center' }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', letterSpacing: 4, textTransform: 'uppercase', fontWeight: 900 }}>
-                        ISO 27001 Certified Operational Sovereignty
-                    </Typography>
-                </Box>
             </Container>
         </Box>
     );

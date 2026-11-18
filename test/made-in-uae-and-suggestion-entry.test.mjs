@@ -34,8 +34,15 @@ test('Made in UAE mark is shared, bilingual and rendered once at the app root fo
   const mark = await read('src/components/MadeInUaeMark.tsx');
   assert.match(mark, /'Made in UAE'/);
   assert.match(mark, /'صُنع في الإمارات'/);
-  assert.match(mark, /aria-hidden="true">🇦🇪/);
+  assert.doesNotMatch(mark, /🇦🇪/);
   assert.match(mark, /dir={isRTL \? 'rtl' : 'ltr'}/);
   const app = await read('src/App.tsx');
   assert.match(app, /<AppContent \/>\s*<MadeInUaeMark \/>/, 'mark must sit beside AppContent so all routes get it');
+});
+
+test('admin shell keeps Made in UAE text and does not use a flag emoji', async () => {
+  const admin = await read('apps/admin-panel/src/App.tsx');
+  assert.match(admin, /MADE IN UAE/);
+  assert.match(admin, /صُنع في الإمارات/);
+  assert.doesNotMatch(admin, /🇦🇪/);
 });
