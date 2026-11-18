@@ -1,7 +1,7 @@
 /**
  * CompliancePage — Admin Panel
  * Displays the canonical audit_logs collection and provides a PDF-style compliance export button.
- * ISO 27001 / UAE PDPL compliant audit trail.
+ * Audit trail for administrators. Do not describe this page as a certification.
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -100,7 +100,7 @@ export default function CompliancePage() {
                         <Typography variant="h4" fontWeight="black" sx={{ color: 'text.primary' }}>Compliance & Audit Log</Typography>
                     </Box>
                     <Typography variant="body2" color="text.secondary">
-                        ISO 27001 · UAE PDPL Compliant · Real-time tamper-evident log
+                        UAE PDPL record-keeping · Real-time tamper-evident log
                     </Typography>
                 </Box>
                 <Button

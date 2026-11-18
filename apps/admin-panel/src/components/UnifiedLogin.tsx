@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import { browserSessionPersistence, inMemoryPersistence, getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
-import { Shield, Lock } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
@@ -366,7 +366,6 @@ export default function UnifiedLogin() {
                             <div data-testid="admin-google-login-disabled" className="p-4 rounded-2xl border border-white/10 bg-white/[0.03] text-[#94a3b8] text-xs leading-relaxed">Google redirect Admin sign-in is disabled until redirect-return MFA resolution is supported. Use email/password and the enrolled Firebase MFA factor.</div>
                         </>
                     )}
-                    <div className="mt-8 flex items-center justify-center gap-2 opacity-40"><Lock className="w-3 h-3 text-[#94a3b8]" /><span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">{t('login.iso_secure_badge')}</span></div>
                 </div>
             </div>
         </div>
