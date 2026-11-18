@@ -104,7 +104,7 @@ const PropertyTypeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             <Box sx={{ mt: 8, textAlign: 'center' }}>
                 <Divider sx={{ mb: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', letterSpacing: 2, fontWeight: 700 }}>
-                    Sovereign-Grade Asset Identification Protocol
+                    Property Identification
                 </Typography>
             </Box>
         </Box>

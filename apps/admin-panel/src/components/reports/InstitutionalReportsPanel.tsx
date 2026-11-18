@@ -254,7 +254,7 @@ const InstitutionalReportsPanel: React.FC = () => {
                 <tr className="border-b border-white/5 text-gray-500 text-xs font-black uppercase tracking-widest">
                   <th className="pb-6">Asset Intelligence</th>
                   <th className="pb-6">Condition</th>
-                  <th className="pb-6">Sovereign Action</th>
+                  <th className="pb-6">Action</th>
                   <th className="pb-6 text-right">Proj. Savings</th>
                 </tr>
               </thead>

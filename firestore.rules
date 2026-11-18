@@ -1854,14 +1854,14 @@ service cloud.firestore {
     }
 
     match /marketplaceProviders/{providerId} {
-      allow read: if signedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /marketplaceOffers/{offerId} {
-      allow read: if signedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();

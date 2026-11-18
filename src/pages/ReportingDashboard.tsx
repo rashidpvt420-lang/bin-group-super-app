@@ -92,7 +92,7 @@ const ReportingDashboard: React.FC = () => {
         doc.rect(0, 0, 210, 40, 'F');
         doc.setTextColor(198, 167, 94);
         doc.setFontSize(22);
-        doc.text("BIN-GENESIS™ SOVEREIGN REPORT", 105, 25, { align: 'center' });
+        doc.text("BIN-GENESIS™ REPORT", 105, 25, { align: 'center' });
         doc.setFontSize(10);
         doc.setTextColor(255, 255, 255);
         doc.text(`AUDIT DATE: ${new Date().toLocaleString()} | ZONE: ${selectedEmirate}`, 105, 33, { align: 'center' });

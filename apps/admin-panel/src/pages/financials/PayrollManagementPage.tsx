@@ -163,7 +163,7 @@ export default function PayrollManagementPage({ mode = 'settle' }: { mode?: Payr
       const result: any = await settlePayroll({ payrollId: record.id, paymentReference });
       const payload = result?.data || {};
       if (payload.status === 'SUCCESS' || payload.success !== false) {
-        alert(`Sovereign Pay Advice Secured: ${payload.pdfUrl || payload.url || 'generated'}`);
+        alert(`Pay advice generated: ${payload.pdfUrl || payload.url || 'generated'}`);
       } else {
         throw new Error(payload.message || 'Payslip generation failed');
       }

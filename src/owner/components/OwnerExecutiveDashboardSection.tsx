@@ -178,7 +178,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
   const pUnits = property.units || property.numberOfUnits || property.unitsCount || 0;
   const pFloors = property.floors || property.numberOfFloors || property.floorsCount || 0;
   const pType = property.propertyType || property.type || 'Residential';
-  const ownerName = property.ownerName || user?.displayName || 'Sovereign Owner';
+  const ownerName = property.ownerName || user?.displayName || 'Property Owner';
 
   return (
     <Card sx={{ ...cardSx, height: '100%' }}>

@@ -367,7 +367,7 @@ export const adminSendOwnerOnboardingMessage = onCall({ cors: true, enforceAppCh
 <p><b>How to respond:</b></p>
 <p>Reply directly to this email. Your reply must go to <b>ceo@bin-groups.com</b>.</p>
 <p>Please do not send replies to support@bin-groups.com until that mailbox is activated.</p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`
+<p>BIN GROUP - Made in UAE</p>`
     },
     metadata: { type: "admin_owner_message", intakeId, ownerId, replyInbox: "ceo@bin-groups.com" },
     createdAt: ts()
@@ -489,7 +489,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
 <p>Activation Status Page: <a href="${ownerActivationUrl}">${ownerActivationUrl}</a></p>
 <p>Your dashboard remains in secure activation mode until the contract is signed. After signature, BIN GROUP will activate the owner dashboard, property passport, documents, tickets, tenants and contract records.</p>
 <p>For support, reply to this email or contact <b>support@bin-groups.com</b>.</p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`
+<p>BIN GROUP - Made in UAE</p>`
     },
     metadata: {
       type: "owner_approval_dashboard_access",
@@ -814,7 +814,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   <p>Submit your mobilisation payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment.</p>
   <p><a href="${safeHttpsHref(dashboardUrl)}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
   <p>Support: support@bin-groups.com</p>
-  <p>BIN GROUP - Made in UAE 🇦🇪</p>`
+  <p>BIN GROUP - Made in UAE</p>`
         },
         metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl, invoiceId: invoiceSnapshot.invoiceId },
         createdAt: ts()

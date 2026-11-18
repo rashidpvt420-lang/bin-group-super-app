@@ -31,7 +31,7 @@ const adminActions = [
   { id: 'units', en: 'Unit Status', ar: 'حالة الوحدات', route: '/admin/units', icon: <BarChart3 size={22} />, enDesc: 'Occupied, vacant, rentable, blocked, and service-linked units.', arDesc: 'وحدات مشغولة أو شاغرة أو قابلة للتأجير أو محظورة أو مربوطة بخدمة.' },
   { id: 'room-rent', en: 'Find Room Rent Ops', ar: 'عمليات إيجار الغرف', route: '/ops/marketplace-approvals', icon: <Users size={22} />, enDesc: 'BIN-managed vacant room listings and renter contact handling.', arDesc: 'قوائم الغرف الشاغرة بإدارة BIN ومعالجة تواصل المستأجرين.' },
   { id: 'messages', en: 'Operations Messages', ar: 'رسائل العمليات', route: '/ops/messages', icon: <TicketCheck size={22} />, enDesc: 'Tenant, owner, staff, and operational message center.', arDesc: 'مركز رسائل المستأجر والمالك والموظفين والعمليات.' },
-  { id: 'control', en: 'Sovereign Control', ar: 'التحكم السيادي', route: '/control-center', icon: <BarChart3 size={22} />, enDesc: 'Full production control center instead of a missing dashboard route.', arDesc: 'مركز التحكم التشغيلي الكامل بدلاً من مسار لوحة مفقود.' },
+  { id: 'control', en: 'Control Center', ar: 'مركز التحكم', route: '/control-center', icon: <BarChart3 size={22} />, enDesc: 'Full production control center instead of a missing dashboard route.', arDesc: 'مركز التحكم التشغيلي الكامل بدلاً من مسار لوحة مفقود.' },
 ];
 
 const pilotMetrics = [

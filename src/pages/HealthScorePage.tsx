@@ -121,7 +121,7 @@ export default function HealthScorePage() {
                 bgcolor: '#0B0B0C', borderRadius: 8, border: `1px solid ${binThemeTokens.gold}`,
                 p: 4, textAlign: 'center', position: 'relative', overflow: 'hidden'
             }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 3 }}>SOVEREIGN BPI SCORE</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 3 }}>BPI SCORE</Typography>
                 <Box sx={{ 
                     my: 4, width: 180, height: 180, borderRadius: '50%', 
                     border: `8px solid rgba(198, 167, 94, 0.1)`, borderTopColor: binThemeTokens.gold,

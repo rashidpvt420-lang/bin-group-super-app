@@ -104,13 +104,13 @@ export default function BrokerDocumentsPage() {
         { type: 'emirates_id', title: 'Emirates ID Registry', desc: 'Valid Front & Back scan required for transaction clearing.' },
         { type: 'rera_license', title: 'RERA Brokerage Permit', desc: 'Institutional verification of real estate professional status.' },
         { type: 'bank_details', title: 'Institutional IBAN', desc: 'Certified bank letter for automated commission settlement.' },
-        { type: 'broker_agreement', title: 'Sovereign Agreement', desc: 'Signed partnership terms with BIN Group.' }
+        { type: 'broker_agreement', title: 'Broker Agreement', desc: 'Signed partnership terms with BIN Group.' }
     ];
     const documentLevel = brokerDocumentLevelLabel(requiredDocs.map((req) => getDocStatus(req.type).status as BrokerDocumentState));
 
     return (
         <BrokerPageFrame
-            title="Sovereign Vault"
+            title="Document Vault"
             subtitle="Secure document archive for compliance and verification"
             loading={loading}
             actions={
@@ -220,7 +220,7 @@ export default function BrokerDocumentsPage() {
                 </Box>
                 <Typography variant="h5" fontWeight="950" color={binThemeTokens.textPrimary}><Bi en={"Referral Supporting Evidence"} ar={"المستندات الداعمة للإحالة"} /></Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, maxWidth: 400, margin: '12px auto 32px auto', fontWeight: 700 }}>
-                    <Bi en={"Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin."} ar={"ارفع اتفاقيات السرية أو التفويضات الموقعة أو تقارير التقييم. جميع الملفات مشفرة ولا يصل إليها إلا مسؤول النظام."} />
+                    <Bi en={"Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by an admin."} ar={"ارفع اتفاقيات السرية أو التفويضات الموقعة أو تقارير التقييم. جميع الملفات مشفرة ولا يصل إليها إلا مسؤول النظام."} />
                 </Typography>
                 <Stack direction="row" spacing={2} justifyContent="center">
                     <Button

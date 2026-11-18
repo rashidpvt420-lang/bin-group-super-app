@@ -107,7 +107,7 @@ const GovernmentPropertyPage: React.FC = () => {
                 {/* INSTITUTIONAL HEADER */}
                 <Box sx={{ mb: 6, p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
                     <Box sx={{ position: 'absolute', top: 0, right: 0, p: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ShieldCheck size={16} /> SOVEREIGN PROTOCOL ACTIVE
+                        <ShieldCheck size={16} /> PROTOCOL ACTIVE
                     </Box>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
                         <Box sx={{ p: 2, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 2 }}>

@@ -62,7 +62,7 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                                 <MenuItem value="Premium">Premium</MenuItem>
                                 <MenuItem value="Luxury">Luxury</MenuItem>
                                 <MenuItem value="Ultra-Luxury">Ultra-Luxury</MenuItem>
-                                <MenuItem value="Sovereign">Sovereign</MenuItem>
+                                <MenuItem value="Sovereign">Institutional</MenuItem>
                             </TextField>
                         </Grid>
 

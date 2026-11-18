@@ -81,7 +81,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                     </Avatar>
                     <Box>
                         <Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold }}>
-                            {role === 'admin' ? 'USER SUPPORT' : 'SOVEREIGN SUPPORT'}
+                            {role === 'admin' ? 'USER SUPPORT' : 'SUPPORT'}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
                             REAL-TIME COMMAND LINK

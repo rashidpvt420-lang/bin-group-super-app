@@ -422,7 +422,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       const result: any = await runSovereignAI({ role, text: cleanText, pageContext, isAutoSummary, fallbackSummary, provider: 'gemini' });
       const data = result?.data || {};
       const responseText = String(data.text || '').trim();
-      if (!responseText) throw new Error('Sovereign AI returned an empty response.');
+      if (!responseText) throw new Error('BIN Assistant returned an empty response.');
       const live = data.live === true;
       const visibleStatus = live ? '' : 'DEGRADED AI - LOCAL RULE GUIDANCE ONLY\n\n';
       setMessages((prev) => [...prev, {
@@ -555,7 +555,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', letterSpacing: 0.2 }}>App help. Each reply shows whether it is live.</Typography>
           </Box>
         </Stack>
-        <IconButton type="button" data-testid="sovereign-ai-close" aria-label="Close Sovereign AI chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
+        <IconButton type="button" data-testid="sovereign-ai-close" aria-label="Close BIN Assistant chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -619,9 +619,9 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
             }
           }}
           autoComplete="off"
-          inputProps={{ 'data-testid': 'sovereign-ai-input', 'aria-label': 'Sovereign AI message' }}
+          inputProps={{ 'data-testid': 'sovereign-ai-input', 'aria-label': 'BIN Assistant message' }}
           sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
-          InputProps={{ endAdornment: <InputAdornment position="end"><IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send Sovereign AI message" disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
+          InputProps={{ endAdornment: <InputAdornment position="end"><IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send BIN Assistant message" disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
         <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>
           <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> {allowLiveProvider ? 'AUTHENTICATED SESSION · STATUS SHOWN' : 'LOCAL GUIDANCE ONLY · SIGN IN FOR LIVE AI'}
@@ -635,8 +635,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       {!unifiedFab && <Portal>
         <Fab
         data-testid="sovereign-ai-open"
-        aria-label="Move or open Sovereign AI chat"
-        title="Move or open Sovereign AI chat"
+        aria-label="Move or open BIN Assistant chat"
+        title="Move or open BIN Assistant chat"
         onPointerDown={handleFabPointerDown}
         onPointerMove={handleFabPointerMove}
         onPointerUp={(event) => finishFabDrag(event)}
@@ -646,7 +646,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       >
         <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}>
           <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
-            Move or open Sovereign AI chat
+            Move or open BIN Assistant chat
           </span>
           <Sparkles size={22} aria-hidden />
           <Grip size={11} aria-hidden />

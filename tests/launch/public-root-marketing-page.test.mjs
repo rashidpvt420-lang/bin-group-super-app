@@ -61,9 +61,7 @@ test('light public surfaces use AA-readable gold text instead of brand-fill gold
 test('public app and contact copy stays honest and operationally routed', async () => {
   const page = await read('src/pages/public/SimpleStartPage.tsx');
   assert.match(page, /BIN-GROUPS works in your web browser today\. For help with the BIN-GROUPS mobile app, contact us\./);
-  // The only allowed "coming soon" is the text-only UAE PASS notice; no store-listing claims.
-  const withoutUaePass = page.split('\n').filter((l) => !/UAE PASS/.test(l)).join('\n');
-  assert.doesNotMatch(withoutUaePass, /coming soon|There is no public Play Store link/i, 'no stale store-listing claims');
+  assert.doesNotMatch(page, /coming soon|There is no public Play Store link/i, 'no stale availability claims');
   assert.doesNotMatch(page, /play\.google\.com\/store|apps\.apple\.com/, 'no invented store URL');
   assert.match(page, /https:\/\/wa\.me\/\$\{whatsappDigits\}/);
   assert.match(page, /mailto:\$\{CONTACT\.email\}/);
@@ -71,16 +69,13 @@ test('public app and contact copy stays honest and operationally routed', async 
   assert.match(page, /photo proof on every job/);
 });
 
-test('landing redesign: why BIN-GROUPS, honest trust strip, text-only UAE PASS notice', async () => {
+test('landing redesign: why BIN-GROUPS and honest trust strip', async () => {
   const page = await read('src/pages/public/SimpleStartPage.tsx');
   assert.equal((page.match(/component="h1"/g) || []).length, 1, 'exactly one h1');
   assert.match(page, /Property maintenance & management across the UAE/);
   assert.match(page, /Licensed in Abu Dhabi/);
   assert.doesNotMatch(page, /licensed (for|in) property management/i, 'no property-management licence claim');
   for (const t of ['No surprises', 'You see everything', 'Fast response', 'Protected payments']) assert.ok(page.includes(t), t);
-  assert.match(page, /UAE PASS — coming soon/);
-  assert.match(page, /الهوية الرقمية UAE PASS — قريباً/);
-  assert.match(page, /data-testid="uae-pass-coming-soon" aria-label=\{c\.uaePassAria\} aria-disabled="true"/);
-  assert.doesNotMatch(page, /uaepass\.ae|uae-pass.*\.(png|svg)/i, 'no UAE PASS artwork or live link');
+  assert.doesNotMatch(page, /UAE PASS|uaepass\.ae|uae-pass/i, 'no unavailable UAE PASS integration');
   assert.doesNotMatch(page, /pointsEn|pointsAr/, 'role cards no longer carry bullet chips');
 });

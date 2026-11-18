@@ -153,7 +153,7 @@ export default function EmergencyCommandCenterPage() {
                     <Typography variant="overline" sx={{ color: '#ef4444', fontWeight: 950, letterSpacing: 4, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ShieldAlert size={16} /> EMERGENCY RESPONSE COMMAND CENTER
                     </Typography>
-                    <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ letterSpacing: -1 }}>Sovereign Dispatch Hub</Typography>
+                    <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ letterSpacing: -1 }}>Dispatch Hub</Typography>
                     <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mt: 0.5 }}>Real-time resident SOS monitoring, instant technical dispatch, and public safety announcements.</Typography>
                 </Box>
                 <Button 

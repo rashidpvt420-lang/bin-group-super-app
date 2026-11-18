@@ -28,8 +28,6 @@ type PageContent = {
   whatsappUs: string;
   trustLabel: string;
   trust: string[];
-  uaePass: string;
-  uaePassAria: string;
   whyTitle: string;
   why: [string, string][];
   rolesTitle: string;
@@ -59,8 +57,6 @@ const content: Record<'en' | 'ar', PageContent> = {
     whatsappUs: 'WhatsApp us',
     trustLabel: 'Why you can trust us',
     trust: ['Licensed in Abu Dhabi', 'CASH and CHEQUE only, receipt every time', 'Response targets from 1 hour', 'Arabic & English'],
-    uaePass: 'UAE PASS — coming soon',
-    uaePassAria: 'UAE PASS sign-in is coming soon and is not available yet',
     whyTitle: 'Why BIN-GROUPS',
     why: [
       ['No surprises', 'A written contract with a clear scope. Any job above AED 1,000 needs the owner’s approval first.'],
@@ -93,8 +89,6 @@ const content: Record<'en' | 'ar', PageContent> = {
     whatsappUs: 'راسلنا على واتساب',
     trustLabel: 'لماذا تثق بنا',
     trust: ['مرخصة في أبوظبي', 'نقداً أو بشيك فقط، مع إيصال في كل مرة', 'أهداف استجابة تبدأ من ساعة واحدة', 'العربية والإنجليزية'],
-    uaePass: 'الهوية الرقمية UAE PASS — قريباً',
-    uaePassAria: 'تسجيل الدخول عبر الهوية الرقمية UAE PASS قريباً وغير متاح حالياً',
     whyTitle: 'لماذا BIN-GROUPS',
     why: [
       ['بدون مفاجآت', 'عقد مكتوب بنطاق واضح. أي عمل تزيد قيمته عن 1,000 درهم يحتاج موافقة المالك أولاً.'],
@@ -280,11 +274,6 @@ export default function SimpleStartPage() {
                     {item}
                   </Box>
                 ))}
-                {/* Text only (no official UAE PASS artwork); not a link or button until the integration exists. */}
-                <Box component="li" data-testid="uae-pass-coming-soon" aria-label={c.uaePassAria} aria-disabled="true" sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1.3, py: 0.7, borderRadius: 2, bgcolor: '#F3F4F6', border: '1px dashed #9CA3AF', color: '#374151', fontWeight: 800, fontSize: '.88rem', cursor: 'default' }}>
-                  <Smartphone size={16} />
-                  {c.uaePass}
-                </Box>
               </Box>
             </Stack>
           </Paper>

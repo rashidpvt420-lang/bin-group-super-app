@@ -173,7 +173,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                                 <VerifiedIcon fontSize="small" />
                                 <Typography variant="overline" fontWeight="bold">Recommended Service Plan</Typography>
-                                <Chip label={`SOVEREIGN ESG: ${valuation.insights?.esgRating || 'A'}`} size="small" color="secondary" sx={{ height: 16, fontSize: 8, fontWeight: 900, ml: 'auto', bgcolor: 'white', color: 'primary.main' }} />
+                                <Chip label={`ESG: ${valuation.insights?.esgRating || 'A'}`} size="small" color="secondary" sx={{ height: 16, fontSize: 8, fontWeight: 900, ml: 'auto', bgcolor: 'white', color: 'primary.main' }} />
                             </Stack>
                             <Typography variant="h4" fontWeight="bold" gutterBottom>
                                 {recommendation.packageName}

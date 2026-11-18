@@ -450,7 +450,7 @@ export default function TechnicianDashboardPage() {
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 8, md: 6 }, minWidth: 0, bgcolor: ui.canvas, color: ui.ink }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: 2.5 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                    <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
+                    <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{t('dash.terminal.technician') || 'FIELD DASHBOARD'}</Typography>
                     <Typography variant="h3" fontWeight="950" sx={{ mt: 1, color: ui.ink, fontSize: { xs: '2.05rem', md: '2.8rem' }, letterSpacing: '-0.045em' }}><Bi en={"Technical Command Dashboard"} ar={"لوحة التحكم الفنية"} /></Typography>
                     <Typography variant="body1" sx={{ color: ui.muted, mt: 1, maxWidth: 760, fontWeight: 700 }}><Bi en={"Staff profile, duty status, dispatch performance, SLA health, compliance, tools, certificates, and live mission control in one terminal."} ar={"الملف الشخصي وحالة الدوام وأداء الإرسال والالتزام بالمواعيد والامتثال والأدوات والشهادات والتحكم المباشر بالمهام في مكان واحد."} /></Typography>
                 </Box>
