@@ -32,7 +32,7 @@ function matchBlock(header) {
 // historical read expression and must not be changed accidentally.
 const paymentTransactionsHeader = '    match /payment_transactions/{paymentId} {';
 const legacyPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();";
-const financeAdminPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', [])) || canManageContracts();";
+const financeAdminPaymentTransactionsRead = "      allow read: if (claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', []) && isNotSuspended()) || participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();";
 let paymentTransactionsBlock = matchBlock(paymentTransactionsHeader);
 if (!paymentTransactionsBlock) {
   failures.push('payment_transactions rule block is missing or malformed');
