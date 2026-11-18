@@ -158,6 +158,20 @@ test('adminBackfillStaffNumbers is gated by MFA and admin role; backfills existi
   const secondRun = await call(adminBackfillStaffNumbers, sa, {});
   assert.equal(secondRun.success, true);
   assert.equal(secondRun.backfilledCount, 0);
+
+  // Continued provisioning never reuses a number already held (10005 was pre-seeded).
+  const held = new Set([updated1.staffNumber, updated2.staffNumber, 10005]);
+  for (let i = 0; i < 4; i += 1) {
+    const created = await call(adminCreateUser, sa, {
+      role: 'finance_manager',
+      email: `sn.after.backfill${i}@example.invalid`,
+      displayName: `After Backfill ${i}`,
+    });
+    assert.equal(created.success, true);
+    assert.ok(!held.has(created.staffNumber), `staff number ${created.staffNumber} must be unique`);
+    held.add(created.staffNumber);
+  }
+  assert.equal(held.size, 7);
 });
 
 test('adminRequestFinanceRoleAssignment accepts either 5-digit staff number or Firebase UID', async () => {

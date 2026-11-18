@@ -60,9 +60,44 @@ export async function resolveStaffUid(uidOrNumber: string): Promise<string> {
     if (!snap.empty) return snap.docs[0].id;
     const strSnap = await db.collection("users").where("staffNumber", "==", trimmed).limit(1).get();
     if (!strSnap.empty) return strSnap.docs[0].id;
+    // Firebase allows numeric UIDs; keep a direct UID match working when no staff number matches.
+    const uidSnap = await db.collection("users").doc(trimmed).get();
+    if (uidSnap.exists) return trimmed;
     throw new HttpsError("not-found", `No staff account found with staff number ${trimmed}.`);
   }
   return trimmed;
+}
+
+/**
+ * Allocates `count` unused staff numbers inside the caller's transaction.
+ * Reads only (no writes): callers must write the counter and profiles afterwards.
+ * Each candidate is checked against users/{uid}.staffNumber so a number already held
+ * (for example an imported or pre-seeded value) is skipped instead of duplicated.
+ */
+export async function allocateStaffNumbers(
+  tx: FirebaseFirestore.Transaction,
+  count: number,
+): Promise<{ numbers: number[]; nextStaffNumber: number }> {
+  const counterSnap = await tx.get(db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC));
+  let candidate = STAFF_NUMBER_START;
+  if (counterSnap.exists) {
+    const rawCurrent = counterSnap.data()?.nextStaffNumber ?? counterSnap.data()?.current;
+    const parsed = Number(rawCurrent);
+    if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) candidate = parsed;
+  }
+  const numbers: number[] = [];
+  while (numbers.length < count) {
+    if (candidate > STAFF_NUMBER_MAX) {
+      throw new HttpsError("resource-exhausted", `Staff number sequence exhausted (maximum is ${STAFF_NUMBER_MAX}).`);
+    }
+    const [numTaken, strTaken] = await Promise.all([
+      tx.get(db.collection("users").where("staffNumber", "==", candidate).limit(1)),
+      tx.get(db.collection("users").where("staffNumber", "==", String(candidate)).limit(1)),
+    ]);
+    if (numTaken.empty && strTaken.empty) numbers.push(candidate);
+    candidate += 1;
+  }
+  return { numbers, nextStaffNumber: candidate };
 }
 
 /**
@@ -516,23 +551,13 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
 
     await db.runTransaction(async (tx) => {
       const counterRef = db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC);
-      const counterSnap = await tx.get(counterRef);
-      let staffNumber = STAFF_NUMBER_START;
-      if (counterSnap.exists) {
-        const rawCurrent = counterSnap.data()?.nextStaffNumber ?? counterSnap.data()?.current;
-        const parsed = Number(rawCurrent);
-        if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) {
-          staffNumber = parsed;
-        }
-      }
-      if (staffNumber > STAFF_NUMBER_MAX) {
-        throw new HttpsError("resource-exhausted", `Staff number sequence exhausted (maximum is ${STAFF_NUMBER_MAX}).`);
-      }
+      const allocation = await allocateStaffNumbers(tx, 1);
+      const staffNumber = allocation.numbers[0];
       assignedStaffNumber = staffNumber;
 
       tx.set(counterRef, {
         current: staffNumber,
-        nextStaffNumber: staffNumber + 1,
+        nextStaffNumber: allocation.nextStaffNumber,
         lastAssignedStaffNumber: staffNumber,
         updatedAt: now,
       }, { merge: true });
@@ -1650,19 +1675,10 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
 
   const now = FieldValue.serverTimestamp();
   const counterRef = db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC);
-  const assignedRecords: Array<{ uid: string; staffNumber: number }> = [];
 
-  await db.runTransaction(async (tx) => {
-    const counterSnap = await tx.get(counterRef);
-    let nextNumber = STAFF_NUMBER_START;
-    if (counterSnap.exists) {
-      const rawCurrent = counterSnap.data()?.nextStaffNumber ?? counterSnap.data()?.current;
-      const parsed = Number(rawCurrent);
-      if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) {
-        nextNumber = parsed;
-      }
-    }
-
+  const assignedRecords = await db.runTransaction(async (tx) => {
+    // Attempt-local: Firestore may retry this callback, so results never leak across attempts.
+    const attemptRecords: Array<{ uid: string; staffNumber: number }> = [];
     const verifiedCandidates: Array<{ uid: string; hasTechDoc: boolean }> = [];
     for (const item of unassigned) {
       const userDoc = await tx.get(db.collection("users").doc(item.id));
@@ -1675,13 +1691,11 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
       }
     }
 
-    if (verifiedCandidates.length > 0 && nextNumber + verifiedCandidates.length - 1 > STAFF_NUMBER_MAX) {
-      throw new HttpsError("resource-exhausted", `Staff number sequence exhausted (maximum is ${STAFF_NUMBER_MAX}).`);
-    }
+    if (verifiedCandidates.length === 0) return attemptRecords;
+    const allocation = await allocateStaffNumbers(tx, verifiedCandidates.length);
 
-    let currentNumber = nextNumber;
-    for (const { uid, hasTechDoc } of verifiedCandidates) {
-      const assigned = currentNumber++;
+    for (const [index, { uid, hasTechDoc }] of verifiedCandidates.entries()) {
+      const assigned = allocation.numbers[index];
       tx.update(db.collection("users").doc(uid), {
         staffNumber: assigned,
         staffNumberStr: String(assigned),
@@ -1699,13 +1713,14 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
           updatedAt: now,
         }, { merge: true });
       }
-      assignedRecords.push({ uid, staffNumber: assigned });
+      attemptRecords.push({ uid, staffNumber: assigned });
     }
 
+    const lastAssigned = attemptRecords[attemptRecords.length - 1].staffNumber;
     tx.set(counterRef, {
-      current: currentNumber - 1,
-      nextStaffNumber: currentNumber,
-      lastAssignedStaffNumber: currentNumber - 1,
+      current: lastAssigned,
+      nextStaffNumber: allocation.nextStaffNumber,
+      lastAssignedStaffNumber: lastAssigned,
       updatedAt: now,
     }, { merge: true });
 
@@ -1716,13 +1731,14 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
       targetType: "system_counters",
       targetId: STAFF_NUMBER_COUNTER_DOC,
       metadata: {
-        count: assignedRecords.length,
-        startNumber: nextNumber,
-        endNumber: currentNumber - 1,
-        assignedUids: assignedRecords.map((r) => r.uid),
+        count: attemptRecords.length,
+        startNumber: attemptRecords[0].staffNumber,
+        endNumber: lastAssigned,
+        assignedUids: attemptRecords.map((r) => r.uid),
       },
       createdAt: now,
     });
+    return attemptRecords;
   });
 
   return {
