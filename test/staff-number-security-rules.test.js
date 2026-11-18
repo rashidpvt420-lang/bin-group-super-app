@@ -57,6 +57,19 @@ describe('Staff number and system_counters security rules', () => {
     });
   });
 
+  describe('technicians collection staffNumber tamper prevention', () => {
+    const hrDb = () => testEnv.authenticatedContext('hr_staff_1', { role: 'hr_staff', email: 'hr1@example.com', email_verified: true }).firestore();
+
+    it('denies HR clients creating or changing technician staff numbers but allows unrelated fields', async () => {
+      await seed('technicians/tech_1', { uid: 'tech_1', name: 'Tech One', trade: 'HVAC', staffNumber: 10010, staffNumberStr: '10010' });
+
+      await assertFails(updateDoc(doc(hrDb(), 'technicians/tech_1'), { staffNumber: 10099 }));
+      await assertFails(updateDoc(doc(hrDb(), 'technicians/tech_1'), { staffNumberStr: '10099' }));
+      await assertFails(setDoc(doc(hrDb(), 'technicians/tech_new'), { uid: 'tech_new', name: 'New', staffNumber: 10011 }));
+      await assertSucceeds(updateDoc(doc(hrDb(), 'technicians/tech_1'), { trade: 'Plumbing' }));
+    });
+  });
+
   describe('users collection staffNumber tamper prevention', () => {
     it('denies client creating a user with staffNumber or staffNumberStr', async () => {
       // User self-creation attempt with staffNumber

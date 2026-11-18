@@ -1448,7 +1448,7 @@ export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europ
   });
   financeUsersSnap.docs.forEach((doc) => lookupUids.add(doc.id));
   const authByUid = new Map<string, admin.auth.UserRecord>();
-  const userStaffNumberMap = new Map<string, number | null>();
+  const userStaffNumberMap = new Map<string, number | string | null>();
   const uidList = [...lookupUids];
   for (let offset = 0; offset < uidList.length; offset += 100) {
     const batchUids = uidList.slice(offset, offset + 100);
@@ -1460,7 +1460,10 @@ export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europ
     userDocs.forEach((docSnap) => {
       if (docSnap.exists) {
         const sNum = docSnap.data()?.staffNumber;
-        userStaffNumberMap.set(docSnap.id, typeof sNum === "number" ? sNum : null);
+        userStaffNumberMap.set(
+          docSnap.id,
+          typeof sNum === "number" || (typeof sNum === "string" && sNum.trim() !== "") ? sNum : null,
+        );
       }
     });
   }
