@@ -109,6 +109,7 @@ export * from "./proofVerification";
 export * from "./staffOperatingSystem";
 export * from "./staffInventoryEngine";
 export * from "./staffPdfReporting";
+export * from "./employeeCredentials";
 
 export {
   resumeTechnicianDuty,
