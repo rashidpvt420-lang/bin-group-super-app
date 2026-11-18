@@ -33,7 +33,9 @@ test('deployable rules preserve design, GPS, payroll and private HR authority af
   assert.equal(artifact.status, 0, artifact.stderr || artifact.stdout);
   assert.equal(readFileSync(path.join(f.directory, 'launch_generated/firestore.rules'), 'utf8'), readFileSync(f.rulesPath, 'utf8'));
   const preparedRules = readFileSync(f.rulesPath, 'utf8');
-  assert.match(preparedRules, /match \/payment_transactions\/\{paymentId\} \{[^]*?\(isNotSuspended\(\) && claimedRole\(\) == 'finance_admin' && 'transactions' in request.auth.token.get\('modules', \[\]\)\)/);
+  assert.match(preparedRules, /match \/payment_transactions\/\{paymentId\} \{\n      allow read: if \(claimedRole\(\) == 'finance_admin' && 'transactions' in request.auth.token.get\('modules', \[\]\) && isNotSuspended\(\)\) \|\| participantCanRead\(resource.data\)/);
+  // The invoices receipt-repair queue uses the same cheap Finance Admin check first (Firestore 1000-expression limit).
+  assert.match(preparedRules, /match \/invoices\/\{invoiceId\} \{\n      allow read: if \(claimedRole\(\) == 'finance_admin' && 'transactions' in request.auth.token.get\('modules', \[\]\) && isNotSuspended\(\)\) \|\| participantCanRead\(resource.data\)/);
   const preparedStorage = readFileSync(path.join(f.directory, 'storage.rules'), 'utf8');
   assert.match(preparedStorage, /collection != 'design-payment-receipts'/);
   assert.match(preparedStorage, /collection != 'privateHrDocuments'/);

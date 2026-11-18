@@ -22,7 +22,7 @@ import './user-directory-mfa-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, documentId, getDoc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import fs from 'fs';
 
 let testEnv;
@@ -1445,6 +1445,60 @@ describe('Firestore Security Rules', () => {
     await seedServerDocument('users/finance_suspended_profile', { role: 'finance_admin', status: 'SUSPENDED' });
     await assertFails(getDoc(doc(suspendedProfile, 'payment_transactions/private_payment')));
     await assertFails(getDocs(query(collection(suspendedProfile, 'payment_transactions'), limit(50))));
+  });
+
+  it('Finance Admin payment and receipt-repair queues are authorized before the costly participant check (1000-expression limit)', async () => {
+    const pendingStatuses = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
+    const pendingQuery = (db) => query(collection(db, 'payment_transactions'), where('status', 'in', pendingStatuses), orderBy('createdAt', 'desc'), limit(50));
+    const paidQuery = (db) => query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+    const receiptRepairQuery = (db) => query(collection(db, 'invoices'), where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']), orderBy(documentId(), 'asc'), limit(30));
+    await seedServerDocument('payment_transactions/fa_pending', { ownerId: 'owner_a', ownerUid: 'owner_a', status: 'PENDING_ADMIN_PAYMENT_VERIFICATION', createdAt: new Date() });
+    await seedServerDocument('payment_transactions/fa_paid', { ownerId: 'owner_a', ownerUid: 'owner_a', status: 'PAID', adminApprovalRequired: true, createdAt: new Date() });
+    await seedServerDocument('invoices/fa_receipt', { ownerId: 'owner_a', ownerUid: 'owner_a', documentState: 'PAID_RECEIPT_FAILED', paymentId: 'fa_paid' });
+
+    const mfa = { firebase: { sign_in_second_factor: 'phone' }, email_verified: true };
+    await seedServerDocument('users/fa_active', { role: 'finance_admin', status: 'ACTIVE' });
+    const financeDb = testEnv.authenticatedContext('fa_active', { role: 'finance_admin', modules: ['dashboard', 'financials', 'transactions', 'reports'], ...mfa }).firestore();
+    await assertSucceeds(getDoc(doc(financeDb, 'payment_transactions/fa_pending')));
+    const pending = await assertSucceeds(getDocs(pendingQuery(financeDb)));
+    assert.deepEqual(pending.docs.map((row) => row.id), ['fa_pending']);
+    const paid = await assertSucceeds(getDocs(paidQuery(financeDb)));
+    assert.deepEqual(paid.docs.map((row) => row.id), ['fa_paid']);
+    await assertSucceeds(getDoc(doc(financeDb, 'invoices/fa_receipt')));
+    const receipts = await assertSucceeds(getDocs(receiptRepairQuery(financeDb)));
+    assert.deepEqual(receipts.docs.map((row) => row.id), ['fa_receipt']);
+    // Read-only: the reorder grants no write authority.
+    await assertFails(updateDoc(doc(financeDb, 'payment_transactions/fa_paid'), { status: 'APPROVED' }));
+    await assertFails(updateDoc(doc(financeDb, 'invoices/fa_receipt'), { documentState: 'PAID' }));
+    await assertFails(setDoc(doc(financeDb, 'invoices/fa_forged'), { documentState: 'PAID_RECEIPT_FAILED' }));
+
+    const denied = [
+      ['fa_no_module', { role: 'finance_admin', modules: ['dashboard', 'financials', 'reports'], ...mfa }, { role: 'finance_admin', status: 'ACTIVE' }],
+      ['fa_profile_suspended', { role: 'finance_admin', modules: ['transactions'], ...mfa }, { role: 'finance_admin', status: 'SUSPENDED' }],
+      ['fa_profile_disabled', { role: 'finance_admin', modules: ['transactions'], ...mfa }, { role: 'finance_admin', suspended: true }],
+      ['fa_claim_suspended', { role: 'finance_admin', modules: ['transactions'], suspended: true, ...mfa }, { role: 'finance_admin', status: 'ACTIVE' }],
+      ['fm_user', { role: 'finance_manager', modules: ['transactions'], ...mfa }, { role: 'finance_manager', status: 'ACTIVE' }],
+      ['owner_b', { role: 'owner', modules: ['transactions'] }, { role: 'owner', status: 'ACTIVE' }],
+    ];
+    for (const [uid, claims, profile] of denied) {
+      await seedServerDocument(`users/${uid}`, profile);
+      const client = testEnv.authenticatedContext(uid, claims).firestore();
+      await assertFails(getDoc(doc(client, 'payment_transactions/fa_pending')));
+      await assertFails(getDocs(pendingQuery(client)));
+      await assertFails(getDocs(paidQuery(client)));
+      await assertFails(getDoc(doc(client, 'invoices/fa_receipt')));
+      await assertFails(getDocs(receiptRepairQuery(client)));
+    }
+
+    // Existing authority is unchanged: Super Admin oversight and owner-own reads still work.
+    const superAdminDb = testEnv.authenticatedContext('super_admin_user', { superAdmin: true, role: 'super_admin', ...mfa }).firestore();
+    await assertSucceeds(getDocs(pendingQuery(superAdminDb)));
+    await assertSucceeds(getDocs(paidQuery(superAdminDb)));
+    await assertSucceeds(getDocs(receiptRepairQuery(superAdminDb)));
+    await seedServerDocument('users/owner_a', { role: 'owner', status: 'ACTIVE' });
+    const ownerADb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertSucceeds(getDoc(doc(ownerADb, 'payment_transactions/fa_pending')));
+    await assertSucceeds(getDoc(doc(ownerADb, 'invoices/fa_receipt')));
   });
 
   it('financial ledgers are server-authored even for admin browser clients', async () => {
