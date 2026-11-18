@@ -35,7 +35,7 @@ const Navigation = () => {
         { text: navText('Design Studio Manager', 'مدير استوديو التصميم'), icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
         { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
         { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
-        { text: navText('Sovereign Control', 'التحكم السيادي'), icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
+        { text: navText('Control Center', 'مركز التحكم'), icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
         { text: navText('BIN Connect Inbox', 'صندوق وارد BIN Connect'), icon: <ReceiptIcon />, path: '/ops/bin-connect', color: '#38bdf8' },
         { text: navText('Pilot Completion', 'إكمال التشغيل التجريبي'), icon: <PendingActionsIcon />, path: '/ops/pilot-completion', color: '#3b82f6' },
         { text: navText('Public Launch Command', 'قيادة الإطلاق العام'), icon: <SecurityIcon />, path: '/ops/public-launch-command', color: binThemeTokens.gold },

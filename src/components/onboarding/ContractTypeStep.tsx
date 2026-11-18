@@ -73,7 +73,7 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                 'Structural major renovation',
                 'Authority fines from prior state'
             ],
-            desc: 'The ultimate Sovereign-grade property operations layer.'
+            desc: 'The ultimate property operations layer.'
         }
     ];
 
@@ -85,7 +85,7 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
     return (
         <Box sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SOVEREIGN SERVICE MODELS</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SERVICE MODELS</Typography>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
                     {tx('onboarding.select_contract', 'SELECT SERVICE PROTOCOL')}
                 </Typography>

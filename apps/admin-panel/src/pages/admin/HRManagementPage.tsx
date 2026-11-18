@@ -315,7 +315,7 @@ export default function HRManagementPage() {
                 <Stack spacing={3}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                         <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SOVEREIGN HUMAN CAPITAL</Typography>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>HUMAN RESOURCES</Typography>
                             <Typography variant="h3" fontWeight="950" color="#FFF">HR <Box component="span" sx={{ color: binThemeTokens.gold }}>Command</Box></Typography>
                             <Typography variant="body2" sx={{ mt: 1, color: 'rgba(255,255,255,0.58)', maxWidth: 940 }}>
                                 Canonical employee authority: Staff Registry → protected profile → invitation/onboarding → attendance/leave → HR documents → payroll evidence → offboarding/audit. Technician Corps is operational only; employee lifecycle changes happen here.

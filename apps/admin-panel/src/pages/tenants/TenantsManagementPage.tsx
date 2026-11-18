@@ -166,7 +166,7 @@ export default function TenantsManagementPage() {
                 return [found, ...prev];
             });
             setSelectedExistingTenantId(found.uid);
-            alert("Sovereign Match Found: User identified in registry.");
+            alert("Match found: User identified in registry.");
         } else {
             alert("No user found with this email. Please use 'New Tenant' mode.");
         }

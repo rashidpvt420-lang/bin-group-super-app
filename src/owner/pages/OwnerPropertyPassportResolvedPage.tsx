@@ -199,14 +199,14 @@ export default function OwnerPropertyPassportResolvedPage() {
   return (
     <Box sx={{ pb: 6 }}>
       <Box sx={{ mb: 6 }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN ASSET REGISTRY</Typography>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>PROPERTY REGISTRY</Typography>
         <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}><Bi en={"Property Passports"} ar={"جوازات العقارات"} /></Typography>
         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}><Bi en={"Official digital twins of your real estate portfolio."} ar={"النسخ الرقمية الرسمية لمحفظتك العقارية."} /></Typography>
       </Box>
 
       {usedFallback && (
         <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
-          <Bi en={"Official property passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records."} ar={"لم تصدر جوازات العقار الرسمية بعد، لذا تُعرض جوازات مؤقتة من الأصول والعقود النشطة المرتبطة."} />
+          <Bi en={"BIN GROUP Property Passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records."} ar={"لم تصدر وثائق جواز عقار BIN GROUP بعد، لذا تُعرض جوازات مؤقتة من الأصول والعقود النشطة المرتبطة."} />
         </Alert>
       )}
 

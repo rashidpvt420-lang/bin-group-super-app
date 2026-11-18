@@ -122,7 +122,7 @@ export default function OrphanWarRoomPage() {
             }, null, 2));
 
             if (err?.code === 'functions/unauthenticated') {
-                setRepairError("Administrative access expired. Sign in again to re-validate your Sovereign credentials.");
+                setRepairError("Administrative access expired. Sign in again to verify your credentials.");
             } else if (err?.code === 'functions/permission-denied') {
                 setRepairError("Permission Denied: Your account requires explicit 'admin' or 'super_admin' claims to run repair batch protocols.");
             } else if (err?.message?.includes('not a function')) {
@@ -152,7 +152,7 @@ export default function OrphanWarRoomPage() {
             setTargetUnitId('');
         } catch (err) {
             console.error("Repair failed:", err);
-            alert("Sovereign Protocol Failure: Linkage could not be established.");
+            alert("Link failed: Linkage could not be established.");
         } finally {
             setFixing(null);
         }

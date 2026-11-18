@@ -56,7 +56,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                                     letterSpacing: 4
                                 }}
                             >
-                                {t('dash.terminal.broker') || 'SOVEREIGN BROKERAGE'}
+                                {t('dash.terminal.broker') || 'BROKERAGE'}
                             </Typography>
                         </Stack>
                         <Typography variant="h3" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ letterSpacing: -1 }}>

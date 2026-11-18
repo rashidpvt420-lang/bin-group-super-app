@@ -6,7 +6,7 @@ const source = await readFile(new URL('../../apps/admin-panel/src/components/Nav
 
 const bilingualLabels = [
   ['Design Studio Manager', 'مدير استوديو التصميم'],
-  ['Sovereign Control', 'التحكم السيادي'],
+  ['Control Center', 'مركز التحكم'],
   ['BIN Connect Inbox', 'صندوق وارد BIN Connect'],
   ['Public Launch Command', 'قيادة الإطلاق العام'],
   ['Pricing Matrix 2026', 'مصفوفة التسعير 2026'],

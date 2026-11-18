@@ -131,8 +131,8 @@ test('Phase 3 control repairs label icon-only controls and keep owner activation
   assert.match(ownerApp, /owner-header-dashboard/);
   assert.match(tenantAi, /tenant-ai-restart/);
   assert.match(tenantAi, /tenant-ai-send/);
-  assert.match(sharedAi, /aria-label="Open Sovereign AI chat"/);
-  assert.match(appAi, /aria-label="Move or open Sovereign AI chat"/);
+  assert.match(sharedAi, /aria-label="Open BIN Assistant chat"/);
+  assert.match(appAi, /aria-label="Move or open BIN Assistant chat"/);
   assert.match(ownerAudit, /page\.goto\('\/owner\/activation'/);
   assert.doesNotMatch(ownerAudit, /owner AR\/EN switch works in shell[\s\S]{0,500}page\.goto\('\/owner\/dashboard'/);
   assert.match(brokerAudit, /waitForResolvedBrokerShell/);

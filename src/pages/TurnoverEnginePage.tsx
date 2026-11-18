@@ -224,7 +224,7 @@ export default function TurnoverEnginePage() {
 
                   <Grid item xs={12} lg={4}>
                       <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
-                          <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}><ShieldCheck color={binThemeTokens.gold} /> SOVEREIGN MOVE-OUT</Typography>
+                          <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}><ShieldCheck color={binThemeTokens.gold} /> MOVE-OUT</Typography>
                           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, lineHeight: 1.6 }}><Bi en={"Every unit transition follows the BIN GROUP Hard-Reset™ standard. All keys, utilities, and structural layers are validated via physical audit."} ar={"يتبع كل انتقال للوحدة معيار BIN GROUP Hard-Reset™. يتم التحقق من المفاتيح والمرافق والهيكل بفحص فعلي."} /></Typography>
                           <Stack spacing={3}>
                               <Box sx={{ display: 'flex', gap: 2 }}>

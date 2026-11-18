@@ -59,7 +59,7 @@ export default function OwnerMoneyControlPage() {
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
             <Box sx={{ mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SOVEREIGN TREASURY</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>TREASURY</Typography>
                 <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>Money <Box component="span" sx={{ color: binThemeTokens.gold }}>Control</Box></Typography>
                 <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>Real-time financial yield and operational expense monitoring.</Typography>
             </Box>

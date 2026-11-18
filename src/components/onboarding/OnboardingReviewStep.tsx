@@ -34,7 +34,7 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     {tx('onboarding.final_review', 'STRATEGIC SUMMARY')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {tx('onboarding.review_desc', 'Verify the operational parameters before commitment to the Sovereign Engine.')}
+                    {tx('onboarding.review_desc', 'Verify the operational parameters before submission.')}
                 </Typography>
             </Box>
 

@@ -801,7 +801,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
 <p><b>Your BIN GROUP payment has been verified and your owner dashboard is now active.</b></p>
 <p>You can now access your property passport, contracts, documents, tickets, tenants and financial records.</p>
 <p>Support: support@bin-groups.com</p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`,
+<p>BIN GROUP - Made in UAE</p>`,
         },
         metadata: {
           type: "owner_payment_approved_dashboard_activated",

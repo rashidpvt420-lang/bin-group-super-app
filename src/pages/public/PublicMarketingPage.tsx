@@ -150,7 +150,7 @@ const copy = {
     cards: [
       ['Home OS Concept', 'Replace scattered calls, chats, and invoices with one prompt-to-workflow operating layer.'],
       ['Total Care Hybrid', 'Handle tenant registry, rent ledger waterfall, management fee logic, maintenance deductions, and owner payout visibility.'],
-      ['Sovereign Property Intelligence', 'Adapt the SOP by asset type: tower, villa, Majlis, residential building, commercial asset, or portfolio.'],
+      ['Property Intelligence', 'Adapt the SOP by asset type: tower, villa, Majlis, residential building, commercial asset, or portfolio.'],
       ['Agentic No-Call Efficiency', 'Classify issues, enforce SLA timers, dispatch technicians, and require before-and-after proof automatically.'],
     ],
     pricingTitle: 'Contracts & financial logic',
@@ -270,7 +270,7 @@ const copy = {
     cards: [
       ['Home OS للعقار', 'استبدال الاتصالات والرسائل والفواتير المتفرقة بطبقة تشغيل موحدة.'],
       ['Total Care Hybrid', 'إدارة سجل المستأجرين ودفتر الإيجارات ورسوم الإدارة وخصومات الصيانة ووضوح التحويل للمالك.'],
-      ['Sovereign Property Intelligence', 'تكييف التشغيل حسب نوع الأصل: برج، فيلا، مجلس، مبنى سكني، أصل تجاري، أو محفظة.'],
+      ['Property Intelligence', 'تكييف التشغيل حسب نوع الأصل: برج، فيلا، مجلس، مبنى سكني، أصل تجاري، أو محفظة.'],
       ['كفاءة No-Call الذكية', 'تصنيف الأعطال، فرض SLA، إرسال الفنيين، وطلب إثبات قبل وبعد تلقائياً.'],
     ],
     pricingTitle: 'العقود والمنطق المالي',

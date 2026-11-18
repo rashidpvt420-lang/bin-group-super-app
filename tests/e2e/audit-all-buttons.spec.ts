@@ -44,7 +44,7 @@ test.describe('Admin Button & Menu Verification Audit', () => {
     { label: 'Design Studio Manager', path: '/design-studio' },
     { label: 'Orphan War Room', path: '/orphans' },
     { label: 'Verify Payment', path: '/manual-approvals' },
-    { label: 'Sovereign Control', path: '/control-center' },
+    { label: 'Control Center', path: '/control-center' },
     { label: 'Pricing Matrix 2026', path: '/admin/pricing-matrix' },
     { label: 'BIN-GPT Engineer', path: '/admin/bin-gpt-engineer' },
     { label: 'ACTIVE TENANTS', path: '/owners' },

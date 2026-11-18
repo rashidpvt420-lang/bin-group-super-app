@@ -802,7 +802,7 @@ export default function OwnerDashboardResolvedPage() {
       {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'OWNER DASHBOARD')}</Typography>
           <Typography variant="h3" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('dash.owner.active', 'Dashboard Active')}</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>{tx('dash.owner.desc', 'Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.')}</Typography>
         </Box>

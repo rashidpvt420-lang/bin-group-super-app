@@ -210,7 +210,7 @@ export default function TicketsManagementPage() {
 
       // 🚨 INSTITUTIONAL SAFEGUARD: Prevent dispatch of unassociated tickets
       if (!assigningTicket.propertyId || !assigningTicket.unit || assigningTicket.propertyId === 'UNASSOCIATED') {
-          alert("Sovereign Protocol Violation: Mission cannot be dispatched without a verified Property and Unit node. Please link this ticket in the Orphan War Room first.");
+          alert("Dispatch blocked: Mission cannot be dispatched without a verified Property and Unit node. Please link this ticket in the Orphan War Room first.");
           return;
       }
 

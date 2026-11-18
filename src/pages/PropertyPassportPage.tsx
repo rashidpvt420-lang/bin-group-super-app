@@ -118,7 +118,7 @@ export default function PropertyPassportPage() {
                     <Typography variant="h3" fontWeight="950" color={binThemeTokens.adaptiveText}>{property.name || property.propertyName || 'Property Passport'}</Typography>
                     <Stack direction="row" spacing={1.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
                         <Chip label={`REF: ${property.id.substring(0,8)}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.adaptiveTextMuted, fontWeight: 900 }} />
-                        <Chip icon={isVerified ? <ShieldCheck size={14}/> : <AlertTriangle size={14}/>} label={isVerified ? 'SOVEREIGN VERIFIED' : 'PENDING VERIFICATION'} sx={{ bgcolor: isVerified ? alpha('#10b981', 0.1) : alpha('#ef4444', 0.1), color: isVerified ? '#10b981' : '#ef4444', fontWeight: 950 }} />
+                        <Chip icon={isVerified ? <ShieldCheck size={14}/> : <AlertTriangle size={14}/>} label={isVerified ? 'VERIFIED' : 'PENDING VERIFICATION'} sx={{ bgcolor: isVerified ? alpha('#10b981', 0.1) : alpha('#ef4444', 0.1), color: isVerified ? '#10b981' : '#ef4444', fontWeight: 950 }} />
                         <Chip icon={<MapPin size={14}/>} label={gps.label} sx={{ bgcolor: alpha(gps.color, 0.1), color: gps.color, fontWeight: 950 }} />
                     </Stack>
                 </Box>
@@ -173,7 +173,7 @@ export default function PropertyPassportPage() {
                             <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(198, 167, 94, 0.05)', border: '1px solid rgba(198, 167, 94, 0.2)' }}>
                                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>INSTITUTIONAL METRICS</Typography>
                                 <Stack spacing={2}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">PROTOCOL</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>{property.protocolLevel || 'SOVEREIGN'}</Typography></Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">PROTOCOL</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>{property.protocolLevel === 'SOVEREIGN' ? 'BIN GROUP' : (property.protocolLevel || 'BIN GROUP')}</Typography></Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">SECURITY</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>{property.securityLevel || 'MAXIMUM'}</Typography></Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">AUTHORITY</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.adaptiveText}>{property.authorityName || 'Federal'}</Typography></Box>
                                     {property.majlis && <Box sx={{ mt: 1, p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 1, textAlign: 'center' }}><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>MAJLIS PROTOCOL ACTIVE</Typography></Box>}

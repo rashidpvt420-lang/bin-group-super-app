@@ -64,7 +64,7 @@ const BinGroupHeader = () => {
             whiteSpace: 'nowrap',
           }}
         >
-          SOVEREIGN PROPERTY OS
+          PROPERTY MANAGEMENT
         </Typography>
       </Box>
     </Box>

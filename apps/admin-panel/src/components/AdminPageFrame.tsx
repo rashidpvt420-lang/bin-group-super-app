@@ -206,7 +206,7 @@ export default function AdminPageFrame({
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 12 }}>
                     <CircularProgress sx={{ color: binThemeTokens.gold, mb: 2 }} />
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, letterSpacing: 2, fontWeight: 900 }}>
-                        Initializing Sovereign Data Node...
+                        Loading data...
                     </Typography>
                 </Box>
             ) : error ? (

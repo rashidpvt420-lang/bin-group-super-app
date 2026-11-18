@@ -203,7 +203,7 @@ export default function TenantInvitePage() {
                         )}
 
                         <Typography variant="caption" sx={{ mt: 2, display: 'block', opacity: 0.6 }}>
-                            Sovereign Auth Node / بوابة التحقق الآمنة
+                            Sign-in verification / بوابة التحقق الآمنة
                         </Typography>
                     </>
                 )}

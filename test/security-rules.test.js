@@ -1223,18 +1223,32 @@ describe('Firestore Security Rules', () => {
     await assertFails(setDoc(doc(ownerADb, 'amenities/amenity_other'), { propertyId: 'prop_other', name: 'Pool' }));
   });
 
-  it('marketplace public/tenant access behaves as intended', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-
-    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
-
-    await setDoc(doc(adminDb, 'marketplaceProviders/provider_1'), { name: 'Clean Co', approved: true });
-    await setDoc(doc(adminDb, 'marketplaceOffers/offer_1'), { providerId: 'provider_1', title: '10% Off' });
-
-    await assertSucceeds(getDoc(doc(tenantADb, 'marketplaceProviders/provider_1')));
-    await assertSucceeds(getDoc(doc(tenantADb, 'marketplaceOffers/offer_1')));
-    await assertFails(setDoc(doc(tenantADb, 'marketplaceProviders/provider_2'), { name: 'Tenant Shop' }));
+  it('marketplace records are readable and writable only by claim-backed admins', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, firebase: { sign_in_second_factor: 'phone' } }).firestore();
+    const clients = [
+      testEnv.unauthenticatedContext().firestore(),
+      testEnv.authenticatedContext('admin_without_mfa', { admin: true }).firestore(),
+      ...['owner', 'tenant', 'technician', 'broker', 'finance_admin'].map(
+        (role) => testEnv.authenticatedContext(`${role}_user`, { role }).firestore(),
+      ),
+      testEnv.authenticatedContext('profile_admin').firestore(),
+    ];
+    await seedServerDocument('users/profile_admin', { role: 'admin' });
+    for (const [name, data] of [
+      ['marketplaceProviders', { name: 'Clean Co', approved: true }],
+      ['marketplaceOffers', { providerId: 'provider_1', title: 'Offer' }],
+    ]) {
+      await assertSucceeds(setDoc(doc(adminDb, name, 'record_1'), data));
+      await assertSucceeds(getDoc(doc(adminDb, name, 'record_1')));
+      await assertSucceeds(getDocs(collection(adminDb, name)));
+      for (const client of clients) {
+        await assertFails(getDoc(doc(client, name, 'record_1')));
+        await assertFails(getDocs(collection(client, name)));
+        await assertFails(setDoc(doc(client, name, 'record_2'), data));
+      }
+      await assertSucceeds(updateDoc(doc(adminDb, name, 'record_1'), { reviewed: true }));
+      await assertSucceeds(deleteDoc(doc(adminDb, name, 'record_1')));
+    }
   });
 
   it('community posts require moderation', async () => {

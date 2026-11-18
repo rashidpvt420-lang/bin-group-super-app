@@ -103,7 +103,7 @@ async function queueSubmissionEmails(
 </table>
 <p>BIN GROUP will verify the property documents, signed agreement and payment receipt. Your dashboard remains securely locked until approval.</p>
 <p><a href="${ownerPortalUrl("/owner/activation")}">Track owner activation</a></p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`,
+<p>BIN GROUP - Made in UAE</p>`,
     },
     metadata: lifecycleMetadata("owner_onboarding_submission_delivery", paymentId, payment, { reason }),
     createdAt: ts(),
@@ -124,7 +124,7 @@ async function queueSubmissionEmails(
 <p>Locked quote hash: <code>${quoteHash}</code></p>
 <p><a href="${contractUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Signed Contract</a></p>
 <p>This contract remains pending activation until the 15% mobilization payment is approved.</p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`,
+<p>BIN GROUP - Made in UAE</p>`,
       },
       metadata: lifecycleMetadata("owner_signed_contract_delivery", paymentId, payment, { reason, contractUrl }),
       createdAt: ts(),
@@ -171,7 +171,7 @@ async function queueRejectionEmail(paymentId: string, payment: FirebaseFirestore
 <p>Reason: ${reason}</p>
 <p>Upload a new receipt and submit a fresh server-authoritative quote package. The rejected evidence cannot unlock the dashboard.</p>
 <p><a href="${ownerPortalUrl("/onboarding")}">Resume owner onboarding</a></p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`,
+<p>BIN GROUP - Made in UAE</p>`,
     },
     metadata: lifecycleMetadata("owner_payment_rejection_delivery", paymentId, payment, { rejectionReason: reason }),
     createdAt: ts(),
@@ -204,7 +204,7 @@ async function queueInvoiceEmail(paymentId: string, payment: FirebaseFirestore.D
 <tr><td><b>Invoice proof hash</b></td><td><code>${invoiceProofHash}</code></td></tr>
 </table>
 <p><a href="${ownerPortalUrl("/owner/financials")}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Financials</a></p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`,
+<p>BIN GROUP - Made in UAE</p>`,
     },
     metadata: lifecycleMetadata("owner_mobilization_invoice_delivery", paymentId, payment, { invoiceId, invoiceProofHash }),
     createdAt: ts(),
