@@ -50,6 +50,7 @@ const STAFF_ROLES = new Set([
 export const STAFF_NUMBER_COUNTER_DOC = "staff_number";
 export const STAFF_NUMBER_START = 10001;
 export const STAFF_NUMBER_MAX = 99999;
+const STAFF_NUMBER_BACKFILL_BATCH = 100;
 
 export async function resolveStaffUid(uidOrNumber: string): Promise<string> {
   const trimmed = cleanString(uidOrNumber);
@@ -434,9 +435,10 @@ async function assertNoExistingIdentity(email: string) {
   }
 }
 
-async function loadExistingStaff(uidOrNumber: string) {
-  if (!uidOrNumber) throw new HttpsError("invalid-argument", "Staff UID is required.");
-  const uid = await resolveStaffUid(uidOrNumber);
+// UID-only: callers that accept a staff number must resolve it once at the request
+// boundary (resolveStaffUid) and use that same UID for every check and write.
+async function loadExistingStaff(uid: string) {
+  if (!uid) throw new HttpsError("invalid-argument", "Staff UID is required.");
   const [authUser, userSnap, accessSnap] = await Promise.all([
     admin.auth().getUser(uid),
     db.collection("users").doc(uid).get(),
@@ -1660,8 +1662,13 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
   usersSnap.docs.forEach((doc) => candidateMap.set(doc.id, doc.data()));
   roleSnap.docs.forEach((doc) => candidateMap.set(doc.id, doc.data()));
 
-  const unassigned = Array.from(candidateMap.entries())
-    .filter(([_, data]) => data.staffNumber === undefined || data.staffNumber === null || data.staffNumber === "")
+  const isStaffProfile = (data: FirebaseFirestore.DocumentData | undefined) =>
+    Boolean(data) && (data?.isStaff === true || STAFF_ROLES.has(cleanString(data?.role)));
+  const hasNoStaffNumber = (data: FirebaseFirestore.DocumentData | undefined) =>
+    data?.staffNumber === undefined || data?.staffNumber === null || data?.staffNumber === "";
+
+  const allUnassigned = Array.from(candidateMap.entries())
+    .filter(([_, data]) => isStaffProfile(data) && hasNoStaffNumber(data))
     .map(([id, data]) => ({ id, data }))
     .sort((a, b) => {
       const aTime = a.data.createdAt?.toMillis?.() || (typeof a.data.createdAt === "number" ? a.data.createdAt : 0);
@@ -1669,43 +1676,52 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
       return aTime - bTime || a.id.localeCompare(b.id);
     });
 
-  if (unassigned.length === 0) {
-    return { success: true, backfilledCount: 0, message: "All staff accounts already have staff numbers." };
+  if (allUnassigned.length === 0) {
+    return { success: true, backfilledCount: 0, remainingCount: 0, message: "All staff accounts already have staff numbers." };
   }
+  // Bounded batch per call keeps the transaction small; call again to continue.
+  const unassigned = allUnassigned.slice(0, STAFF_NUMBER_BACKFILL_BATCH);
+  const remainingCount = allUnassigned.length - unassigned.length;
 
   const now = FieldValue.serverTimestamp();
   const counterRef = db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC);
 
   const assignedRecords = await db.runTransaction(async (tx) => {
     // Attempt-local: Firestore may retry this callback, so results never leak across attempts.
-    const attemptRecords: Array<{ uid: string; staffNumber: number }> = [];
-    const verifiedCandidates: Array<{ uid: string; hasTechDoc: boolean }> = [];
+    const attemptRecords: Array<{ uid: string; staffNumber: number; staffAccessRecordMissing: boolean }> = [];
+    const verifiedCandidates: Array<{ uid: string; hasTechDoc: boolean; hasAccessDoc: boolean }> = [];
     for (const item of unassigned) {
       const userDoc = await tx.get(db.collection("users").doc(item.id));
-      if (userDoc.exists) {
-        const uData = userDoc.data();
-        if (uData?.staffNumber === undefined || uData?.staffNumber === null || uData?.staffNumber === "") {
-          const techDoc = await tx.get(db.collection("technicians").doc(item.id));
-          verifiedCandidates.push({ uid: item.id, hasTechDoc: techDoc.exists });
-        }
-      }
+      if (!userDoc.exists) continue;
+      const uData = userDoc.data();
+      // Re-check on the live snapshot: the profile may have changed since discovery.
+      if (!isStaffProfile(uData) || !hasNoStaffNumber(uData)) continue;
+      const [techDoc, accessDoc] = await Promise.all([
+        tx.get(db.collection("technicians").doc(item.id)),
+        tx.get(db.collection("staffAccess").doc(item.id)),
+      ]);
+      verifiedCandidates.push({ uid: item.id, hasTechDoc: techDoc.exists, hasAccessDoc: accessDoc.exists });
     }
 
     if (verifiedCandidates.length === 0) return attemptRecords;
     const allocation = await allocateStaffNumbers(tx, verifiedCandidates.length);
 
-    for (const [index, { uid, hasTechDoc }] of verifiedCandidates.entries()) {
+    for (const [index, { uid, hasTechDoc, hasAccessDoc }] of verifiedCandidates.entries()) {
       const assigned = allocation.numbers[index];
       tx.update(db.collection("users").doc(uid), {
         staffNumber: assigned,
         staffNumberStr: String(assigned),
         updatedAt: now,
       });
-      tx.set(db.collection("staffAccess").doc(uid), {
-        staffNumber: assigned,
-        staffNumberStr: String(assigned),
-        updatedAt: now,
-      }, { merge: true });
+      // Only update an existing access record; never create a partial one (a missing
+      // staffAccess record must be repaired through the provisioning workflow).
+      if (hasAccessDoc) {
+        tx.update(db.collection("staffAccess").doc(uid), {
+          staffNumber: assigned,
+          staffNumberStr: String(assigned),
+          updatedAt: now,
+        });
+      }
       if (hasTechDoc) {
         tx.set(db.collection("technicians").doc(uid), {
           staffNumber: assigned,
@@ -1713,7 +1729,7 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
           updatedAt: now,
         }, { merge: true });
       }
-      attemptRecords.push({ uid, staffNumber: assigned });
+      attemptRecords.push({ uid, staffNumber: assigned, staffAccessRecordMissing: !hasAccessDoc });
     }
 
     const lastAssigned = attemptRecords[attemptRecords.length - 1].staffNumber;
@@ -1735,6 +1751,7 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
         startNumber: attemptRecords[0].staffNumber,
         endNumber: lastAssigned,
         assignedUids: attemptRecords.map((r) => r.uid),
+        staffAccessRecordMissingUids: attemptRecords.filter((r) => r.staffAccessRecordMissing).map((r) => r.uid),
       },
       createdAt: now,
     });
@@ -1747,6 +1764,8 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
     startNumber: assignedRecords[0]?.staffNumber ?? null,
     endNumber: assignedRecords[assignedRecords.length - 1]?.staffNumber ?? null,
     assigned: assignedRecords,
+    remainingCount,
+    staffAccessRecordMissingUids: assignedRecords.filter((r) => r.staffAccessRecordMissing).map((r) => r.uid),
   };
 });
 

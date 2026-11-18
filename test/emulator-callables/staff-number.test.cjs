@@ -145,6 +145,11 @@ test('adminBackfillStaffNumbers is gated by MFA and admin role; backfills existi
   assert.ok(updated2.staffNumber > updated1.staffNumber);
   const tech2 = (await db.doc('technicians/legacy_staff_2').get()).data();
   assert.equal(tech2.staffNumber, updated2.staffNumber);
+  // Backfill never creates a partial staffAccess record for a legacy account without one.
+  const access2 = await db.doc('staffAccess/legacy_staff_2').get();
+  assert.equal(access2.exists, false);
+  assert.deepEqual(backfillResult.staffAccessRecordMissingUids, ['legacy_staff_2']);
+  assert.equal(backfillResult.remainingCount, 0);
 
   // Existing staff was untouched
   const existingDoc = (await db.doc('users/existing_staff').get()).data();
