@@ -29,6 +29,29 @@ export const canAssignFinanceTierRoles = (user: { role?: string | null; claims?:
 };
 export const PAYROLL_PREP_PATH = '/hr/payroll-prep';
 
+// Finance grants screen: mirrors adminRequestFinanceRoleAssignment / adminApproveFinanceRoleAssignment.
+// Request: Super Admin or CEO. Approve/reject: Super Admin, CEO or Finance Controller who is neither the
+// requester nor the target. Both need a verified MFA session. The server remains the authority.
+export const FINANCE_GRANTS_PATH = '/finance/grants';
+export type FinanceGrantCapabilities = { canView: boolean; canRequest: boolean; canApprove: boolean; mfaReady: boolean };
+export function financeGrantCapabilities(
+  user: { role?: string | null; claims?: Record<string, unknown> | null } | null | undefined,
+  mfaVerified: boolean,
+): FinanceGrantCapabilities {
+  const claims = user?.claims || {};
+  const role = String(user?.role || claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+  if (!user || claims.suspended === true) return { canView: false, canRequest: false, canApprove: false, mfaReady: false };
+  const canRequestRole = role === 'super_admin' || role === 'ceo' || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true;
+  const canApproveRole = canRequestRole || role === 'finance_controller' || claims.finance_controller === true;
+  const mfaReady = mfaVerified === true;
+  return {
+    canView: canApproveRole,
+    canRequest: canRequestRole && mfaReady,
+    canApprove: canApproveRole && mfaReady,
+    mfaReady,
+  };
+}
+
 export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'technician', label: 'Technician', description: 'Technician mobile portal only' },
     { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map and SOS' },
@@ -151,6 +174,10 @@ export const WHATSAPP_TEMPLATES_PATH = '/ops/whatsapp-templates';
 export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     if (!user) return false;
     if (pathname === '/profile' || pathname.startsWith('/profile?')) return true;
+    const grantsPath = String(pathname || '/').split(/[?#]/, 1)[0] || '/';
+    if (grantsPath === FINANCE_GRANTS_PATH || grantsPath.startsWith(`${FINANCE_GRANTS_PATH}/`)) {
+        return financeGrantCapabilities(user, true).canView;
+    }
     if (isFullAdminUser(user)) return true;
 
     const role = normalizeRole(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole);

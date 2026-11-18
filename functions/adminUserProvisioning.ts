@@ -76,6 +76,14 @@ async function requireFinanceTierAssigner(request: any) {
 }
 
 export const FINANCE_APPROVER_ROLES: ReadonlySet<string> = new Set(["finance_admin", "finance_manager", "finance_controller"]);
+/**
+ * Re-grant: refreshes financeAuthorizedAt for an ACTIVE account that already holds the same explicit
+ * Finance approver role. It is the same two-person flow (Super Admin/CEO requests, an independent
+ * Super Admin/CEO/Finance Controller who is neither requester nor target approves, both with MFA, 24h
+ * request TTL). On approval it changes nothing except financeAuthorizedAt: no role, module, status or
+ * suspension change, and the authorization is consumed so it can never be replayed elsewhere.
+ */
+export const FINANCE_REGRANT_ACTION = "REGRANT_FINANCE_AUTHORITY";
 const INDEPENDENT_FINANCE_APPROVER_ROLES = new Set(["super_admin", "ceo", "finance_controller"]);
 
 function isIndependentFinanceApprover(claims: any) {
@@ -693,6 +701,26 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     if (!FINANCE_APPROVER_ROLES.has(targetRole)) {
       throw new HttpsError("invalid-argument", `Invalid Finance approver role: ${targetRole}. Must be one of: finance_admin, finance_manager, finance_controller.`);
     }
+    if (actionType === FINANCE_REGRANT_ACTION) {
+      const claims = authUser.customClaims || {};
+      if (targetRole !== currentRole || !FINANCE_APPROVER_ROLES.has(currentRole)) {
+        throw new HttpsError("invalid-argument", "A Finance re-grant must keep the target's current explicit Finance approver role.");
+      }
+      if (cleanString(claims.role || claims.userRole || claims.primaryRole).toLowerCase() !== currentRole || claims[currentRole] !== true) {
+        throw new HttpsError("failed-precondition", "The target does not currently hold this explicit Finance approver claim. Use the assignment flow instead.");
+      }
+      if (authUser.disabled || claims.suspended === true || userSnap.data()?.suspended === true) {
+        throw new HttpsError("failed-precondition", "A Finance re-grant is only for an active, unsuspended account. Use the reactivation flow instead.");
+      }
+      const pending = await db.collection("finance_role_authorizations")
+        .where("targetUid", "==", targetUid)
+        .where("status", "==", "PENDING_INDEPENDENT_APPROVAL")
+        .limit(10)
+        .get();
+      if (pending.docs.some((doc) => doc.data()?.actionType === FINANCE_REGRANT_ACTION && !isAuthorizationExpired(doc.data()?.createdAt).expired)) {
+        throw new HttpsError("already-exists", "A Finance re-grant request for this account is already pending independent approval.");
+      }
+    }
   }
 
   const now = FieldValue.serverTimestamp();
@@ -718,7 +746,9 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     tx.create(db.collection("audit_logs").doc(), {
       actorId,
       actorRole,
-      action: isDemotion ? "ADMIN_REQUEST_FINANCE_ROLE_DEMOTION" : "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT",
+      action: isDemotion
+        ? "ADMIN_REQUEST_FINANCE_ROLE_DEMOTION"
+        : (actionType === FINANCE_REGRANT_ACTION ? "ADMIN_REQUEST_FINANCE_ROLE_REGRANT" : "ADMIN_REQUEST_FINANCE_ROLE_ASSIGNMENT"),
       targetType: "users",
       targetId: targetUid,
       metadata: {
@@ -783,6 +813,7 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
             actionType,
             isDemotion,
             isReactivation,
+            isRegrant: actionType === FINANCE_REGRANT_ACTION,
             modules,
             permissions,
             isRecovery: true,
@@ -856,6 +887,60 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
       if (FINANCE_APPROVER_ROLES.has(targetRole)) {
         throw new HttpsError("failed-precondition", "Demotion cannot grant financial approval authority.");
       }
+    }
+
+    if (actionType === FINANCE_REGRANT_ACTION) {
+      if (!FINANCE_APPROVER_ROLES.has(targetRole) || liveTargetRole !== targetRole) {
+        throw new HttpsError("failed-precondition", "Underlying condition changed: the target no longer holds the Finance approver role being re-granted.");
+      }
+      if (userData.suspended === true) {
+        throw new HttpsError("failed-precondition", "Underlying condition changed: the target account is suspended. Use the reactivation flow instead.");
+      }
+      // Consumed at approval: a re-grant authorization can never be replayed by adminUpdateStaffAccess
+      // or adminSetStaffStatus. No role, module, status or staffAccess change is made.
+      tx.update(authRef, {
+        status: "APPROVED",
+        consumed: true,
+        consumedAt: now,
+        consumedBy: approverId,
+        authSyncStatus: "PENDING",
+        authSyncRetryRequired: false,
+        approverId,
+        approverRole,
+        twoPersonVerified: true,
+        approvedAt: now,
+        updatedAt: now,
+      });
+      tx.create(db.collection("audit_logs").doc(), {
+        actorId: approverId,
+        actorRole: approverRole,
+        action: "FINANCE_ROLE_REGRANT_APPROVED",
+        targetType: "users",
+        targetId: targetUid,
+        metadata: {
+          authorizationId,
+          actionType,
+          targetUid,
+          targetRole,
+          previousRole: authData.previousRole || liveTargetRole,
+          requesterId: authData.requesterId,
+          approverId,
+          twoPersonVerified: true,
+          decision: "APPROVED",
+          reason: "Finance authorization independently re-granted (financeAuthorizedAt refresh only)",
+        },
+        createdAt: now,
+      });
+      return {
+        targetUid,
+        targetRole,
+        actionType,
+        isDemotion: false,
+        isReactivation: false,
+        isRegrant: true,
+        modules: [],
+        permissions: {},
+      };
     }
 
     const isReactivation = actionType === "REACTIVATE_STAFF" || actionType === "RESTORE_AUTHORITY";
@@ -944,6 +1029,24 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
   try {
     const targetUser = await admin.auth().getUser(txResult.targetUid);
     const existingClaims = targetUser.customClaims || {};
+    if (txResult.isRegrant) {
+      const liveClaimRole = cleanString(existingClaims.role || existingClaims.userRole || existingClaims.primaryRole).toLowerCase();
+      if (
+        targetUser.disabled ||
+        existingClaims.suspended === true ||
+        liveClaimRole !== txResult.targetRole ||
+        existingClaims[txResult.targetRole] !== true
+      ) {
+        throw new Error("Re-grant target no longer holds an active explicit Finance approver claim; financeAuthorizedAt was not refreshed.");
+      }
+      await admin.auth().setCustomUserClaims(txResult.targetUid, {
+        ...existingClaims,
+        financeApprovalPending: false,
+        financeAuthorizedAt: Date.now(),
+      });
+      await admin.auth().revokeRefreshTokens(txResult.targetUid);
+      authSyncSuccess = true;
+    }
     const nextClaims = {
       ...existingClaims,
       ...claimsForAccess(
@@ -965,12 +1068,14 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
         : (FINANCE_APPROVER_ROLES.has(txResult.targetRole) ? { financeAuthorizedAt: Date.now() } : {})),
     };
 
-    if (txResult.isReactivation) {
-      await admin.auth().updateUser(txResult.targetUid, { disabled: false });
+    if (!txResult.isRegrant) {
+      if (txResult.isReactivation) {
+        await admin.auth().updateUser(txResult.targetUid, { disabled: false });
+      }
+      await admin.auth().setCustomUserClaims(txResult.targetUid, nextClaims);
+      await admin.auth().revokeRefreshTokens(txResult.targetUid);
+      authSyncSuccess = true;
     }
-    await admin.auth().setCustomUserClaims(txResult.targetUid, nextClaims);
-    await admin.auth().revokeRefreshTokens(txResult.targetUid);
-    authSyncSuccess = true;
   } catch (authErr: any) {
     authSyncError = authErr;
     console.error("Critical: Auth claims sync or token revocation failed post-transaction", {
@@ -1066,7 +1171,9 @@ export const adminApproveFinanceRoleAssignment = onCall({ cors: true, region: "e
     twoPersonVerified: true,
     message: txResult.isDemotion
       ? "Finance role demotion independently approved and applied."
-      : "Finance role assignment independently approved and granted.",
+      : (txResult.isRegrant
+        ? "Finance authorization independently re-granted. The account must sign in again with MFA."
+        : "Finance role assignment independently approved and granted."),
   };
 });
 
@@ -1196,6 +1303,153 @@ export const adminGetFinanceRoleAuthorization = onCall({ cors: true, region: "eu
       ageMs: expiryCheck.ageMs || null,
       ttlRemainingMs: expiryCheck.expired ? 0 : Math.max(0, FINANCE_AUTHORIZATION_TTL_MS - (expiryCheck.ageMs || 0)),
     },
+  };
+});
+
+/**
+ * Read-only overview for the Admin "Finance grants" screen. Visible only to an MFA-verified Super Admin,
+ * CEO or Finance Controller (the request and approval authorities). It mutates nothing except an audit
+ * entry, and every decision still goes through adminRequestFinanceRoleAssignment /
+ * adminApproveFinanceRoleAssignment / adminRejectFinanceRoleAssignment, which remain the authority.
+ */
+export function describeFinanceGrantViewer(liveClaims: Record<string, unknown>) {
+  return {
+    canRequest: isFinanceTierAssigner(liveClaims),
+    canApprove: isIndependentFinanceApprover(liveClaims),
+  };
+}
+
+export function financeGrantAge(financeAuthorizedAt: unknown, nowMs: number = Date.now()) {
+  const grantedMs = parseAuthorizationTimestampMs(financeAuthorizedAt);
+  if (grantedMs === null) return { grantedAtMs: null, ageMs: null, expiresAtMs: null, fresh: false };
+  const ageMs = nowMs - grantedMs;
+  return {
+    grantedAtMs: grantedMs,
+    ageMs,
+    expiresAtMs: grantedMs + FINANCE_AUTHORIZATION_TTL_MS,
+    fresh: ageMs >= 0 && ageMs < FINANCE_AUTHORIZATION_TTL_MS,
+  };
+}
+
+export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  await requirePrivilegedMfaSession(request.auth);
+  const token = request.auth.token || {};
+  if (!isFinanceTierAssigner(token) && !isIndependentFinanceApprover(token)) {
+    throw new HttpsError("permission-denied", "Only a Super Admin, CEO or Finance Controller can view Finance grants.");
+  }
+  const viewerRecord = await admin.auth().getUser(request.auth.uid);
+  const liveClaims = (viewerRecord.customClaims || {}) as Record<string, unknown>;
+  const viewer = describeFinanceGrantViewer(liveClaims);
+  if (viewerRecord.disabled || (!viewer.canRequest && !viewer.canApprove)) {
+    throw new HttpsError("permission-denied", "Finance grant authority is not active on this account.");
+  }
+  const viewerUid = request.auth.uid;
+  const nowMs = Date.now();
+
+  const [pendingSnap, financeUsersSnap] = await Promise.all([
+    db.collection("finance_role_authorizations").where("status", "==", "PENDING_INDEPENDENT_APPROVAL").limit(100).get(),
+    db.collection("users").where("role", "in", [...FINANCE_APPROVER_ROLES]).limit(100).get(),
+  ]);
+
+  const lookupUids = new Set<string>();
+  pendingSnap.docs.forEach((doc) => {
+    const data = doc.data() || {};
+    if (data.requesterId) lookupUids.add(String(data.requesterId));
+    if (data.targetUid) lookupUids.add(String(data.targetUid));
+  });
+  financeUsersSnap.docs.forEach((doc) => lookupUids.add(doc.id));
+  const authByUid = new Map<string, admin.auth.UserRecord>();
+  const uidList = [...lookupUids];
+  for (let offset = 0; offset < uidList.length; offset += 100) {
+    const result = await admin.auth().getUsers(uidList.slice(offset, offset + 100).map((uid) => ({ uid })));
+    result.users.forEach((user) => authByUid.set(user.uid, user));
+  }
+
+  const pendingRegrantTargets = new Set<string>();
+  const pending = pendingSnap.docs.map((doc) => {
+    const data = doc.data() || {};
+    const createdAtMs = parseAuthorizationTimestampMs(data.createdAt);
+    const expiry = isAuthorizationExpired(data.createdAt, nowMs);
+    const targetUid = cleanString(data.targetUid);
+    const requesterId = cleanString(data.requesterId);
+    const actionType = cleanString(data.actionType, "PROMOTE_STAFF");
+    if (actionType === FINANCE_REGRANT_ACTION && !expiry.expired) pendingRegrantTargets.add(targetUid);
+    const viewerIsRequester = viewerUid === requesterId;
+    const viewerIsTarget = viewerUid === targetUid;
+    return {
+      authorizationId: doc.id,
+      actionType,
+      targetUid,
+      targetEmail: cleanString(authByUid.get(targetUid)?.email || data.targetEmail),
+      targetDisplayName: cleanString(authByUid.get(targetUid)?.displayName),
+      targetRole: cleanString(data.targetRole),
+      previousRole: cleanString(data.previousRole),
+      requesterId,
+      requesterEmail: cleanString(authByUid.get(requesterId)?.email),
+      requesterRole: cleanString(data.requesterRole),
+      createdAtMs,
+      expiresAtMs: createdAtMs === null ? null : createdAtMs + FINANCE_AUTHORIZATION_TTL_MS,
+      isExpired: expiry.expired,
+      viewerIsRequester,
+      viewerIsTarget,
+      viewerCanApprove: viewer.canApprove && !viewerIsRequester && !viewerIsTarget && !expiry.expired,
+      viewerCanReject: viewer.canApprove && !viewerIsRequester && !expiry.expired,
+    };
+  }).sort((left, right) => (left.createdAtMs || 0) - (right.createdAtMs || 0));
+
+  const financeAccounts = financeUsersSnap.docs.map((doc) => {
+    const data = doc.data() || {};
+    const record = authByUid.get(doc.id);
+    const claims = (record?.customClaims || {}) as Record<string, unknown>;
+    const role = cleanString(data.role).toLowerCase();
+    const claimRole = cleanString(claims.role || claims.userRole || claims.primaryRole).toLowerCase();
+    const grant = financeGrantAge(claims.financeAuthorizedAt, nowMs);
+    const explicitClaim = claimRole === role && claims[role] === true;
+    const active = Boolean(record) && record?.disabled !== true && claims.suspended !== true && data.suspended !== true;
+    return {
+      uid: doc.id,
+      email: cleanString(record?.email || data.email),
+      displayName: cleanString(record?.displayName || data.displayName || data.fullName),
+      role,
+      status: cleanString(data.status),
+      active,
+      explicitClaim,
+      totpEnrolled: (record?.multiFactor?.enrolledFactors || []).some((factor) => factor.factorId === "totp"),
+      financeApprovalPending: claims.financeApprovalPending === true,
+      grantedAtMs: grant.grantedAtMs,
+      grantAgeMs: grant.ageMs,
+      grantExpiresAtMs: grant.expiresAtMs,
+      grantFresh: grant.fresh && explicitClaim && active,
+      pendingRegrant: pendingRegrantTargets.has(doc.id),
+      viewerIsTarget: doc.id === viewerUid,
+      viewerCanRequestRegrant: viewer.canRequest && doc.id !== viewerUid && active && explicitClaim && !pendingRegrantTargets.has(doc.id),
+    };
+  }).sort((left, right) => `${left.role}|${left.email}`.localeCompare(`${right.role}|${right.email}`));
+
+  await db.collection("audit_logs").add({
+    action: "FINANCE_GRANT_OVERVIEW_VIEWED",
+    actorId: viewerUid,
+    actorRole: cleanString(liveClaims.role || liveClaims.userRole || liveClaims.primaryRole),
+    targetType: "finance_role_authorizations",
+    targetId: "overview",
+    pendingCount: pending.length,
+    financeAccountCount: financeAccounts.length,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    nowMs,
+    ttlMs: FINANCE_AUTHORIZATION_TTL_MS,
+    viewer: {
+      uid: viewerUid,
+      role: cleanString(liveClaims.role || liveClaims.userRole || liveClaims.primaryRole),
+      canRequest: viewer.canRequest,
+      canApprove: viewer.canApprove,
+    },
+    pending,
+    financeAccounts,
   };
 });
 
