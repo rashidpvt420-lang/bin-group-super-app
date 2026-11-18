@@ -183,7 +183,17 @@ export default function FinanceGrantsPage() {
                       return (
                         <TableRow key={grant.authorizationId} data-testid={`finance-grant-${grant.authorizationId}`}>
                           <TableCell>{actionLabel(grant.actionType, t)}</TableCell>
-                          <TableCell>{grant.targetDisplayName || grant.targetEmail || grant.targetUid}<br /><Typography variant="caption" color="text.secondary">{grant.targetEmail} · {roleLabel(grant.targetRole, t)}</Typography></TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={0.75} alignItems="center">
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {grant.targetDisplayName || grant.targetEmail || grant.targetUid}
+                              </Typography>
+                              {grant.targetStaffNumber && (
+                                <Chip label={`#${grant.targetStaffNumber}`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800 }} />
+                              )}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">{grant.targetEmail} · {roleLabel(grant.targetRole, t)}</Typography>
+                          </TableCell>
                           <TableCell>{grant.requesterEmail || grant.requesterId}<br /><Typography variant="caption" color="text.secondary">{roleLabel(grant.requesterRole, t)}</Typography></TableCell>
                           <TableCell>{formatDubaiTime(grant.createdAtMs, isRTL)}</TableCell>
                           <TableCell>
@@ -232,7 +242,17 @@ export default function FinanceGrantsPage() {
                       const reason = regrantBlockReason(account, viewer, mfaVerified, t);
                       return (
                         <TableRow key={account.uid} data-testid={`finance-account-${account.uid}`}>
-                          <TableCell>{account.displayName || account.email}<br /><Typography variant="caption" color="text.secondary">{account.email}{account.active ? '' : ` · ${t('suspended/disabled', 'موقوف/معطّل')}`}</Typography></TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={0.75} alignItems="center">
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {account.displayName || account.email}
+                              </Typography>
+                              {account.staffNumber && (
+                                <Chip label={`#${account.staffNumber}`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800 }} />
+                              )}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">{account.email}{account.active ? '' : ` · ${t('suspended/disabled', 'موقوف/معطّل')}`}</Typography>
+                          </TableCell>
                           <TableCell>{roleLabel(account.role, t)}</TableCell>
                           <TableCell><Chip size="small" color={account.totpEnrolled ? 'success' : 'warning'} label={account.totpEnrolled ? t('Enrolled', 'مسجّل') : t('Missing', 'غير مسجّل')} /></TableCell>
                           <TableCell>
@@ -266,12 +286,12 @@ export default function FinanceGrantsPage() {
                 )}
               </Typography>
               <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
-                <TextField size="small" label={t('Staff UID', 'معرّف الموظف')} value={assignUid} onChange={(event) => setAssignUid(event.target.value)} inputProps={{ 'data-testid': 'finance-assign-uid' }} />
+                <TextField size="small" label={t('Staff number or UID', 'الرقم الوظيفي أو معرّف الموظف')} value={assignUid} onChange={(event) => setAssignUid(event.target.value)} inputProps={{ 'data-testid': 'finance-assign-uid' }} />
                 <TextField size="small" select label={t('Finance role', 'الدور المالي')} value={assignRole} onChange={(event) => setAssignRole(event.target.value)} sx={{ minWidth: 220 }}>
                   {['finance_manager', 'finance_controller', 'finance_admin'].map((role) => <MenuItem key={role} value={role}>{roleLabel(role, t)}</MenuItem>)}
                 </TextField>
                 <Tooltip title={viewer?.canRequest && mfaVerified ? '' : t('Only a Super Admin or CEO with MFA can request.', 'الطلب متاح فقط للمشرف العام أو الرئيس التنفيذي مع التحقق الثنائي.')}><span>
-                  <Button variant="contained" data-testid="finance-assign-request" disabled={busy || !viewer?.canRequest || !mfaVerified || assignUid.trim().length < 6 || assignUid.trim() === viewer?.uid} onClick={() => void requestAssignment()}>{t('Request role', 'طلب الدور')}</Button>
+                  <Button variant="contained" data-testid="finance-assign-request" disabled={busy || !viewer?.canRequest || !mfaVerified || assignUid.trim().length < 5 || assignUid.trim() === viewer?.uid} onClick={() => void requestAssignment()}>{t('Request role', 'طلب الدور')}</Button>
                 </span></Tooltip>
               </Stack>
               {assignRole === 'finance_admin' && (

@@ -10,11 +10,13 @@ export type PendingGrant = {
   authorizationId: string;
   actionType: string;
   targetUid: string;
+  targetStaffNumber?: number | string | null;
   targetEmail: string;
   targetDisplayName?: string;
   targetRole: string;
   previousRole: string;
   requesterId: string;
+  requesterStaffNumber?: number | string | null;
   requesterEmail: string;
   requesterRole: string;
   createdAtMs: number | null;
@@ -27,6 +29,7 @@ export type PendingGrant = {
 };
 export type FinanceAccount = {
   uid: string;
+  staffNumber?: number | string | null;
   email: string;
   displayName: string;
   role: string;

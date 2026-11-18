@@ -46,6 +46,23 @@ const STAFF_ROLES = new Set([
   "payroll_admin",
 ]);
 
+export const STAFF_NUMBER_COUNTER_DOC = "staff_number";
+export const STAFF_NUMBER_START = 10001;
+
+export async function resolveStaffUid(uidOrNumber: string): Promise<string> {
+  const trimmed = cleanString(uidOrNumber);
+  if (!trimmed) throw new HttpsError("invalid-argument", "Staff identifier is required.");
+  if (/^\d{5}$/.test(trimmed)) {
+    const num = Number(trimmed);
+    const snap = await db.collection("users").where("staffNumber", "==", num).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+    const strSnap = await db.collection("users").where("staffNumber", "==", trimmed).limit(1).get();
+    if (!strSnap.empty) return strSnap.docs[0].id;
+    throw new HttpsError("not-found", `No staff account found with staff number ${trimmed}.`);
+  }
+  return trimmed;
+}
+
 /**
  * D-04 (ported from #2000): finance tiers that carry money-adjacent authority
  * (painting payments, payroll prep). Only a Super Admin or CEO, signed in with MFA
@@ -380,8 +397,9 @@ async function assertNoExistingIdentity(email: string) {
   }
 }
 
-async function loadExistingStaff(uid: string) {
-  if (!uid) throw new HttpsError("invalid-argument", "Staff UID is required.");
+async function loadExistingStaff(uidOrNumber: string) {
+  if (!uidOrNumber) throw new HttpsError("invalid-argument", "Staff UID is required.");
+  const uid = await resolveStaffUid(uidOrNumber);
   const [authUser, userSnap, accessSnap] = await Promise.all([
     admin.auth().getUser(uid),
     db.collection("users").doc(uid).get(),
@@ -402,7 +420,7 @@ async function loadExistingStaff(uid: string) {
   if (currentStatus === "OFFBOARDED" || claims.offboarded === true || userSnap.data()?.offboarded === true) {
     throw new HttpsError("failed-precondition", "OFFBOARDED is terminal. Create a new staff identity through the approved provisioning lifecycle instead of restoring this account.");
   }
-  return { authUser, userSnap, accessSnap, currentRole };
+  return { authUser, userSnap, accessSnap, currentRole, uid };
 }
 
 export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
@@ -490,18 +508,48 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       accessClassification: "PRIVATE_HR_SERVER_ONLY", createdAt: now, updatedAt: now, createdBy: actorId,
     };
 
+    let assignedStaffNumber = STAFF_NUMBER_START;
+
     await db.runTransaction(async (tx) => {
-      tx.create(db.collection("users").doc(uid), operationalProfile);
+      const counterRef = db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC);
+      const counterSnap = await tx.get(counterRef);
+      let staffNumber = STAFF_NUMBER_START;
+      if (counterSnap.exists) {
+        const rawCurrent = counterSnap.data()?.nextStaffNumber ?? counterSnap.data()?.current;
+        const parsed = Number(rawCurrent);
+        if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) {
+          staffNumber = parsed;
+        }
+      }
+      assignedStaffNumber = staffNumber;
+
+      tx.set(counterRef, {
+        current: staffNumber,
+        nextStaffNumber: staffNumber + 1,
+        lastAssignedStaffNumber: staffNumber,
+        updatedAt: now,
+      }, { merge: true });
+
+      tx.create(db.collection("users").doc(uid), {
+        ...operationalProfile,
+        staffNumber,
+        staffNumberStr: String(staffNumber),
+      });
       tx.create(db.collection("staffAccess").doc(uid), {
         uid, role, active: false, suspended: true, status: "INVITED", onboardingStage: "INVITED",
         modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now,
+        staffNumber,
+        staffNumberStr: String(staffNumber),
         ...(isFinanceApprover ? { financeApprovalStatus: "PENDING_INDEPENDENT_APPROVAL" } : {}),
       });
       tx.create(db.collection("hrProfiles").doc(uid), scheduleProfile);
       tx.create(db.collection("private_hr_profiles").doc(uid), privateHrProfile);
       if (role === "technician") {
         tx.create(db.collection("technicians").doc(uid), {
-          ...operationalProfile, available: false, onDuty: false, currentJobCount: 0, approvalStatus: "PENDING",
+          ...operationalProfile,
+          staffNumber,
+          staffNumberStr: String(staffNumber),
+          available: false, onDuty: false, currentJobCount: 0, approvalStatus: "PENDING",
           maxConcurrentJobs: boundedInteger(payload.maxConcurrentJobs, 3, 1, 10), emergencyEligible: Boolean(payload.emergencyEligible),
         });
       }
@@ -516,6 +564,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
           emailHash: hashValue(email), role, modules, permissionKeys: Object.keys(permissions).sort(),
           financeTierAssignment,
           isFinanceApprover,
+          staffNumber,
           invitationQueued: true, invitationMailId: invitationRef.id, privateHrSeparated: true,
           onboardingStage: "INVITED", activationRequired: true, portalAccessActive: false,
         },
@@ -526,6 +575,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
           authorizationId,
           actionType: "CREATE_FINANCE_APPROVER",
           targetUid: uid,
+          targetStaffNumber: staffNumber,
           targetEmail: email,
           targetRole: role,
           modules,
@@ -547,6 +597,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
             authorizationId,
             actionType: "CREATE_FINANCE_APPROVER",
             targetUid: uid,
+            targetStaffNumber: staffNumber,
             targetRole: role,
             requesterId: actorId,
             status: "PENDING_INDEPENDENT_APPROVAL",
@@ -557,7 +608,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     });
 
     return {
-      success: true, uid, role, modules, invitationQueued: true, onboardingStage: "INVITED", portalAccessActive: false,
+      success: true, uid, staffNumber: assignedStaffNumber, role, modules, invitationQueued: true, onboardingStage: "INVITED", portalAccessActive: false,
       ...(isFinanceApprover ? {
         pendingIndependentApproval: true,
         authorizationId,
@@ -675,12 +726,13 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     throw new HttpsError("permission-denied", "Only a Super Admin or CEO can initiate a Finance role assignment request.");
   }
   const payload = request.data || {};
-  const targetUid = cleanString(payload.targetUid || payload.uid);
+  const rawTarget = cleanString(payload.targetUid || payload.uid || payload.staffNumber);
+  if (!rawTarget) throw new HttpsError("invalid-argument", "targetUid is required.");
+  const targetUid = await resolveStaffUid(rawTarget);
   const targetRole = cleanString(payload.targetRole || payload.role).toLowerCase();
   const actionType = cleanString(payload.actionType, "PROMOTE_STAFF").toUpperCase();
   const isDemotion = actionType === "DEMOTE_STAFF" || actionType === "REVOKE_AUTHORITY" || actionType === "DEMOTE_FINANCE_APPROVER" || actionType === "REVOKE_FINANCE_APPROVER";
 
-  if (!targetUid) throw new HttpsError("invalid-argument", "targetUid is required.");
   if (targetUid === actorId) {
     throw new HttpsError("permission-denied", isDemotion
       ? "Self-demotion prohibited: you cannot request demotion or revocation for yourself."
@@ -734,6 +786,7 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
       authorizationId,
       actionType,
       targetUid,
+      targetStaffNumber: userSnap.data()?.staffNumber || null,
       targetEmail: authUser.email || userSnap.data()?.email || "",
       targetRole,
       previousRole: currentRole,
@@ -770,6 +823,7 @@ export const adminRequestFinanceRoleAssignment = onCall({ cors: true, region: "e
     success: true,
     authorizationId,
     targetUid,
+    targetStaffNumber: userSnap.data()?.staffNumber || null,
     targetRole,
     status: "PENDING_INDEPENDENT_APPROVAL",
     message: isDemotion
@@ -1362,10 +1416,21 @@ export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europ
   });
   financeUsersSnap.docs.forEach((doc) => lookupUids.add(doc.id));
   const authByUid = new Map<string, admin.auth.UserRecord>();
+  const userStaffNumberMap = new Map<string, number | null>();
   const uidList = [...lookupUids];
   for (let offset = 0; offset < uidList.length; offset += 100) {
-    const result = await admin.auth().getUsers(uidList.slice(offset, offset + 100).map((uid) => ({ uid })));
+    const batchUids = uidList.slice(offset, offset + 100);
+    const [result, userDocs] = await Promise.all([
+      admin.auth().getUsers(batchUids.map((uid) => ({ uid }))),
+      Promise.all(batchUids.map((uid) => db.collection("users").doc(uid).get())),
+    ]);
     result.users.forEach((user) => authByUid.set(user.uid, user));
+    userDocs.forEach((docSnap) => {
+      if (docSnap.exists) {
+        const sNum = docSnap.data()?.staffNumber;
+        userStaffNumberMap.set(docSnap.id, typeof sNum === "number" ? sNum : null);
+      }
+    });
   }
 
   const pendingRegrantTargets = new Set<string>();
@@ -1379,15 +1444,19 @@ export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europ
     if (actionType === FINANCE_REGRANT_ACTION && !expiry.expired) pendingRegrantTargets.add(targetUid);
     const viewerIsRequester = viewerUid === requesterId;
     const viewerIsTarget = viewerUid === targetUid;
+    const targetStaffNumber = data.targetStaffNumber || userStaffNumberMap.get(targetUid) || null;
+    const requesterStaffNumber = data.requesterStaffNumber || userStaffNumberMap.get(requesterId) || null;
     return {
       authorizationId: doc.id,
       actionType,
       targetUid,
+      targetStaffNumber,
       targetEmail: cleanString(authByUid.get(targetUid)?.email || data.targetEmail),
       targetDisplayName: cleanString(authByUid.get(targetUid)?.displayName),
       targetRole: cleanString(data.targetRole),
       previousRole: cleanString(data.previousRole),
       requesterId,
+      requesterStaffNumber,
       requesterEmail: cleanString(authByUid.get(requesterId)?.email),
       requesterRole: cleanString(data.requesterRole),
       createdAtMs,
@@ -1409,8 +1478,10 @@ export const adminListFinanceGrantOverview = onCall({ cors: true, region: "europ
     const grant = financeGrantAge(claims.financeAuthorizedAt, nowMs);
     const explicitClaim = claimRole === role && claims[role] === true;
     const active = Boolean(record) && record?.disabled !== true && claims.suspended !== true && data.suspended !== true;
+    const staffNumber = data.staffNumber || userStaffNumberMap.get(doc.id) || null;
     return {
       uid: doc.id,
+      staffNumber,
       email: cleanString(record?.email || data.email),
       displayName: cleanString(record?.displayName || data.displayName || data.fullName),
       role,
@@ -1545,6 +1616,113 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", `Unable to update staff status safely: ${error?.message || error}`);
   }
+});
+
+export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { actorId, actorRole } = await requireProvisioningAdmin(request);
+  const staffRoleValues = Array.from(STAFF_ROLES);
+  const [usersSnap, roleSnap] = await Promise.all([
+    db.collection("users").where("isStaff", "==", true).get(),
+    db.collection("users").where("role", "in", staffRoleValues.slice(0, 30)).get(),
+  ]);
+
+  const candidateMap = new Map<string, FirebaseFirestore.DocumentData>();
+  usersSnap.docs.forEach((doc) => candidateMap.set(doc.id, doc.data()));
+  roleSnap.docs.forEach((doc) => candidateMap.set(doc.id, doc.data()));
+
+  const unassigned = Array.from(candidateMap.entries())
+    .filter(([_, data]) => data.staffNumber === undefined || data.staffNumber === null || data.staffNumber === "")
+    .map(([id, data]) => ({ id, data }))
+    .sort((a, b) => {
+      const aTime = a.data.createdAt?.toMillis?.() || (typeof a.data.createdAt === "number" ? a.data.createdAt : 0);
+      const bTime = b.data.createdAt?.toMillis?.() || (typeof b.data.createdAt === "number" ? b.data.createdAt : 0);
+      return aTime - bTime || a.id.localeCompare(b.id);
+    });
+
+  if (unassigned.length === 0) {
+    return { success: true, backfilledCount: 0, message: "All staff accounts already have staff numbers." };
+  }
+
+  const now = FieldValue.serverTimestamp();
+  const counterRef = db.collection("system_counters").doc(STAFF_NUMBER_COUNTER_DOC);
+  const assignedRecords: Array<{ uid: string; staffNumber: number }> = [];
+
+  await db.runTransaction(async (tx) => {
+    const counterSnap = await tx.get(counterRef);
+    let nextNumber = STAFF_NUMBER_START;
+    if (counterSnap.exists) {
+      const rawCurrent = counterSnap.data()?.nextStaffNumber ?? counterSnap.data()?.current;
+      const parsed = Number(rawCurrent);
+      if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) {
+        nextNumber = parsed;
+      }
+    }
+
+    const verifiedCandidates: Array<{ uid: string; hasTechDoc: boolean }> = [];
+    for (const item of unassigned) {
+      const userDoc = await tx.get(db.collection("users").doc(item.id));
+      if (userDoc.exists) {
+        const uData = userDoc.data();
+        if (uData?.staffNumber === undefined || uData?.staffNumber === null || uData?.staffNumber === "") {
+          const techDoc = await tx.get(db.collection("technicians").doc(item.id));
+          verifiedCandidates.push({ uid: item.id, hasTechDoc: techDoc.exists });
+        }
+      }
+    }
+
+    let currentNumber = nextNumber;
+    for (const { uid, hasTechDoc } of verifiedCandidates) {
+      const assigned = currentNumber++;
+      tx.update(db.collection("users").doc(uid), {
+        staffNumber: assigned,
+        staffNumberStr: String(assigned),
+        updatedAt: now,
+      });
+      tx.set(db.collection("staffAccess").doc(uid), {
+        staffNumber: assigned,
+        staffNumberStr: String(assigned),
+        updatedAt: now,
+      }, { merge: true });
+      if (hasTechDoc) {
+        tx.set(db.collection("technicians").doc(uid), {
+          staffNumber: assigned,
+          staffNumberStr: String(assigned),
+          updatedAt: now,
+        }, { merge: true });
+      }
+      assignedRecords.push({ uid, staffNumber: assigned });
+    }
+
+    tx.set(counterRef, {
+      current: currentNumber - 1,
+      nextStaffNumber: currentNumber,
+      lastAssignedStaffNumber: currentNumber - 1,
+      updatedAt: now,
+    }, { merge: true });
+
+    tx.create(db.collection("audit_logs").doc(), {
+      actorId,
+      actorRole,
+      action: "ADMIN_BACKFILL_STAFF_NUMBERS",
+      targetType: "system_counters",
+      targetId: STAFF_NUMBER_COUNTER_DOC,
+      metadata: {
+        count: assignedRecords.length,
+        startNumber: nextNumber,
+        endNumber: currentNumber - 1,
+        assignedUids: assignedRecords.map((r) => r.uid),
+      },
+      createdAt: now,
+    });
+  });
+
+  return {
+    success: true,
+    backfilledCount: assignedRecords.length,
+    startNumber: assignedRecords[0]?.staffNumber ?? null,
+    endNumber: assignedRecords[assignedRecords.length - 1]?.staffNumber ?? null,
+    assigned: assignedRecords,
+  };
 });
 
 // Fail-safe only: direct Firestore edits may suspend an account, but they may
