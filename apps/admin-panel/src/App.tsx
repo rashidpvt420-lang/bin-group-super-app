@@ -29,6 +29,7 @@ import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import SmokeTestPage from './pages/smoke-test/SmokeTestPage';
 import AdminSecurityProfilePage from './pages/settings/AdminSecurityProfilePage';
+import FinanceGrantsPage from './pages/financials/FinanceGrantsPage';
 import AdminMfaRecoveryPage from './pages/settings/AdminMfaRecoveryPage';
 import AdminContractControlPage from './pages/admin/AdminContractControlPage';
 import ReportsPage from './pages/reports/ReportsPage';
@@ -158,6 +159,7 @@ function AppContent() {
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
                     <Route path="/ops/painting" element={<ProtectedRoute adminOnly><PaintingProjectsAdminPage /></ProtectedRoute>} />
                     <Route path="/ops/maintenance-plans" element={<ProtectedRoute adminOnly><MaintenancePlansAdminPage /></ProtectedRoute>} />
+                    <Route path="/finance/grants" element={<ProtectedRoute><FinanceGrantsPage /></ProtectedRoute>} />
                     <Route path="/finance/painting-payments" element={<ProtectedRoute adminOnly extraRoles={['finance_manager', 'finance_controller']}><PaintingFinanceReviewPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<Navigate to="/vault" replace />} />

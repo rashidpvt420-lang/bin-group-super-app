@@ -278,6 +278,7 @@ const roleCases: RoleCase[] = [
       '/ops/painting',
       '/ops/maintenance-plans',
       '/finance/painting-payments',
+      '/finance/grants',
       '/technicians',
       '/technicians/map',
       '/sos',

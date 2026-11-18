@@ -76,6 +76,7 @@ const Navigation = () => {
         ...(isRecoveryApprover
             ? [{ text: navText('MFA Recovery', 'استعادة المصادقة'), icon: <SecurityIcon />, path: '/mfa-recovery' }]
             : []),
+        { text: navText('Finance Grants', 'صلاحيات المالية'), icon: <SecurityIcon />, path: '/finance/grants' },
         { text: navText('My HR', 'شؤوني الوظيفية'), icon: <Users size={20} />, path: '/my-hr' },
         { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/settings' },
     ];
