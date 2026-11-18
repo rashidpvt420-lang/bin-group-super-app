@@ -53,6 +53,31 @@ export function claimsGrantAdminPortal(claims = {}) {
   );
 }
 
+// Explicit Finance tier approvers (finance_manager / finance_controller), assigned only through the
+// two-person adminRequestFinanceRoleAssignment -> adminApproveFinanceRoleAssignment flow. They have no
+// Admin-portal authority, so they are expected Finance approvers: never part of the Founder + Finance Admin
+// privileged pair and never privileged-cleanup targets. Any account that also carries an elevated flag
+// (admin, super admin, CEO, manager, finance_admin) is NOT a tier approver and stays unexpected.
+export const FINANCE_TIER_APPROVER_ROLES = new Set(['finance_manager', 'finance_controller']);
+const ELEVATED_CLAIM_FLAGS = ['admin', 'isAdmin', 'super_admin', 'superAdmin', 'ceo', 'manager', 'finance_admin'];
+
+export function isExplicitFinanceTierApprover(user) {
+  const claims = user?.customClaims || {};
+  const role = lower(claims.role || claims.userRole || claims.primaryRole);
+  if (!FINANCE_TIER_APPROVER_ROLES.has(role)) return false;
+  for (const key of ['role', 'userRole', 'primaryRole']) {
+    if (claims[key] !== undefined && claims[key] !== null && lower(claims[key]) !== role) return false;
+  }
+  if (claims[role] !== true) return false;
+  for (const other of FINANCE_TIER_APPROVER_ROLES) {
+    if (other !== role && claims[other] === true) return false;
+  }
+  if (ELEVATED_CLAIM_FLAGS.some((flag) => claims[flag] === true)) return false;
+  if (claimsGrantAdminPortal(claims)) return false;
+  if (lower(user?.email) === CANONICAL_FOUNDER_EMAIL) return false;
+  return true;
+}
+
 export function recoveryApproverRole(claims = {}) {
   const role = roleOfClaims(claims);
   return FOUNDER_ROLES.has(role) ? role : '';
@@ -97,10 +122,19 @@ export function summarizeAdminMfaUsers(users, { expectedFinanceEmail = '' } = {}
   let financeApproverEmailUnverifiedCount = 0;
   let financeApproverMissingTotpFactorCount = 0;
   let unexpectedPrivilegedAccountCount = 0;
+  let financeTierApproverCount = 0;
+  let financeTierApproverTotpReadyCount = 0;
   const founderRoleCounts = { ceo: 0, super_admin: 0 };
 
   for (const user of source) {
     const claims = user?.customClaims || {};
+    if (isExplicitFinanceTierApprover(user)) {
+      // Expected Finance approver, reported only. Never unexpected, never counted in the privileged pair.
+      financeTierApproverCount += 1;
+      const tierTotp = enrolledFactors(user).some((factor) => lower(factor?.factorId) === 'totp');
+      if (user?.disabled !== true && user?.emailVerified === true && tierTotp) financeTierApproverTotpReadyCount += 1;
+      continue;
+    }
     if (!claimsGrantAdminPortal(claims)) continue;
     claimedAdminCount += 1;
 
@@ -230,6 +264,8 @@ export function summarizeAdminMfaUsers(users, { expectedFinanceEmail = '' } = {}
       financeApproverEmailUnverifiedCount,
       financeApproverMissingTotpFactorCount,
       unexpectedPrivilegedAccountCount,
+      financeTierApproverCount,
+      financeTierApproverTotpReadyCount,
       canonicalFounderCeoCount: founderRoleCounts.ceo,
       canonicalFounderSuperAdminCount: founderRoleCounts.super_admin,
       dualControlReady,
@@ -499,7 +535,9 @@ export async function verifyAdminMfaProduction({
       + `active=${result.summary.activeAdminCount} `
       + `founder_ready=${result.summary.canonicalFounderMfaReadyCount} `
       + `finance_ready=${result.summary.financeApproverMfaReadyCount} `
-      + `unexpected_privileged=${result.summary.unexpectedPrivilegedAccountCount}`,
+      + `unexpected_privileged=${result.summary.unexpectedPrivilegedAccountCount} `
+      + `finance_tier_approvers=${result.summary.financeTierApproverCount} `
+      + `finance_tier_totp_ready=${result.summary.financeTierApproverTotpReadyCount}`,
   );
   return evidence;
 }

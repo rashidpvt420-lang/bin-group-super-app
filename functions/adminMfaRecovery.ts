@@ -20,6 +20,10 @@ const ADMIN_TARGET_ROLES = new Set([
   "hr_manager",
   "hr_staff",
 ]);
+// Finance tier approvers may finalize their OWN freshly enrolled factor (self-service TOTP enrollment).
+// They are deliberately NOT added to ADMIN_TARGET_ROLES, so the dual-approved MFA recovery/reset flow
+// still cannot target them.
+const SELF_FINALIZE_EXTRA_ROLES = new Set(["finance_manager", "finance_controller"]);
 const LIVE_REQUEST_STATES = new Set(["PENDING_SECOND_APPROVAL", "EXECUTING"]);
 
 type Actor = { uid: string; role: string; displayName: string };
@@ -471,7 +475,10 @@ export const finalizeOwnAdminMfaRecovery = onCall(
     if (!profileSnap.exists) throw new HttpsError("not-found", "Admin profile not found.");
     const profile = profileSnap.data() || {};
     const role = roleOf(request.auth.token || {}, profile);
-    if (!ADMIN_TARGET_ROLES.has(role) || userRecord.disabled) {
+    const token = (request.auth.token || {}) as Record<string, unknown>;
+    const selfFinalizeAllowed = ADMIN_TARGET_ROLES.has(role) ||
+      (SELF_FINALIZE_EXTRA_ROLES.has(role) && token[role] === true && token.suspended !== true);
+    if (!selfFinalizeAllowed || userRecord.disabled) {
       throw new HttpsError("permission-denied", "Approved active Admin authority is required.");
     }
     if ((userRecord.multiFactor?.enrolledFactors || []).length <= 0) {

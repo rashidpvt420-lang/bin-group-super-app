@@ -52,6 +52,31 @@ function claimsGrantAdminPortal(claims: Record<string, unknown> = {}) {
   );
 }
 
+// Explicit Finance tier approvers (assigned only through adminRequestFinanceRoleAssignment ->
+// adminApproveFinanceRoleAssignment). They carry no Admin-portal authority, so they are never part of
+// the Founder + Finance Admin privileged pair and are never cleanup targets. Anything that also carries
+// an elevated flag (admin, super admin, CEO, manager, finance_admin) is NOT treated as a tier approver
+// and stays an unexpected privileged account.
+export const FINANCE_TIER_APPROVER_ROLES: ReadonlySet<string> = new Set(["finance_manager", "finance_controller"]);
+const ELEVATED_CLAIM_FLAGS = ["admin", "isAdmin", "super_admin", "superAdmin", "ceo", "manager", "finance_admin"];
+
+export function isExplicitFinanceTierApprover(user: { email?: string | null; customClaims?: Record<string, unknown> | null }) {
+  const claims = (user?.customClaims || {}) as Record<string, unknown>;
+  const role = lower(claims.role || claims.userRole || claims.primaryRole, 80);
+  if (!FINANCE_TIER_APPROVER_ROLES.has(role)) return false;
+  for (const key of ["role", "userRole", "primaryRole"]) {
+    if (claims[key] !== undefined && claims[key] !== null && lower(claims[key], 80) !== role) return false;
+  }
+  if (claims[role] !== true) return false;
+  for (const other of FINANCE_TIER_APPROVER_ROLES) {
+    if (other !== role && claims[other] === true) return false;
+  }
+  if (ELEVATED_CLAIM_FLAGS.some((flag) => claims[flag] === true)) return false;
+  if (claimsGrantAdminPortal(claims)) return false;
+  if (lower(user?.email, 320) === CANONICAL_FOUNDER_EMAIL) return false;
+  return true;
+}
+
 function profileIsActive(profile: FirebaseFirestore.DocumentData = {}) {
   if (profile.suspended === true) return false;
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status, 80));
@@ -125,11 +150,24 @@ export function buildAdminMfaReadinessOverview(
   let financeAdminCount = 0;
   let financeAdminReadyCount = 0;
   let unexpectedPrivilegedAccountCount = 0;
+  let financeTierApproverCount = 0;
+  let financeTierApproverTotpReadyCount = 0;
   const blockers: AdminMfaReadinessTarget[] = [];
 
   for (const record of records) {
     const user = record.user;
     const claims = (user.customClaims || {}) as Record<string, unknown>;
+    if (isExplicitFinanceTierApprover(user)) {
+      // Expected Finance approver: reported for TOTP readiness, never DELETE_REQUIRED, and never
+      // counted toward the Founder + Finance Admin privileged pair.
+      financeTierApproverCount += 1;
+      const tierFactors = user.multiFactor?.enrolledFactors || [];
+      const tierActive = record.profileExists && !user.disabled && profileIsActive(record.profile);
+      if (tierActive && user.emailVerified === true && tierFactors.some((factor) => lower(factor.factorId, 80) === "totp")) {
+        financeTierApproverTotpReadyCount += 1;
+      }
+      continue;
+    }
     if (!claimsGrantAdminPortal(claims)) continue;
     claimedAdminCount += 1;
 
@@ -225,6 +263,8 @@ export function buildAdminMfaReadinessOverview(
       financeAdminCount,
       financeAdminReadyCount,
       unexpectedPrivilegedAccountCount,
+      financeTierApproverCount,
+      financeTierApproverTotpReadyCount,
       dualControlReady,
       founderSingletonReady: dualControlReady,
       blockingAccountCount: blockers.length,
@@ -244,7 +284,10 @@ export const getAdminMfaReadinessOverview = onCall(
   async (request) => {
     const viewer = await requireReadinessViewer(request.auth);
     const users = await fetchAllUsers();
-    const claimedAdmins = users.filter((user) => claimsGrantAdminPortal((user.customClaims || {}) as Record<string, unknown>));
+    const claimedAdmins = users.filter((user) =>
+      claimsGrantAdminPortal((user.customClaims || {}) as Record<string, unknown>) ||
+      isExplicitFinanceTierApprover(user)
+    );
     const profiles = new Map<string, { profileExists: boolean; profile: FirebaseFirestore.DocumentData }>();
     for (let offset = 0; offset < claimedAdmins.length; offset += 100) {
       const chunk = claimedAdmins.slice(offset, offset + 100);
