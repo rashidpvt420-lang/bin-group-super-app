@@ -18,7 +18,7 @@ export async function requirePaintingFinanceApprover(request: any): Promise<{ ui
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Finance login required.");
   const token = auth.token || {};
   const role = text(token.role || token.financeRole).toLowerCase();
-  if (!PAINTING_FINANCE_APPROVER_ROLES.has(role) || token.suspended === true) {
+  if (!PAINTING_FINANCE_APPROVER_ROLES.has(role) || token.suspended === true || token.designatedSecondApprover === true) {
     throw new HttpsError("permission-denied", "Only a Finance Manager or Finance Controller can decide painting payments.");
   }
   if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
@@ -31,7 +31,7 @@ export async function requirePaintingFinanceApprover(request: any): Promise<{ ui
   // Stale-token guard: the role must still be held in the LIVE custom claims (roles unchanged).
   const live = (record.customClaims || {}) as Record<string, unknown>;
   const liveRole = text(live.role || live.financeRole).toLowerCase();
-  if (!PAINTING_FINANCE_APPROVER_ROLES.has(liveRole) || live.suspended === true) {
+  if (!PAINTING_FINANCE_APPROVER_ROLES.has(liveRole) || live.suspended === true || live.designatedSecondApprover === true) {
     throw new HttpsError("permission-denied", "Finance Manager / Controller authority is no longer active on this account.");
   }
   return { uid: auth.uid, email: text(token.email || record.email).toLowerCase(), role };

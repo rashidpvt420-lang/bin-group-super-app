@@ -182,7 +182,9 @@ service cloud.firestore {
     // Explicit Finance approver identities. CEO / Super Admin / generic Admin alone
     // never match this helper. Used only to read server-written money records they review.
     function isFinanceApprover() {
-      return signedIn() && isNotSuspended() && (
+      // The named second approver approves Finance grants only, never money.
+      return signedIn() && isNotSuspended() &&
+        request.auth.token.get('designatedSecondApprover', false) != true && (
         claimedRole() in ['finance_admin', 'finance_manager', 'finance_controller'] ||
         request.auth.token.get('finance_admin', false) == true ||
         request.auth.token.get('finance_manager', false) == true ||
@@ -1933,8 +1935,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Finance Admin payout review (Rashid, 18 Nov 2026): read-only document metadata for an explicit
+    // finance_admin that holds the 'broker' module, signed in with a second factor. No other staff role,
+    // no write, and no Storage file access (storage.rules is unchanged).
+    function isBrokerModuleFinanceAdmin() {
+      return signedIn() && hasAdminSecondFactor() && isNotSuspended() &&
+        claimedRole() == 'finance_admin' &&
+        request.auth.token.get('finance_admin', false) == true &&
+        request.auth.token.get('designatedSecondApprover', false) != true &&
+        'broker' in request.auth.token.get('modules', []);
+    }
+
     match /brokerDocuments/{documentId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || isBrokerModuleFinanceAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
       allow create: if signedIn() &&
         claimedRole() == 'broker' &&
         request.resource.data.get('brokerId', null) == request.auth.uid &&

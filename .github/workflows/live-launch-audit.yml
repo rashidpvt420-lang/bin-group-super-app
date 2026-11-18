@@ -99,6 +99,8 @@ jobs:
           fi
 
       - name: Verify current main is already the deployed production SHA
+        env:
+          SECOND_APPROVER_EMAIL: ${{ secrets.SECOND_APPROVER_EMAIL }}
         run: node scripts/verify-production-deployment.mjs
 
       - name: Run protected live launch audit against the deployed current main

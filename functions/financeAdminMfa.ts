@@ -13,6 +13,8 @@ const text = (value: unknown) => String(value || "").trim();
 
 export function claimsGrantFinanceAdmin(claims: Record<string, any>): boolean {
   if (!claims || claims.suspended === true) return false;
+  // The named second approver (designatedSecondApprover) may approve Finance GRANTS, never money.
+  if (claims.designatedSecondApprover === true) return false;
   const role = text(claims.role || claims.userRole || claims.primaryRole).toLowerCase();
   if (FINANCE_ADMIN_ROLES.has(role)) return true;
   // If an account holds a separately assigned explicit Finance approver role in custom claims,

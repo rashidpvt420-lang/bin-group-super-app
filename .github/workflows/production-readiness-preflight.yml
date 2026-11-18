@@ -33,6 +33,7 @@ jobs:
     env:
       GCP_PROJECT_ID: bin-group-57c60
       LAUNCH_MODE: ${{ inputs.launch_mode }}
+      SECOND_APPROVER_EMAIL: ${{ secrets.SECOND_APPROVER_EMAIL }}
       FIREBASE_PHONE_AUTH_REQUIRED_DOMAINS: bin-group-57c60.web.app,bin-group-57c60.firebaseapp.com,bin-group-admin-panel.web.app,bin-group-admin-panel.firebaseapp.com
       FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE
 

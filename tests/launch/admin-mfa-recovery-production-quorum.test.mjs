@@ -12,7 +12,11 @@ test('production Admin MFA preflight requires canonical Founder plus one Finance
   const source = await read('scripts/verify-admin-mfa-production.mjs');
   expectAll(source, [
     /CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups\.com'/,
-    /claimedAdminCount === 2/,
+    // Exactly two, or three only with the named MFA-ready second approver (Rashid, 18 Nov 2026).
+    /claimedAdminCount === expectedPrivilegedAccountCount/,
+    /const expectedPrivilegedAccountCount = secondApproverAccepted \? 3 : 2;/,
+    /secondApproverCandidateCount === 1 &&\n\s+secondApproverMfaReadyCount === 1;/,
+    /secondApproverMfaReadyCount === secondApproverCandidateCount/,
     /unexpectedPrivilegedAccountCount === 0/,
     /canonicalFounderCandidateCount === 1/,
     /canonicalFounderMfaReadyCount === 1/,

@@ -141,6 +141,7 @@ jobs:
         env:
           GITHUB_SHA: ${{ steps.release.outputs.sha }}
           GITHUB_REF: refs/heads/main
+          SECOND_APPROVER_EMAIL: ${{ secrets.SECOND_APPROVER_EMAIL }}
         run: node scripts/review-privileged-accounts-production.mjs
 
       - name: Validate exact-SHA no-mutation review evidence
