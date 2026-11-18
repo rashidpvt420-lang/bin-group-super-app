@@ -49,6 +49,7 @@ const STAFF_ROLES = new Set([
 
 export const STAFF_NUMBER_COUNTER_DOC = "staff_number";
 export const STAFF_NUMBER_START = 10001;
+export const STAFF_NUMBER_MAX = 99999;
 
 export async function resolveStaffUid(uidOrNumber: string): Promise<string> {
   const trimmed = cleanString(uidOrNumber);
@@ -523,6 +524,9 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         if (Number.isInteger(parsed) && parsed >= STAFF_NUMBER_START) {
           staffNumber = parsed;
         }
+      }
+      if (staffNumber > STAFF_NUMBER_MAX) {
+        throw new HttpsError("resource-exhausted", `Staff number sequence exhausted (maximum is ${STAFF_NUMBER_MAX}).`);
       }
       assignedStaffNumber = staffNumber;
 
@@ -1669,6 +1673,10 @@ export const adminBackfillStaffNumbers = onCall({ cors: true, region: "europe-we
           verifiedCandidates.push({ uid: item.id, hasTechDoc: techDoc.exists });
         }
       }
+    }
+
+    if (verifiedCandidates.length > 0 && nextNumber + verifiedCandidates.length - 1 > STAFF_NUMBER_MAX) {
+      throw new HttpsError("resource-exhausted", `Staff number sequence exhausted (maximum is ${STAFF_NUMBER_MAX}).`);
     }
 
     let currentNumber = nextNumber;
