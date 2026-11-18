@@ -7,6 +7,7 @@ import { Alert, Box, Button, Paper, Stack, Tab, Table, TableBody, TableCell, Tab
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db, functions, httpsCallable } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { openEmployeeDocumentPdf } from './EmployeeCredentialsPanel';
 
 export const MY_HR_COLLECTIONS = ['staffPayslips', 'staffDocuments', 'staffRequests'] as const;
 type MyHrCollection = typeof MY_HR_COLLECTIONS[number];
@@ -42,6 +43,18 @@ export default function MyHrSelfServicePage() {
     } finally { setBusy(false); }
   };
 
+  // Own employee ID card and contract draft (server-rendered; 5-minute signed link, own records only).
+  const [myCredentials, setMyCredentials] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (tab !== 3 || myCredentials !== null || !uid) return;
+    httpsCallable(functions, 'getMyEmployeeCredentials')({})
+      .then((response: any) => setMyCredentials(Array.isArray(response?.data?.documents) ? response.data.documents : []))
+      .catch((err: any) => { setMyCredentials([]); setError(err?.message || 'Your ID card could not be loaded.'); });
+  }, [tab, myCredentials, uid]);
+  const openMyDocument = async (documentId: string) => {
+    try { await openEmployeeDocumentPdf(uid, documentId); } catch (err: any) { setError(err?.message || 'Document could not be opened.'); }
+  };
+
   const fmtDate = (v: any) => (v?.toDate ? v.toDate().toLocaleDateString() : String(v || '—'));
 
   return (
@@ -51,7 +64,7 @@ export default function MyHrSelfServicePage() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="My payslips" /><Tab label="My documents" /><Tab label="My requests" />
+        <Tab label="My payslips" /><Tab label="My documents" /><Tab label="My requests" /><Tab label="My ID card" data-testid="my-hr-id-card-tab" />
       </Tabs>
       <Paper sx={{ p: 2 }}>
         {tab === 0 && (
@@ -73,6 +86,14 @@ export default function MyHrSelfServicePage() {
             <Table size="small"><TableHead><TableRow><TableCell>TYPE</TableCell><TableCell>STATUS</TableCell><TableCell>CREATED</TableCell></TableRow></TableHead>
               <TableBody>{rows.staffRequests.map((r) => <TableRow key={r.id}><TableCell>{r.requestType || r.category || '—'}</TableCell><TableCell>{String(r.status || '—').replace(/_/g, ' ')}</TableCell><TableCell>{fmtDate(r.createdAt)}</TableCell></TableRow>)}
                 {rows.staffRequests.length === 0 && <TableRow><TableCell colSpan={3} align="center">No HR requests yet.</TableCell></TableRow>}</TableBody></Table>
+          </Stack>
+        )}
+        {tab === 3 && (
+          <Stack spacing={2} data-testid="my-hr-id-card">
+            <Alert severity="info">Your company ID card and employment contract DRAFT, issued by HR. Contract drafts are pending legal review and MOHRE registration and are not signed. — بطاقتك ومسودة عقدك؛ المسودة بانتظار المراجعة القانونية والتسجيل وغير موقعة.</Alert>
+            <Table size="small"><TableHead><TableRow><TableCell>DOCUMENT</TableCell><TableCell>STATUS</TableCell><TableCell>VALID</TableCell><TableCell /></TableRow></TableHead>
+              <TableBody>{(myCredentials || []).map((d) => <TableRow key={d.documentId}><TableCell>{d.documentType === 'EMPLOYEE_ID_CARD' ? 'ID card' : 'Contract draft'}</TableCell><TableCell>{String(d.status || '—').replace(/_/g, ' ')}</TableCell><TableCell>{d.issueDate ? `${d.issueDate} → ${d.expiryDate}` : '—'}</TableCell><TableCell align="right"><Button size="small" onClick={() => void openMyDocument(d.documentId)}>View / print</Button></TableCell></TableRow>)}
+                {myCredentials !== null && myCredentials.length === 0 && <TableRow><TableCell colSpan={4} align="center">HR has not issued your card yet.</TableCell></TableRow>}</TableBody></Table>
           </Stack>
         )}
       </Paper>

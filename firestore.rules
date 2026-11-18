@@ -2512,6 +2512,29 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Employee ID cards and employment contract DRAFTS (Rashid, 18 Nov 2026). They live under the
+    // private HR record, which the generic Admin catch-all already excludes, and are written only by the
+    // App Check + MFA employee-credential callables (Admin SDK). Readable only by the employee
+    // themselves, the HR manager tier and the Founder (CEO / Super Admin) on a second-factor session.
+    // Generic Admin, Finance, Ops and HR Staff identities are deliberately excluded. The card-id index
+    // (private_hr_profiles/_employee_card_index/cards/{cardId}) has no client rule and stays server-only.
+    function isEmployeeCredentialHrOrFounder() {
+      return signedIn() && hasAdminSecondFactor() && (
+        claimedRole() in ['hr_admin', 'hr_manager', 'ceo', 'super_admin'] ||
+        request.auth.token.get('ceo', false) == true ||
+        request.auth.token.get('super_admin', false) == true ||
+        request.auth.token.get('superAdmin', false) == true
+      );
+    }
+    match /private_hr_profiles/{staffUid}/employee_documents/{documentId} {
+      allow read: if (signedIn() && staffUid == request.auth.uid && resource.data.get('staffUid', '') == request.auth.uid) || isEmployeeCredentialHrOrFounder();
+      allow create, update, delete: if false;
+    }
+    match /private_hr_profiles/{staffUid}/employee_credentials/{summaryId} {
+      allow read: if (signedIn() && staffUid == request.auth.uid) || isEmployeeCredentialHrOrFounder();
+      allow create, update, delete: if false;
+    }
+
     // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
     // no browser, tenant, owner, technician, broker, or admin client may access it.
     match /system_secrets/{secretId} {

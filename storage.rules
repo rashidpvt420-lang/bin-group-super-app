@@ -392,6 +392,20 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // Employee ID card and employment contract DRAFT PDFs (Rashid, 18 Nov 2026), kept under the private
+    // HR prefix that the Admin catch-all already excludes. Written only by the App Check + MFA
+    // employee-credential callables (Admin SDK). Read: the employee, the HR manager tier, and the
+    // Founder (CEO / Super Admin) on a second-factor session. Generic Admin, Finance, Ops, HR Staff and
+    // auditors cannot read them. No browser writes, admins included.
+    match /privateHrDocuments/{staffId}/employee-documents/{fileName} {
+      allow read: if isAuth() && (
+        request.auth.uid == staffId ||
+        (hasAdminSecondFactor() && hasAnyRole(['hr_admin', 'hr_manager'])) ||
+        (isAdmin() && claimedRole() in ['ceo', 'super_admin', 'CEO', 'SUPER_ADMIN'])
+      );
+      allow write: if false;
+    }
+
     match /design_requests/{userId}/{allPaths=**} {
       // AI Design Studio reference images are server-written private media.
       // Browser clients receive only short-lived signed URLs after callable authorization.
