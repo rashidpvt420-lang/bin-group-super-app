@@ -17,6 +17,8 @@ interface Notification {
     id: string;
     title: string;
     body: string;
+    titleAr?: string;
+    bodyAr?: string;
     type: string;
     status?: string;
     read: boolean;
@@ -54,7 +56,7 @@ function toMillis(value: any): number {
 
 export default function NotificationInboxPage() {
     const { user, role, isAdmin } = useRole();
-    const { tx } = useLanguage();
+    const { tx, isRTL } = useLanguage();
     const navigate = useNavigate();
     const [directNotifications, setDirectNotifications] = useState<Notification[]>([]);
     const [adminGroupNotifications, setAdminGroupNotifications] = useState<Notification[]>([]);
@@ -227,10 +229,10 @@ export default function NotificationInboxPage() {
                                 </Box>
                                 <Box sx={{ flexGrow: 1 }}>
                                     <Typography variant="subtitle1" fontWeight="950" color="#FFF">
-                                        {notif.title}
+                                        {isRTL && notif.titleAr ? notif.titleAr : notif.title}
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 0.5 }}>
-                                        {notif.body}
+                                        {isRTL && notif.bodyAr ? notif.bodyAr : notif.body}
                                     </Typography>
                                     <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} alignItems="center" flexWrap="wrap">
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'rgba(255,255,255,0.3)' }}>

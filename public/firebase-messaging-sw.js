@@ -13,6 +13,10 @@ firebase.initializeApp(self.__BIN_GROUP_FIREBASE_CONFIG);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+  // Server pushes (deliverNotificationPush) carry a notification payload, which the Firebase SDK already
+  // shows with the app closed (and opens webpush.fcmOptions.link on tap). Showing it again here produced
+  // two identical system notifications, so only data-only messages are rendered by this handler.
+  if (payload.notification && (payload.notification.title || payload.notification.body)) return;
   const notification = payload.notification || {};
   const data = payload.data || {};
   const title = notification.title || data.title || 'BIN GROUP';

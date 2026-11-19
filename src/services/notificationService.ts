@@ -18,6 +18,9 @@ export interface BinNotification {
     type: NotificationType;
     title: string;
     body: string;
+    /** Arabic copy written by server-side staff alerts (staffEventAlerts). */
+    titleAr?: string;
+    bodyAr?: string;
     ticketId?: string;
     read: boolean;
     createdAt: any;

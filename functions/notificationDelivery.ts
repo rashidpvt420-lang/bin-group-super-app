@@ -465,6 +465,35 @@ export const createNotification = onCall(
   },
 );
 
+// Staff alerts for new Owner / Tenant / Broker requests (staffEventAlerts.ts sets emailFallback) must not be
+// lost when the staff member has no current push registration (app never opened on that device, web
+// registration older than a day, permission revoked). One e-mail per notification, deterministic id.
+// The e-mail reuses the alert copy only, which never carries free text, amounts, bank details or codes.
+async function queueStaffAlertEmailFallback(notificationId: string, data: FirebaseFirestore.DocumentData, recipientIds: string[]) {
+    if (data.emailFallback !== true || data.deliverySource !== "server:staffEventAlerts" || !String(data.type || "").startsWith("STAFF_ALERT_") || recipientIds.length !== 1) return;
+    try {
+        const profile = (await db.collection("users").doc(recipientIds[0]).get()).data() || {};
+        const email = cleanString(profile.email, 254).toLowerCase();
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !profileIsActive(profile)) return;
+        const title = cleanString(data.title || "BIN GROUP", 120);
+        const body = cleanString(data.body || "New update received.", 240);
+        await db.collection("mail").doc(`staff_alert_email_${notificationId}`.slice(0, 1400)).create({
+            to: email,
+            message: {
+                subject: `[BIN GROUP] ${title}`,
+                text: `${body}\n\nOpen the BIN GROUP app to review. Turn on notifications in the app to get these alerts as push messages.`,
+            },
+            source: "staffAlertEmailFallback",
+            notificationId,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        await db.collection("notifications").doc(notificationId).set({ emailFallbackQueuedAt: FieldValue.serverTimestamp() }, { merge: true });
+    } catch (error: any) {
+        if (error?.code === 6 || /already exists/i.test(String(error?.message || ""))) return;
+        console.warn("[Notification email fallback failed]", { notificationId });
+    }
+}
+
 export const deliverNotificationPush = onDocumentCreated({
     document: "notifications/{notificationId}",
     region: "europe-west3",
@@ -498,6 +527,7 @@ export const deliverNotificationPush = onDocumentCreated({
             pushDeliveryState: "NO_REGISTERED_TOKEN",
             invalidPushTokens: FieldValue.delete(),
         }, { merge: true });
+        await queueStaffAlertEmailFallback(event.params.notificationId, data, recipientIds);
         return null;
     }
 
@@ -573,6 +603,9 @@ export const deliverNotificationPush = onDocumentCreated({
         pushPrunedCount: invalidRegistrations.length,
         pushDeliveryState: deliveryState,
     }, { merge: true });
+    if (deliveryState === "FAILED") {
+        await queueStaffAlertEmailFallback(event.params.notificationId, data, recipientIds);
+    }
 
     return null;
 });

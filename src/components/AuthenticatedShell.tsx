@@ -58,6 +58,9 @@ const AI_ENABLED_ROLES = [
 
 const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin', '/auditor'];
 
+const PUSH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const PUSH_REFRESH_MIN_GAP_MS = 60 * 60 * 1000;
+
 function PushNotificationBootstrap() {
   const { user, role } = useRole();
   const navigate = useNavigate();
@@ -67,6 +70,7 @@ function PushNotificationBootstrap() {
 
   React.useEffect(() => {
     let detach: undefined | (() => void);
+    let stopRefresh: undefined | (() => void);
     let cancelled = false;
 
     if (!user?.uid) return undefined;
@@ -84,6 +88,24 @@ function PushNotificationBootstrap() {
           })
           .catch((error) => console.warn('[Push] Registration failed:', error));
 
+        // Web registrations are only deliverable for 24h after the last registerPushToken call
+        // (notificationDelivery.ts). Staff keep the console open for days, so refresh the registration
+        // while the app stays open and when it comes back to the foreground, without ever prompting.
+        let lastRefreshAt = Date.now();
+        const refreshRegistration = () => {
+          if (cancelled || Date.now() - lastRefreshAt < PUSH_REFRESH_MIN_GAP_MS) return;
+          if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') return;
+          lastRefreshAt = Date.now();
+          registerPushNotifications(user.uid, role).catch((error) => console.warn('[Push] Refresh failed:', error));
+        };
+        const refreshTimer = window.setInterval(refreshRegistration, PUSH_REFRESH_INTERVAL_MS);
+        const onVisible = () => { if (document.visibilityState === 'visible') refreshRegistration(); };
+        document.addEventListener('visibilitychange', onVisible);
+        stopRefresh = () => {
+          window.clearInterval(refreshTimer);
+          document.removeEventListener('visibilitychange', onVisible);
+        };
+
         attachForegroundPushListener(undefined, { onNavigate: (path) => navigateRef.current(path) }).then((unsubscribe) => {
           if (cancelled && typeof unsubscribe === 'function') unsubscribe();
           else detach = typeof unsubscribe === 'function' ? unsubscribe : undefined;
@@ -93,6 +115,7 @@ function PushNotificationBootstrap() {
 
     return () => {
       cancelled = true;
+      if (stopRefresh) stopRefresh();
       if (detach) detach();
     };
   }, [user?.uid, role]);

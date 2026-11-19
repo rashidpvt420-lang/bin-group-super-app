@@ -25,6 +25,7 @@ export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRene
 export { getOwnerComplianceCalendar, sendComplianceReminders } from './ownerComplianceCalendar';
 export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, markEndedLeasesVacant, ownerPrepareUnitListing } from './unitVacancy';
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
+export { fanOutStaffEventAlerts, fanOutStaffChatAlerts } from './staffEventAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
 export { getOwnerVendorScorecards, sendVendorCredentialAlerts } from './ownerVendorVerification';
 export { ownerGrantAuthority, ownerRevokeAuthority, getOwnerAuthorityRegister } from './ownerAuthorityRegister';
