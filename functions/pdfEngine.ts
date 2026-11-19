@@ -1135,10 +1135,20 @@ export async function generateOwnerPaymentReceiptPdfArtifact(
             try {
                 const buffer = Buffer.concat(chunks);
                 const documentHash = crypto.createHash('sha256').update(JSON.stringify({ invoiceId, paymentId, contractId, ownerId, amount, proofHash, status: 'PAID' })).digest('hex');
-                resolve(await savePdf(buffer, artifactPath, {
-                    invoiceId, paymentId, contractId, ownerId, documentType: 'approved_payment_receipt',
-                    language: 'en-ar', documentHash, proofHash, status: 'PAID'
-                }));
+                try {
+                    resolve(await savePdf(buffer, artifactPath, {
+                        invoiceId, paymentId, contractId, ownerId, documentType: 'approved_payment_receipt',
+                        language: 'en-ar', documentHash, proofHash, status: 'PAID'
+                    }));
+                } catch (saveError) {
+                    if (options.uniqueArtifact) {
+                        try {
+                            const bucket = getStorage().bucket();
+                            await bucket.file(artifactPath).delete({ ignoreNotFound: true });
+                        } catch (_ignored) {}
+                    }
+                    throw saveError;
+                }
             } catch (error) { reject(error); }
         });
         doc.fillColor(GOLD).fontSize(14).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });

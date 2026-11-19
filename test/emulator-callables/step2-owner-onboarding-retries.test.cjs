@@ -271,6 +271,9 @@ for (const pauseStage of ['before upload', 'after upload', 'before commit']) {
       assert.equal(winningInvoice.documentState, 'PAID_RECEIPT_READY');
       assert.ok(winningInvoice.receiptPdfSha256);
       assert.ok(winningInvoice.receiptPdfGeneration);
+      var preReleasePath = winningInvoice.receiptStoragePath;
+      var preReleaseSha = winningInvoice.receiptPdfSha256;
+      var preReleaseGen = String(winningInvoice.receiptPdfGeneration);
     } finally {
       releaseReceipt();
       await delayed;
@@ -280,7 +283,9 @@ for (const pauseStage of ['before upload', 'after upload', 'before commit']) {
     const invoice = await db.doc(`invoices/${payment.invoiceId}`).get();
     assert.equal(invoice.get('status'), 'PAID');
     assert.equal(invoice.get('documentState'), 'PAID_RECEIPT_READY');
-    assert.ok(String(invoice.get('receiptStoragePath') || '').includes('/receipts/'));
+    assert.equal(invoice.get('receiptStoragePath'), preReleasePath, 'canonical receipt path remains unchanged');
+    assert.equal(invoice.get('receiptPdfSha256'), preReleaseSha, 'canonical receipt sha remains unchanged');
+    assert.equal(String(invoice.get('receiptPdfGeneration')), preReleaseGen, 'canonical receipt generation remains unchanged');
 
     const file = admin.storage().bucket().file(invoice.get('receiptStoragePath'));
     const [pdf] = await file.download();
@@ -288,7 +293,8 @@ for (const pauseStage of ['before upload', 'after upload', 'before commit']) {
     assert.equal(crypto.createHash('sha256').update(pdf).digest('hex'), invoice.get('receiptPdfSha256'), 'winning receipt SHA matches file');
     assert.equal(String(metadata.generation), invoice.get('receiptPdfGeneration'), 'a late retry cannot overwrite winning receipt PDF');
 
-    if (firstAttemptArtifactPath && firstAttemptArtifactPath !== invoice.get('receiptStoragePath')) {
+    if (firstAttemptArtifactPath) {
+      assert.notEqual(firstAttemptArtifactPath, preReleasePath, 'delayed attempt used a distinct storage path');
       const [orphanExists] = await admin.storage().bucket().file(firstAttemptArtifactPath).exists();
       assert.equal(orphanExists, false, 'losing attempt orphan artifact must be cleaned up from storage');
     }

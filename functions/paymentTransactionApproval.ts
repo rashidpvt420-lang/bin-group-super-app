@@ -841,7 +841,9 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   }
   const receiptMissing =
     !String(approvedInvoice.receiptPdfUrl || "").trim() ||
-    !String(approvedInvoice.receiptStoragePath || "").trim();
+    !String(approvedInvoice.receiptStoragePath || "").trim() ||
+    !String(approvedInvoice.receiptPdfSha256 || "").trim() ||
+    !String(approvedInvoice.receiptPdfGeneration || "").trim();
   const receiptNeedsRepair =
     receiptMissing ||
     ["PAID_RECEIPT_PENDING", "PAID_RECEIPT_FAILED"].includes(String(approvedInvoice.documentState || "").trim().toUpperCase());
@@ -862,18 +864,22 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       // Return an explicit result object so Firestore transaction retries cannot corrupt outer state.
       const receiptCommitResult = await db.runTransaction(async (transaction) => {
         const freshInvoiceSnap = await transaction.get(invoiceRef);
-        if (!freshInvoiceSnap.exists) return { committed: false };
+        if (!freshInvoiceSnap.exists) return { committed: false, canonicalStoragePath: null };
         const freshInvoice = freshInvoiceSnap.data() || {};
         const currentDocumentState = String(freshInvoice.documentState || "").trim().toUpperCase();
+        const canonicalPath = String(freshInvoice.receiptStoragePath || "").trim() || null;
+        if (currentDocumentState === "PAYMENT_REVERSED_CHEQUE_RETURNED") {
+          return { committed: false, canonicalStoragePath: canonicalPath };
+        }
         const alreadyReady =
           currentDocumentState === "PAID_RECEIPT_READY" &&
           Boolean(String(freshInvoice.receiptPdfUrl || "").trim()) &&
-          Boolean(String(freshInvoice.receiptStoragePath || "").trim()) &&
+          Boolean(canonicalPath) &&
           Boolean(String(freshInvoice.receiptPdfSha256 || "").trim()) &&
           Boolean(String(freshInvoice.receiptPdfGeneration || "").trim());
         if (alreadyReady) {
           // Losing attempt: canonical receipt is already secured with valid metadata.
-          return { committed: false };
+          return { committed: false, canonicalStoragePath: canonicalPath };
         }
         transaction.set(invoiceRef, {
           receiptPdfUrl: receiptArtifact.pdfUrl,
@@ -891,15 +897,17 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
           receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
           updatedAt: ts(),
         }, { merge: true });
-        return { committed: true };
+        return { committed: true, canonicalStoragePath: receiptArtifact.storagePath };
       });
       // Safe orphan cleanup: if this attempt lost the race, remove its unreferenced artifact
       // from Storage so no orphan is retained. The winning artifact has a different UUID and is untouched.
       if (!receiptCommitResult?.committed && receiptArtifact?.storagePath) {
-        try {
-          await admin.storage().bucket().file(receiptArtifact.storagePath).delete({ ignoreNotFound: true });
-        } catch (_cleanupError) {
-          // Best-effort orphan cleanup.
+        if (receiptCommitResult?.canonicalStoragePath !== receiptArtifact.storagePath) {
+          try {
+            await admin.storage().bucket().file(receiptArtifact.storagePath).delete({ ignoreNotFound: true });
+          } catch (_cleanupError) {
+            // Best-effort orphan cleanup.
+          }
         }
       }
     } catch (receiptError: any) {
@@ -918,7 +926,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
             Boolean(canonicalStoragePath) &&
             Boolean(String(freshInvoice.receiptPdfSha256 || "").trim()) &&
             Boolean(String(freshInvoice.receiptPdfGeneration || "").trim());
-          if (alreadyReady) {
+          if (alreadyReady || currentDocumentState === "PAYMENT_REVERSED_CHEQUE_RETURNED") {
             return;
           }
           transaction.set(invoiceRef, {
