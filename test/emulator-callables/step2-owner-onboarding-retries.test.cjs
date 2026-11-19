@@ -220,6 +220,266 @@ for (const pauseStage of ['before upload', 'after upload']) {
   });
 }
 
+for (const pauseStage of ['before upload', 'after upload', 'before commit']) {
+  test(`a delayed paid-receipt generation (${pauseStage}) preserves PAID_RECEIPT_READY and its PDF generation`, { timeout: 120_000 }, async (context) => {
+    stubSignedUrl(context);
+    const id = crypto.randomUUID();
+    await submit(id);
+    await advanceToFinalSigned(id);
+    await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+
+    const pdfEngine = lib('pdfEngine.js');
+    const originalReceipt = pdfEngine.generateOwnerPaymentReceiptPdfArtifact;
+    let releaseReceipt;
+    let notifyReceipt;
+    const blocked = new Promise((resolve) => { releaseReceipt = resolve; });
+    const reachedReceipt = new Promise((resolve) => { notifyReceipt = resolve; });
+    let firstAttempt = true;
+    let firstAttemptArtifactPath = null;
+    pdfEngine.generateOwnerPaymentReceiptPdfArtifact = async (...args) => {
+      const shouldPause = firstAttempt;
+      firstAttempt = false;
+      if (shouldPause && pauseStage === 'before upload') {
+        notifyReceipt();
+        await blocked;
+      }
+      const artifact = await originalReceipt(...args);
+      if (shouldPause) {
+        firstAttemptArtifactPath = artifact.storagePath;
+      }
+      if (shouldPause && (pauseStage === 'after upload' || pauseStage === 'before commit')) {
+        notifyReceipt();
+        await blocked;
+      }
+      return artifact;
+    };
+    context.after(() => {
+      releaseReceipt();
+      pdfEngine.generateOwnerPaymentReceiptPdfArtifact = originalReceipt;
+    });
+
+    const delayed = call(secureApprovePayment, financeB, { paymentId: id });
+    try {
+      await Promise.race([
+        reachedReceipt,
+        delayed.then(() => { throw new Error('Expected first receipt generation to pause'); })
+      ]);
+      // Execute concurrent approval which finishes and commits the winning receipt
+      await call(secureApprovePayment, financeB, { paymentId: id });
+      const winningPayment = (await db.doc(`payment_transactions/${id}`).get()).data();
+      const winningInvoice = (await db.doc(`invoices/${winningPayment.invoiceId}`).get()).data();
+      assert.equal(winningInvoice.documentState, 'PAID_RECEIPT_READY');
+      assert.ok(winningInvoice.receiptPdfSha256);
+      assert.ok(winningInvoice.receiptPdfGeneration);
+    } finally {
+      releaseReceipt();
+      await delayed;
+    }
+
+    const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+    const invoice = await db.doc(`invoices/${payment.invoiceId}`).get();
+    assert.equal(invoice.get('status'), 'PAID');
+    assert.equal(invoice.get('documentState'), 'PAID_RECEIPT_READY');
+    assert.ok(String(invoice.get('receiptStoragePath') || '').includes('/receipts/'));
+
+    const file = admin.storage().bucket().file(invoice.get('receiptStoragePath'));
+    const [pdf] = await file.download();
+    const [metadata] = await file.getMetadata();
+    assert.equal(crypto.createHash('sha256').update(pdf).digest('hex'), invoice.get('receiptPdfSha256'), 'winning receipt SHA matches file');
+    assert.equal(String(metadata.generation), invoice.get('receiptPdfGeneration'), 'a late retry cannot overwrite winning receipt PDF');
+
+    if (firstAttemptArtifactPath && firstAttemptArtifactPath !== invoice.get('receiptStoragePath')) {
+      const [orphanExists] = await admin.storage().bucket().file(firstAttemptArtifactPath).exists();
+      assert.equal(orphanExists, false, 'losing attempt orphan artifact must be cleaned up from storage');
+    }
+
+    const decisions = (await db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').get()).docs
+      .filter((d) => [d.get('targetId'), d.get('paymentId')].includes(id));
+    assert.equal(decisions.length, 1, 'concurrent retries produce exactly one payment approval audit');
+  });
+}
+
+test('a Firestore transaction contention retry on receipt commit cleans up the losing orphan artifact and preserves winning receipt', { timeout: 120_000 }, async (context) => {
+  stubSignedUrl(context);
+  const id = crypto.randomUUID();
+  await submit(id);
+  await advanceToFinalSigned(id);
+  await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+
+  const pdfEngine = lib('pdfEngine.js');
+  const originalReceipt = pdfEngine.generateOwnerPaymentReceiptPdfArtifact;
+  let losingReceiptPath = null;
+  let firstArtifact = true;
+  pdfEngine.generateOwnerPaymentReceiptPdfArtifact = async (...args) => {
+    const artifact = await originalReceipt(...args);
+    if (firstArtifact) {
+      firstArtifact = false;
+      losingReceiptPath = artifact.storagePath;
+    }
+    return artifact;
+  };
+
+  const originalRunTransaction = db.runTransaction.bind(db);
+  let totalReceiptTransactionRuns = 0;
+  let receiptAttempt1Committed = null;
+  let receiptAttempt2Committed = null;
+  let winningReceiptPath = null;
+  let winningSha = null;
+  let winningGen = null;
+
+  db.runTransaction = async (updateFunction, transactionOptions) => {
+    const interceptedUpdate = async (transaction) => {
+      const result = await updateFunction(transaction);
+      if (result && typeof result === 'object' && 'committed' in result) {
+        totalReceiptTransactionRuns += 1;
+        if (totalReceiptTransactionRuns === 1) {
+          receiptAttempt1Committed = result.committed;
+          const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+          const invoiceRef = db.doc(`invoices/${payment.invoiceId}`);
+          winningReceiptPath = `invoices/${payment.invoiceId}/receipts/winning-${crypto.randomUUID()}.pdf`;
+          const dummyPdf = Buffer.from('%PDF-1.4 WINNING RECEIPT');
+          winningSha = crypto.createHash('sha256').update(dummyPdf).digest('hex');
+          const file = admin.storage().bucket().file(winningReceiptPath);
+          await file.save(dummyPdf, { contentType: 'application/pdf' });
+          const [metadata] = await file.getMetadata();
+          winningGen = String(metadata.generation);
+
+          await invoiceRef.set({
+            receiptPdfUrl: `https://storage.googleapis.com/${winningReceiptPath}`,
+            receiptStoragePath: winningReceiptPath,
+            receiptPdfSha256: winningSha,
+            receiptPdfGeneration: winningGen,
+            documentState: 'PAID_RECEIPT_READY',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } else if (totalReceiptTransactionRuns === 2) {
+          receiptAttempt2Committed = result.committed;
+        }
+      }
+      return result;
+    };
+    return originalRunTransaction(interceptedUpdate, transactionOptions);
+  };
+
+  context.after(() => {
+    db.runTransaction = originalRunTransaction;
+    pdfEngine.generateOwnerPaymentReceiptPdfArtifact = originalReceipt;
+  });
+
+  await call(secureApprovePayment, financeB, { paymentId: id });
+
+  assert.equal(totalReceiptTransactionRuns, 2, 'Firestore transaction must have retried due to contention (ran exactly 2 times)');
+  assert.equal(receiptAttempt1Committed, true, 'attempt 1 staged commit before contention abort');
+  assert.equal(receiptAttempt2Committed, false, 'attempt 2 retry observed winning receipt and returned committed: false');
+
+  const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+  const invoice = await db.doc(`invoices/${payment.invoiceId}`).get();
+  assert.equal(invoice.get('status'), 'PAID');
+  assert.equal(invoice.get('documentState'), 'PAID_RECEIPT_READY');
+  assert.equal(invoice.get('receiptStoragePath'), winningReceiptPath, 'winning receipt must remain canonical');
+  assert.equal(invoice.get('receiptPdfSha256'), winningSha);
+  assert.equal(invoice.get('receiptPdfGeneration'), winningGen);
+
+  assert.ok(losingReceiptPath, 'losing attempt generated an artifact');
+  const [orphanExists] = await admin.storage().bucket().file(losingReceiptPath).exists();
+  assert.equal(orphanExists, false, 'losing attempt orphan artifact must be cleaned up from storage after transaction retry');
+
+  const [winningExists] = await admin.storage().bucket().file(winningReceiptPath).exists();
+  assert.equal(winningExists, true, 'winning receipt file must exist in storage');
+
+  const decisions = (await db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').get()).docs
+    .filter((d) => [d.get('targetId'), d.get('paymentId')].includes(id));
+  assert.equal(decisions.length, 1, 'concurrent retries produce exactly one payment approval audit');
+});
+
+test('an exception during receipt transaction cleans up the orphan artifact without overwriting ready receipt state or masking the error', { timeout: 120_000 }, async (context) => {
+  stubSignedUrl(context);
+  const id = crypto.randomUUID();
+  await submit(id);
+  await advanceToFinalSigned(id);
+  await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+
+  const pdfEngine = lib('pdfEngine.js');
+  const originalReceipt = pdfEngine.generateOwnerPaymentReceiptPdfArtifact;
+  let losingReceiptPath = null;
+  pdfEngine.generateOwnerPaymentReceiptPdfArtifact = async (...args) => {
+    const artifact = await originalReceipt(...args);
+    losingReceiptPath = artifact.storagePath;
+    return artifact;
+  };
+
+  const originalRunTransaction = db.runTransaction.bind(db);
+  const SIMULATED_ERROR = 'Simulated Firestore transaction network timeout failure';
+  let winningReceiptPath = null;
+  let winningSha = null;
+  let winningGen = null;
+
+  db.runTransaction = async (updateFunction, transactionOptions) => {
+    const interceptedUpdate = async (transaction) => {
+      const result = await updateFunction(transaction);
+      if (result && typeof result === 'object' && 'committed' in result) {
+        // While this transaction was preparing, a concurrent process committed a canonical winning receipt
+        const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+        const invoiceRef = db.doc(`invoices/${payment.invoiceId}`);
+        winningReceiptPath = `invoices/${payment.invoiceId}/receipts/winning-${crypto.randomUUID()}.pdf`;
+        const dummyPdf = Buffer.from('%PDF-1.4 CONCURRENT WINNING RECEIPT');
+        winningSha = crypto.createHash('sha256').update(dummyPdf).digest('hex');
+        const file = admin.storage().bucket().file(winningReceiptPath);
+        await file.save(dummyPdf, { contentType: 'application/pdf' });
+        const [metadata] = await file.getMetadata();
+        winningGen = String(metadata.generation);
+
+        await invoiceRef.set({
+          receiptPdfUrl: `https://storage.googleapis.com/${winningReceiptPath}`,
+          receiptStoragePath: winningReceiptPath,
+          receiptPdfSha256: winningSha,
+          receiptPdfGeneration: winningGen,
+          documentState: 'PAID_RECEIPT_READY',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Simulate a database/network exception that aborts this attempt's transaction
+        throw new Error(SIMULATED_ERROR);
+      }
+      return result;
+    };
+    return originalRunTransaction(interceptedUpdate, transactionOptions);
+  };
+
+  context.after(() => {
+    db.runTransaction = originalRunTransaction;
+    pdfEngine.generateOwnerPaymentReceiptPdfArtifact = originalReceipt;
+  });
+
+  let caughtError = null;
+  try {
+    await call(secureApprovePayment, financeB, { paymentId: id });
+  } catch (err) {
+    caughtError = err;
+  }
+
+  assert.ok(caughtError, 'approval call must throw and not swallow the transaction error');
+  assert.ok(
+    String(caughtError.message || caughtError).includes(SIMULATED_ERROR),
+    `error message must preserve original transaction failure (got: ${caughtError.message})`
+  );
+
+  const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+  const invoice = await db.doc(`invoices/${payment.invoiceId}`).get();
+  assert.equal(invoice.get('status'), 'PAID');
+  assert.equal(invoice.get('documentState'), 'PAID_RECEIPT_READY', 'ready receipt must not be downgraded on exception');
+  assert.equal(invoice.get('receiptStoragePath'), winningReceiptPath, 'winning receipt must remain canonical');
+  assert.equal(invoice.get('receiptPdfSha256'), winningSha);
+  assert.equal(invoice.get('receiptPdfGeneration'), winningGen);
+
+  assert.ok(losingReceiptPath, 'losing attempt generated an artifact');
+  const [orphanExists] = await admin.storage().bucket().file(losingReceiptPath).exists();
+  assert.equal(orphanExists, false, 'losing attempt orphan artifact must be cleaned up from storage after transaction error');
+
+  const [winningExists] = await admin.storage().bucket().file(winningReceiptPath).exists();
+  assert.equal(winningExists, true, 'winning receipt file must remain intact in storage');
+});
+
 test('owner application decisions: request-changes retry and reject retry write one audit each and never activate', async () => {
   const id = crypto.randomUUID();
   await submit(id);
