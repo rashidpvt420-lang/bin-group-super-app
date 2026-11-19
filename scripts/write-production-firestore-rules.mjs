@@ -223,8 +223,8 @@ replaceRuleBlock('    match /users/{userId} {', `    match /users/{userId} {
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)
                   );
-      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
-      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
+      allow create: if (isAdmin() || safeUserBootstrapCreate(request.resource.data, userId)) && !('staffNumber' in request.resource.data) && !('staffNumberStr' in request.resource.data);
+      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId)) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['staffNumber', 'staffNumberStr']);
       allow delete: if isNotSuspended() && isAdmin();
       match /fcmTokens/{tokenId} {
         allow read, write: if false;

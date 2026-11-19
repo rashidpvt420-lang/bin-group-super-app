@@ -99,6 +99,7 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
 
 interface StaffMember {
     id: string;
+    staffNumber?: number | string;
     displayName: string;
     email: string;
     role: string;
@@ -155,6 +156,7 @@ export default function StaffAccessPage() {
                     const data = entry.data();
                     return {
                         id: entry.id,
+                        staffNumber: data.staffNumber,
                         displayName: data.displayName || data.fullName || 'Staff',
                         email: data.email || '',
                         role: data.role || 'support_admin',
@@ -315,7 +317,7 @@ export default function StaffAccessPage() {
                             <Table>
                                 <TableHead>
                                     <TableRow>
-                                        {['STAFF MEMBER', 'ROLE', 'MODULE ACCESS', 'STATUS', 'LAST LOGIN', 'ACTIONS'].map((label) => (
+                                        {['STAFF #', 'STAFF MEMBER', 'ROLE', 'MODULE ACCESS', 'STATUS', 'LAST LOGIN', 'ACTIONS'].map((label) => (
                                             <TableCell key={label} align={label === 'ACTIONS' ? 'right' : 'left'} sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{label}</TableCell>
                                         ))}
                                     </TableRow>
@@ -323,6 +325,11 @@ export default function StaffAccessPage() {
                                 <TableBody>
                                     {staff.map((member) => (
                                         <TableRow key={member.id} hover sx={{ opacity: member.status === 'SUSPENDED' ? 0.55 : 1 }}>
+                                            <TableCell>
+                                                <Typography variant="body2" sx={{ fontWeight: 800, color: binThemeTokens.gold, fontFamily: 'monospace' }}>
+                                                    {member.staffNumber ? `#${member.staffNumber}` : '—'}
+                                                </Typography>
+                                            </TableCell>
                                             <TableCell>
                                                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{member.displayName}</Typography>
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{member.email}</Typography>
@@ -356,7 +363,7 @@ export default function StaffAccessPage() {
                                             </TableCell>
                                         </TableRow>
                                     ))}
-                                    {staff.length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>NO STAFF ACCOUNTS FOUND</TableCell></TableRow>}
+                                    {staff.length === 0 && <TableRow><TableCell colSpan={7} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>NO STAFF ACCOUNTS FOUND</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
                             {staffHasMore && staffPageLimit < STAFF_MAX_ROWS && (

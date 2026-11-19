@@ -143,7 +143,9 @@ service cloud.firestore {
         'drivingLicenseStatus', 'licenseStatus', 'drivingLicenseExpiry', 'licenseExpiry',
         'certifications', 'certificationsStatus', 'certificationStatus', 'certificateStatus',
         'currentShiftId', 'activeShiftId', 'shiftStatus', 'currentShiftStatus', 'dutyStatus', 'onDuty',
-        'isAvailable', 'available'
+        'isAvailable', 'available',
+        // Staff numbers are server-assigned display IDs (adminCreateUser / adminBackfillStaffNumbers).
+        'staffNumber', 'staffNumberStr'
       ];
     }
 
@@ -1225,6 +1227,10 @@ service cloud.firestore {
       allow write: if false;  // server-only via Admin SDK launch evidence jobs
     }
 
+    match /system_counters/{counterDoc} {
+      allow read, write: if false;  // server-only counter documents via Admin SDK transactions
+    }
+
     match /users/{userId} {
       allow get: if request.auth != null && (
                     request.auth.uid == userId ||
@@ -1247,8 +1253,8 @@ service cloud.firestore {
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)
                   );
-      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
-      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
+      allow create: if (isAdmin() || safeUserBootstrapCreate(request.resource.data, userId)) && !('staffNumber' in request.resource.data) && !('staffNumberStr' in request.resource.data);
+      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId)) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['staffNumber', 'staffNumberStr']);
       allow delete: if isNotSuspended() && isAdmin();
       match /fcmTokens/{tokenId} {
         allow read, write: if false;
@@ -2873,7 +2879,9 @@ service cloud.firestore {
           'owner_authorities',
           'owner_authority_events',
           'ticket_reopen_events',
-          'finance_fraud_alerts'
+          'finance_fraud_alerts',
+          'system_counters',
+          'technicians'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -3008,7 +3016,9 @@ service cloud.firestore {
           'owner_authorities',
           'owner_authority_events',
           'ticket_reopen_events',
-          'finance_fraud_alerts'
+          'finance_fraud_alerts',
+          'system_counters',
+          'technicians'
         ]
       ) && hasAdminClaim();
     }

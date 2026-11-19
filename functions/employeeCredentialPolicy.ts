@@ -208,6 +208,7 @@ export type EmployeeIdentity = {
   displayNameAr: string;
   role: string;
   staffId: string;
+  staffNumber?: string;
   department: string;
   jobTitle: string;
   joiningDate: string;
@@ -223,12 +224,14 @@ export type EmployeeIdentity = {
 
 export function employeeIdentityFrom(uid: string, user: Record<string, any>, hr: Record<string, any>, privateHr: Record<string, any>): EmployeeIdentity {
   const role = normalizeRole(user.role || user.userRole || user.primaryRole);
+  const staffNumber = text(user.staffNumber || user.staffNumberStr);
   return {
     uid,
     displayName: text(user.displayName || user.fullName || hr.displayName || user.name),
     displayNameAr: text(hr.displayNameAr || user.displayNameAr || hr.arabicName || user.arabicName),
     role,
-    staffId: text(privateHr.employeeId || user.staffId || user.employeeId || hr.employeeId),
+    staffId: text(staffNumber || privateHr.employeeId || user.staffId || user.employeeId || hr.employeeId),
+    staffNumber,
     department: text(hr.department || user.department),
     jobTitle: text(hr.jobTitle || user.jobTitle || user.position),
     joiningDate: text(hr.joiningDate || privateHr.joiningDate),

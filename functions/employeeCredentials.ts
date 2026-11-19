@@ -227,7 +227,7 @@ export async function renderEmployeeCardPdf(args: {
   write(role.ar, tx + tw * 0.45, y, { width: tw * 0.55, align: "right" });
   y += 12;
   const rows: Array<[string, string, string]> = [
-    ["Staff ID", "الرقم الوظيفي", identity.staffId || "Not assigned"],
+    ["Staff ID", "الرقم الوظيفي", identity.staffNumber ? `#${identity.staffNumber}` : (identity.staffId || "Not assigned")],
     ["Department", "القسم", identity.department || "Not recorded"],
     ["Issued", "تاريخ الإصدار", args.issueDate],
     ["Expires", "تاريخ الانتهاء", args.expiryDate],
@@ -598,6 +598,7 @@ export const adminListEmployeeCredentials = onCall(SECURE_CALLABLE_OPTIONS, asyn
     const cardStatus = !credential?.currentCardDocumentId ? "MISSING" : expiry && expiry < today ? "EXPIRED" : "ACTIVE";
     return {
       uid,
+      staffNumber: data.staffNumber ? String(data.staffNumber) : null,
       displayName: text(data.displayName || data.fullName) || "Staff",
       role,
       roleLabel: roleLabel(role),

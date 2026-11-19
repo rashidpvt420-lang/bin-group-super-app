@@ -17,6 +17,7 @@ type CredentialRow = {
     displayName: string;
     role: string;
     roleLabel?: { en: string; ar: string };
+    staffNumber?: string | null;
     department: string | null;
     isSelf: boolean;
     cardStatus: 'MISSING' | 'ACTIVE' | 'EXPIRED';
@@ -169,7 +170,12 @@ export default function EmployeeCredentialsPanel() {
                                 {rows.map((row) => (
                                     <TableRow key={row.uid} data-testid="employee-credentials-row">
                                         <TableCell>
-                                            <Typography variant="body2" sx={{ fontWeight: 800 }}>{row.displayName}</Typography>
+                                            <Stack direction="row" spacing={0.75} alignItems="center">
+                                                <Typography variant="body2" sx={{ fontWeight: 800 }}>{row.displayName}</Typography>
+                                                {row.staffNumber && (
+                                                    <Chip label={`#${row.staffNumber}`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800 }} />
+                                                )}
+                                            </Stack>
                                             <Typography variant="caption" sx={{ opacity: .6 }}>{row.department || 'Department not recorded'}</Typography>
                                         </TableCell>
                                         <TableCell>{row.roleLabel?.en || row.role}</TableCell>

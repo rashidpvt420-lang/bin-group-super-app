@@ -19,6 +19,7 @@ import './user-suggestions-rules.test.js';
 import './payment-collection-rules.test.js';
 import './owner-dashboard-own-data-rules.test.js';
 import './user-directory-mfa-rules.test.js';
+import './staff-number-security-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -373,7 +374,8 @@ describe('Firestore Security Rules', () => {
   it('technician assigned-ticket access: approved technician can read assigned tickets', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
+    // Technician readiness fields are server-only (Admin SDK); seed them without client rules.
+    await seedServerDocument('technicians/tech_a', { status: 'active', approved: true });
     await seedServerDocument('maintenanceTickets/ticket_2', { assignedTechnicianId: 'tech_a' });
 
     const techADb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
@@ -383,7 +385,8 @@ describe('Firestore Security Rules', () => {
   it('ticket update narrowing: approved technician cannot reassign or escalate ticket', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
+    // Technician readiness fields are server-only (Admin SDK); seed them without client rules.
+    await seedServerDocument('technicians/tech_a', { status: 'active', approved: true });
     await seedServerDocument('maintenanceTickets/ticket_3', {
       assignedTechnicianId: 'tech_a',
       status: 'ASSIGNED',
@@ -461,7 +464,7 @@ describe('Firestore Security Rules', () => {
     await assertFails(updateDoc(doc(techDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
 
     // Approved technician profile still cannot self-claim via client write (server transaction required).
-    await setDoc(doc(adminDb, 'technicians/tech_approved'), {
+    await seedServerDocument('technicians/tech_approved', {
       status: 'active',
       approvalStatus: 'approved',
       suspended: false,
