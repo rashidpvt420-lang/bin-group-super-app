@@ -31,8 +31,8 @@ describe('Staff number and system_counters security rules', () => {
   const userDb = () => testEnv.authenticatedContext(USER, { email: 'staff1@example.com', email_verified: true, role: 'staff' }).firestore();
   const adminDb = () => testEnv.authenticatedContext('admin_staff', { ...ADMIN, ...MFA }).firestore();
 
-  const seed = (path, data) => testEnv.withSecurityRulesDisabled(async (c) => {
-    await setDoc(doc(c.firestore(), path), data);
+  const seed = (path, seedData) => testEnv.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), path), { ...seedData });
   });
 
   describe('system_counters server-only protection', () => {
@@ -67,6 +67,24 @@ describe('Staff number and system_counters security rules', () => {
       await assertFails(updateDoc(doc(hrDb(), 'technicians/tech_1'), { staffNumberStr: '10099' }));
       await assertFails(setDoc(doc(hrDb(), 'technicians/tech_new'), { uid: 'tech_new', name: 'New', staffNumber: 10011 }));
       await assertSucceeds(updateDoc(doc(hrDb(), 'technicians/tech_1'), { trade: 'Plumbing' }));
+    });
+
+    it('denies MFA admin clients creating or changing technician staff numbers; legitimate admin writes still pass', async () => {
+      await seed('technicians/tech_1', { uid: 'tech_1', name: 'Tech One', trade: 'HVAC', staffNumber: 10010, staffNumberStr: '10010', approvalStatus: 'APPROVED' });
+
+      // Staff number forgery through the generic admin grant is closed.
+      await assertFails(updateDoc(doc(adminDb(), 'technicians/tech_1'), { staffNumber: 10099 }));
+      await assertFails(updateDoc(doc(adminDb(), 'technicians/tech_1'), { staffNumberStr: '10099' }));
+      await assertFails(setDoc(doc(adminDb(), 'technicians/tech_admin_new'), { uid: 'tech_admin_new', name: 'New', staffNumber: 10012 }));
+      await assertFails(setDoc(doc(adminDb(), 'technicians/tech_admin_new2'), { uid: 'tech_admin_new2', name: 'New', staffNumberStr: '10013' }));
+      // Other protected readiness fields stay server-only for admins too.
+      await assertFails(updateDoc(doc(adminDb(), 'technicians/tech_1'), { approvalStatus: 'SUSPENDED' }));
+
+      // Legitimate admin writes on unprotected fields still pass via the technicians match.
+      await assertSucceeds(updateDoc(doc(adminDb(), 'technicians/tech_1'), { trade: 'Electrical' }));
+      await assertSucceeds(setDoc(doc(adminDb(), 'technicians/tech_admin_ok'), { uid: 'tech_admin_ok', name: 'Admin Created', trade: 'HVAC' }));
+      await assertSucceeds(setDoc(doc(adminDb(), 'technicians/tech_1/deviceReadiness/gps'), { ok: true }));
+      await assertSucceeds(getDoc(doc(adminDb(), 'technicians/tech_1')));
     });
   });
 

@@ -2880,7 +2880,8 @@ service cloud.firestore {
           'owner_authority_events',
           'ticket_reopen_events',
           'finance_fraud_alerts',
-          'system_counters'
+          'system_counters',
+          'technicians'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -3016,7 +3017,8 @@ service cloud.firestore {
           'owner_authority_events',
           'ticket_reopen_events',
           'finance_fraud_alerts',
-          'system_counters'
+          'system_counters',
+          'technicians'
         ]
       ) && hasAdminClaim();
     }
