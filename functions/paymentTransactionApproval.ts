@@ -839,13 +839,15 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   } catch (error: any) {
     throw new HttpsError("aborted", error?.message || "The approved mobilisation invoice identity changed.");
   }
-  const receiptMissing =
-    !String(approvedInvoice.receiptPdfUrl || "").trim() ||
-    !String(approvedInvoice.receiptStoragePath || "").trim() ||
-    !String(approvedInvoice.receiptPdfSha256 || "").trim() ||
-    !String(approvedInvoice.receiptPdfGeneration || "").trim();
+  // A receipt is canonical only when all four immutable artifact fields are present.
+  // Reuse this exact predicate for the pre-generation fast path and transactional commit checks.
+  const hasCompleteReceiptMetadata = (invoice: Record<string, any>) =>
+    Boolean(String(invoice.receiptPdfUrl || "").trim()) &&
+    Boolean(String(invoice.receiptStoragePath || "").trim()) &&
+    Boolean(String(invoice.receiptPdfSha256 || "").trim()) &&
+    Boolean(String(invoice.receiptPdfGeneration || "").trim());
   const receiptNeedsRepair =
-    receiptMissing ||
+    !hasCompleteReceiptMetadata(approvedInvoice) ||
     ["PAID_RECEIPT_PENDING", "PAID_RECEIPT_FAILED"].includes(String(approvedInvoice.documentState || "").trim().toUpperCase());
   if (receiptNeedsRepair) {
     let receiptArtifact: any = null;
@@ -873,10 +875,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         }
         const alreadyReady =
           currentDocumentState === "PAID_RECEIPT_READY" &&
-          Boolean(String(freshInvoice.receiptPdfUrl || "").trim()) &&
-          Boolean(canonicalPath) &&
-          Boolean(String(freshInvoice.receiptPdfSha256 || "").trim()) &&
-          Boolean(String(freshInvoice.receiptPdfGeneration || "").trim());
+          hasCompleteReceiptMetadata(freshInvoice);
         if (alreadyReady) {
           // Losing attempt: canonical receipt is already secured with valid metadata.
           return { committed: false, canonicalStoragePath: canonicalPath };
@@ -922,10 +921,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
           const currentDocumentState = String(freshInvoice.documentState || "").trim().toUpperCase();
           const alreadyReady =
             currentDocumentState === "PAID_RECEIPT_READY" &&
-            Boolean(String(freshInvoice.receiptPdfUrl || "").trim()) &&
-            Boolean(canonicalStoragePath) &&
-            Boolean(String(freshInvoice.receiptPdfSha256 || "").trim()) &&
-            Boolean(String(freshInvoice.receiptPdfGeneration || "").trim());
+            hasCompleteReceiptMetadata(freshInvoice);
           if (alreadyReady || currentDocumentState === "PAYMENT_REVERSED_CHEQUE_RETURNED") {
             return;
           }
