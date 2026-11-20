@@ -139,6 +139,20 @@ for (const method of ['CASH', 'CHEQUE']) {
     const results = await Promise.allSettled([call(secureApprovePayment, financeB, { paymentId: id }), call(secureApprovePayment, financeB, { paymentId: id })]);
     assert.ok(results.some((r) => r.status === 'fulfilled'), JSON.stringify(results.map((r) => r.reason?.message)));
     await call(secureApprovePayment, financeB, { paymentId: id });
+
+    // A PAID_RECEIPT_READY marker is not sufficient: missing any canonical metadata field
+    // must enter the repair path. Regress the previously missed URL+path-but-no-generation case.
+    const approvedPaymentForRepair = (await db.doc(`payment_transactions/${id}`).get()).data();
+    const approvedInvoiceRef = db.doc(`invoices/${approvedPaymentForRepair.invoiceId}`);
+    await approvedInvoiceRef.update({ receiptPdfGeneration: admin.firestore.FieldValue.delete() });
+    await call(secureApprovePayment, financeB, { paymentId: id });
+    const repairedInvoice = (await approvedInvoiceRef.get()).data();
+    assert.equal(repairedInvoice.documentState, 'PAID_RECEIPT_READY');
+    assert.ok(repairedInvoice.receiptPdfUrl, 'missing receipt URL is repaired');
+    assert.ok(repairedInvoice.receiptStoragePath, 'missing receipt storage path is repaired');
+    assert.ok(repairedInvoice.receiptPdfSha256, 'missing receipt SHA-256 is repaired');
+    assert.ok(repairedInvoice.receiptPdfGeneration, 'missing receipt generation is repaired');
+
     assert.equal(await isActive(id), true);
     const decisions = (await db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').get()).docs.filter((d) => [d.get('targetId'), d.get('paymentId')].includes(id));
     assert.equal(decisions.length, 1, 'one financial decision');
