@@ -169,6 +169,82 @@ for (const method of ['CASH', 'CHEQUE']) {
   });
 }
 
+for (const receiptOutcome of ['commit', 'failure']) {
+  test(`a returned cheque cannot be overwritten by receipt ${receiptOutcome} handling`, { timeout: 120_000 }, async (context) => {
+    stubSignedUrl(context);
+    const id = crypto.randomUUID();
+    await submit(id);
+    await advanceToFinalSigned(id);
+    await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id, 'CHEQUE'));
+    await call(adminSetOwnerChequeClearance, financeA, { paymentId: id, clearance: 'CLEARED' });
+
+    const pdfEngine = lib('pdfEngine.js');
+    const originalReceipt = pdfEngine.generateOwnerPaymentReceiptPdfArtifact;
+    let releaseReceipt;
+    let notifyReceipt;
+    const blocked = new Promise((resolve) => { releaseReceipt = resolve; });
+    const reachedReceipt = new Promise((resolve) => { notifyReceipt = resolve; });
+    let attemptStoragePath = null;
+    pdfEngine.generateOwnerPaymentReceiptPdfArtifact = async (...args) => {
+      if (receiptOutcome === 'failure') {
+        notifyReceipt();
+        await blocked;
+        throw new Error('Simulated receipt rendering failure after cheque return');
+      }
+      const artifact = await originalReceipt(...args);
+      attemptStoragePath = artifact.storagePath;
+      notifyReceipt();
+      await blocked;
+      return artifact;
+    };
+    context.after(() => {
+      releaseReceipt();
+      pdfEngine.generateOwnerPaymentReceiptPdfArtifact = originalReceipt;
+    });
+
+    const approval = call(secureApprovePayment, financeB, { paymentId: id });
+    try {
+      await Promise.race([
+        reachedReceipt,
+        approval.then(() => { throw new Error('Expected receipt handling to pause'); }),
+      ]);
+      // Approval is already recorded; the bank return now reverses the invoice while receipt
+      // generation is in flight. Neither the success callback nor failure handler may overwrite it.
+      await call(adminSetOwnerChequeClearance, financeA, {
+        paymentId: id, clearance: 'BOUNCED', note: 'Bank confirmed cheque returned unpaid',
+      });
+      const paymentAfterBounce = (await db.doc(`payment_transactions/${id}`).get()).data();
+      const reversedInvoiceRef = db.doc(`invoices/${paymentAfterBounce.invoiceId}`);
+      const reversedBeforeRelease = (await reversedInvoiceRef.get()).data();
+      assert.equal(reversedBeforeRelease.documentState, 'PAYMENT_REVERSED_CHEQUE_RETURNED');
+      assert.equal(reversedBeforeRelease.paymentStatus, 'UNPAID');
+      assert.equal(reversedBeforeRelease.status, 'PENDING');
+    } finally {
+      releaseReceipt();
+      if (receiptOutcome === 'failure') {
+        await assert.rejects(approval, /Simulated receipt rendering failure after cheque return/);
+      } else {
+        await approval;
+      }
+    }
+
+    const paymentAfter = (await db.doc(`payment_transactions/${id}`).get()).data();
+    const reversedAfter = (await db.doc(`invoices/${paymentAfter.invoiceId}`).get()).data();
+    assert.equal(reversedAfter.documentState, 'PAYMENT_REVERSED_CHEQUE_RETURNED', 'receipt handling preserves cheque-return state');
+    assert.equal(reversedAfter.paymentStatus, 'UNPAID', 'receipt handling cannot mark a returned cheque paid');
+    assert.equal(reversedAfter.status, 'PENDING', 'receipt handling cannot close the reversed invoice');
+    assert.equal(reversedAfter.receiptPdfUrl || null, null, 'no canonical receipt URL is attached after reversal');
+    assert.equal(reversedAfter.receiptStoragePath || null, null, 'no canonical receipt path is attached after reversal');
+    assert.equal(reversedAfter.receiptPdfSha256 || null, null, 'no canonical receipt hash is attached after reversal');
+    assert.equal(reversedAfter.receiptPdfGeneration || null, null, 'no canonical receipt generation is attached after reversal');
+
+    if (attemptStoragePath) {
+      const [orphanExists] = await admin.storage().bucket().file(attemptStoragePath).exists();
+      assert.equal(orphanExists, false, 'uncommitted receipt attempt is cleaned up after cheque return');
+    }
+  });
+}
+
 for (const pauseStage of ['before upload', 'after upload']) {
   test(`a delayed missing-invoice repair (${pauseStage}) preserves PAID and its PDF generation`, { timeout: 120_000 }, async (context) => {
     stubSignedUrl(context);
