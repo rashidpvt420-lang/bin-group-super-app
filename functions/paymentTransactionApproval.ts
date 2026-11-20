@@ -839,15 +839,20 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   } catch (error: any) {
     throw new HttpsError("aborted", error?.message || "The approved mobilisation invoice identity changed.");
   }
-  const receiptMissing =
-    !String(approvedInvoice.receiptPdfUrl || "").trim() ||
-    !String(approvedInvoice.receiptStoragePath || "").trim();
+  // A receipt is canonical only when all four immutable artifact fields are present.
+  // Reuse this exact predicate for the pre-generation fast path and transactional commit checks.
+  const hasCompleteReceiptMetadata = (invoice: Record<string, any>) =>
+    Boolean(String(invoice.receiptPdfUrl || "").trim()) &&
+    Boolean(String(invoice.receiptStoragePath || "").trim()) &&
+    Boolean(String(invoice.receiptPdfSha256 || "").trim()) &&
+    Boolean(String(invoice.receiptPdfGeneration || "").trim());
   const receiptNeedsRepair =
-    receiptMissing ||
+    !hasCompleteReceiptMetadata(approvedInvoice) ||
     ["PAID_RECEIPT_PENDING", "PAID_RECEIPT_FAILED"].includes(String(approvedInvoice.documentState || "").trim().toUpperCase());
   if (receiptNeedsRepair) {
+    let receiptArtifact: any = null;
     try {
-      const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
+      receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
         ...invoiceSnapshot,
         ownerId: ownerUid,
         paymentReferenceId: manualReference || payment.stripeSessionId,
@@ -855,29 +860,96 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         chequeDetails: payment.chequeDetails || null,
         chequeClearanceState: payment.chequeClearanceState || null,
         verifiedAt: new Date().toISOString(),
+      }, { uniqueArtifact: true });
+      // A concurrent approval/retry request may have already generated and committed the canonical
+      // receipt while this PDF was rendering. Check existence and commit atomically (first-writer-wins).
+      // Return an explicit result object so Firestore transaction retries cannot corrupt outer state.
+      const receiptCommitResult = await db.runTransaction(async (transaction) => {
+        const freshInvoiceSnap = await transaction.get(invoiceRef);
+        if (!freshInvoiceSnap.exists) return { committed: false, canonicalStoragePath: null };
+        const freshInvoice = freshInvoiceSnap.data() || {};
+        const currentDocumentState = String(freshInvoice.documentState || "").trim().toUpperCase();
+        const canonicalPath = String(freshInvoice.receiptStoragePath || "").trim() || null;
+        if (currentDocumentState === "PAYMENT_REVERSED_CHEQUE_RETURNED") {
+          return { committed: false, canonicalStoragePath: canonicalPath };
+        }
+        const alreadyReady =
+          currentDocumentState === "PAID_RECEIPT_READY" &&
+          hasCompleteReceiptMetadata(freshInvoice);
+        if (alreadyReady) {
+          // Losing attempt: canonical receipt is already secured with valid metadata.
+          return { committed: false, canonicalStoragePath: canonicalPath };
+        }
+        transaction.set(invoiceRef, {
+          receiptPdfUrl: receiptArtifact.pdfUrl,
+          receiptStoragePath: receiptArtifact.storagePath,
+          receiptPdfSha256: receiptArtifact.pdfSha256,
+          receiptPdfGeneration: receiptArtifact.generation,
+          receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+          documentState: "PAID_RECEIPT_READY",
+          receiptPdfError: FieldValue.delete(),
+          updatedAt: ts(),
+        }, { merge: true });
+        transaction.set(db.collection("invoice_registry").doc(invoiceHash), {
+          receiptPdfSha256: receiptArtifact.pdfSha256,
+          receiptStoragePath: receiptArtifact.storagePath,
+          receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+          updatedAt: ts(),
+        }, { merge: true });
+        return { committed: true, canonicalStoragePath: receiptArtifact.storagePath };
       });
-      await invoiceRef.set({
-        receiptPdfUrl: receiptArtifact.pdfUrl,
-        receiptStoragePath: receiptArtifact.storagePath,
-        receiptPdfSha256: receiptArtifact.pdfSha256,
-        receiptPdfGeneration: receiptArtifact.generation,
-        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-        documentState: "PAID_RECEIPT_READY",
-        receiptPdfError: FieldValue.delete(),
-        updatedAt: ts(),
-      }, { merge: true });
-      await db.collection("invoice_registry").doc(invoiceHash).set({
-        receiptPdfSha256: receiptArtifact.pdfSha256,
-        receiptStoragePath: receiptArtifact.storagePath,
-        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-        updatedAt: ts(),
-      }, { merge: true });
+      // Safe orphan cleanup: if this attempt lost the race, remove its unreferenced artifact
+      // from Storage so no orphan is retained. The winning artifact has a different UUID and is untouched.
+      if (!receiptCommitResult?.committed && receiptArtifact?.storagePath) {
+        if (receiptCommitResult?.canonicalStoragePath !== receiptArtifact.storagePath) {
+          try {
+            await admin.storage().bucket().file(receiptArtifact.storagePath).delete({ ignoreNotFound: true });
+          } catch (_cleanupError) {
+            // Best-effort orphan cleanup.
+          }
+        }
+      }
     } catch (receiptError: any) {
-      await invoiceRef.set({
-        documentState: "PAID_RECEIPT_FAILED",
-        receiptPdfError: String(receiptError?.message || receiptError || "Receipt PDF generation failed").slice(0, 500),
-        updatedAt: ts(),
-      }, { merge: true });
+      // Failure-state protection: a late failure must NEVER overwrite an already-ready receipt.
+      let canonicalStoragePath: string | null = null;
+      try {
+        await db.runTransaction(async (transaction) => {
+          const freshInvoiceSnap = await transaction.get(invoiceRef);
+          if (!freshInvoiceSnap.exists) return;
+          const freshInvoice = freshInvoiceSnap.data() || {};
+          canonicalStoragePath = String(freshInvoice.receiptStoragePath || "").trim() || null;
+          const currentDocumentState = String(freshInvoice.documentState || "").trim().toUpperCase();
+          const alreadyReady =
+            currentDocumentState === "PAID_RECEIPT_READY" &&
+            hasCompleteReceiptMetadata(freshInvoice);
+          if (alreadyReady || currentDocumentState === "PAYMENT_REVERSED_CHEQUE_RETURNED") {
+            return;
+          }
+          transaction.set(invoiceRef, {
+            documentState: "PAID_RECEIPT_FAILED",
+            receiptPdfError: String(receiptError?.message || receiptError || "Receipt PDF generation failed").slice(0, 500),
+            updatedAt: ts(),
+          }, { merge: true });
+        });
+      } catch (txFailureError) {
+        console.warn("[paymentTransactionApproval] Failed to record receipt failure state:", txFailureError);
+      }
+
+      // Safe orphan cleanup in exception path: if a unique PDF was uploaded but the transaction threw
+      // (or failed before committing), clean up only this attempt's artifact if it is not the canonical receipt.
+      if (receiptArtifact?.storagePath) {
+        try {
+          if (canonicalStoragePath === null) {
+            const currentSnap = await invoiceRef.get();
+            canonicalStoragePath = String(currentSnap.data()?.receiptStoragePath || "").trim() || null;
+          }
+          if (canonicalStoragePath !== receiptArtifact.storagePath) {
+            await admin.storage().bucket().file(receiptArtifact.storagePath).delete({ ignoreNotFound: true });
+          }
+        } catch (cleanupError) {
+          console.warn("[paymentTransactionApproval] Failed to cleanup orphan receipt artifact after transaction failure:", cleanupError);
+        }
+      }
       throw receiptError;
     }
   }

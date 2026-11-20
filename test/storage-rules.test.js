@@ -260,7 +260,11 @@ describe('Storage Security Rules', () => {
   });
 
   it('invoice evidence is server/Admin-authored and participant reads remain scoped', async () => {
-    const paths = ['invoices/invoice_owner_a/invoice.pdf', 'invoices/invoice_owner_a/repairs/attempt.pdf'];
+    const paths = [
+      'invoices/invoice_owner_a/invoice.pdf',
+      'invoices/invoice_owner_a/repairs/attempt.pdf',
+      'invoices/invoice_owner_a/receipts/attempt.pdf'
+    ];
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'invoices/invoice_owner_a'), {
         ownerId: 'owner_a',
@@ -292,6 +296,12 @@ describe('Storage Security Rules', () => {
     await assertFails(uploadString(
       ref(ownerAStorage, 'invoices/invoice_owner_a/repairs/forged.pdf'),
       'forged invoice',
+      'raw',
+      { contentType: 'application/pdf' },
+    ));
+    await assertFails(uploadString(
+      ref(ownerAStorage, 'invoices/invoice_owner_a/receipts/forged.pdf'),
+      'forged receipt',
       'raw',
       { contentType: 'application/pdf' },
     ));

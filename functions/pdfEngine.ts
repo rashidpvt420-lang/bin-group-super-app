@@ -1103,7 +1103,10 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(
     });
 }
 
-export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
+export async function generateOwnerPaymentReceiptPdfArtifact(
+    data: any,
+    options: { uniqueArtifact?: boolean } = {},
+): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     const invoiceId = textValue(data.invoiceId);
     const paymentId = textValue(data.paymentId);
@@ -1114,6 +1117,11 @@ export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise
     if (!invoiceId || !paymentId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical payment receipt fields are incomplete.');
     }
+    // Overlapping approval/retry requests race with each other. Each attempt must write
+    // to an immutable unique path so it never overwrites the winning receipt object in Storage.
+    const artifactPath = options.uniqueArtifact
+        ? `invoices/${invoiceId}/receipts/${crypto.randomUUID()}.pdf`
+        : `invoices/${invoiceId}/payment-receipt.pdf`;
     const invoiceFont = await getCairoFont();
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Payment Receipt ${invoiceId}`, Author: 'BIN GROUP Super App' } });
@@ -1127,10 +1135,20 @@ export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise
             try {
                 const buffer = Buffer.concat(chunks);
                 const documentHash = crypto.createHash('sha256').update(JSON.stringify({ invoiceId, paymentId, contractId, ownerId, amount, proofHash, status: 'PAID' })).digest('hex');
-                resolve(await savePdf(buffer, `invoices/${invoiceId}/payment-receipt.pdf`, {
-                    invoiceId, paymentId, contractId, ownerId, documentType: 'approved_payment_receipt',
-                    language: 'en-ar', documentHash, proofHash, status: 'PAID'
-                }));
+                try {
+                    resolve(await savePdf(buffer, artifactPath, {
+                        invoiceId, paymentId, contractId, ownerId, documentType: 'approved_payment_receipt',
+                        language: 'en-ar', documentHash, proofHash, status: 'PAID'
+                    }));
+                } catch (saveError) {
+                    if (options.uniqueArtifact) {
+                        try {
+                            const bucket = getStorage().bucket();
+                            await bucket.file(artifactPath).delete({ ignoreNotFound: true });
+                        } catch (_ignored) {}
+                    }
+                    throw saveError;
+                }
             } catch (error) { reject(error); }
         });
         doc.fillColor(GOLD).fontSize(14).text(BIN_GROUP_LEGAL_ENTITY_NAME, { align: 'center' });
