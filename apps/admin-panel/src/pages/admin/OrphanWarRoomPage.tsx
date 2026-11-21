@@ -40,7 +40,7 @@ export default function OrphanWarRoomPage() {
     const ticketOrphanConstraints = useMemo(() => [where('propertyId', '==', 'UNASSOCIATED')], []);
     const tenantOrphanConstraints = useMemo(() => [where('role', '==', 'tenant'), where('propertyId', '==', 'UNASSOCIATED')], []);
     const ticketOrphansPage = usePagedCollection({ db, collectionName: 'maintenanceTickets', constraints: ticketOrphanConstraints, resetKey: 'orphan-tickets' });
-    const tenantOrphansPage = usePagedCollection({ db, collectionName: 'users', constraints: tenantOrphanConstraints, resetKey: 'orphan-tenants' });
+    const tenantOrphansPage = usePagedCollection({ db, collectionName: 'users', constraints: tenantOrphanConstraints, resetKey: 'orphan-tenants', count: false });
     const propertiesPage = usePagedCollection({ db, collectionName: 'properties' });
     const unitsPage = usePagedCollection({ db, collectionName: 'units' });
     const properties = propertiesPage.rows;

@@ -6,7 +6,7 @@
   "indexScriptAssetCount": 2,
   "indexScriptAssets": [
     {
-      "path": "static/js/main.242e951a.js",
+      "path": "static/js/main.ab2a4764.js",
       "size": 148760
     },
     {
@@ -17,39 +17,39 @@
   "generatedScriptAssetCount": 9,
   "generatedScriptAssets": [
     {
+      "path": "static/js/198.a37835e8.chunk.js",
+      "size": 996388
+    },
+    {
+      "path": "static/js/207.35fbeda5.chunk.js",
+      "size": 729582
+    },
+    {
       "path": "static/js/239.3f431156.chunk.js",
       "size": 202928
     },
     {
-      "path": "static/js/411.5dacfaff.chunk.js",
-      "size": 281329
+      "path": "static/js/411.90535771.chunk.js",
+      "size": 297394
     },
     {
-      "path": "static/js/455.1103bc91.chunk.js",
+      "path": "static/js/455.987798f2.chunk.js",
       "size": 139972
     },
     {
-      "path": "static/js/527.b8de9a5f.chunk.js",
-      "size": 1913405
-    },
-    {
-      "path": "static/js/611.944fecc3.chunk.js",
-      "size": 901753
+      "path": "static/js/527.dc7a019c.chunk.js",
+      "size": 1915358
     },
     {
       "path": "static/js/614.63ade29d.chunk.js",
       "size": 1186
     },
     {
-      "path": "static/js/940.5312f669.chunk.js",
-      "size": 721314
-    },
-    {
       "path": "static/js/977.e75088cf.chunk.js",
       "size": 27172
     },
     {
-      "path": "static/js/main.242e951a.js",
+      "path": "static/js/main.ab2a4764.js",
       "size": 148760
     }
   ],

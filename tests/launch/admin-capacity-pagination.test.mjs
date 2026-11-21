@@ -96,3 +96,20 @@ test('technician transactions retry with backoff', () => {
   assert.match(index, /runTransactionWithRetry/);
   assert.match(index, /withCriticalScale/);
 });
+
+test('usePagedCollection guards against unbounded aggregation on restricted directories', () => {
+  for (const hookPath of ['src/lib/usePagedCollection.ts', 'apps/admin-panel/src/lib/usePagedCollection.ts', 'apps/owner-app/src/lib/usePagedCollection.ts']) {
+    const hook = read(hookPath);
+    assert.match(hook, /count\?: boolean;/);
+    assert.match(hook, /shouldCount = count \?\? \(collectionName !== 'users'\)/);
+    assert.match(hook, /if \(shouldCount\) \{/);
+  }
+  const brokerPage = read('apps/admin-panel/src/pages/brokers/BrokerManagementPage.tsx');
+  assert.match(brokerPage, /collectionName:\s*'users'[\s\S]*?count:\s*false/);
+  assert.match(brokerPage, /collectionName:\s*'brokerDocuments'[\s\S]*?count:\s*false/);
+  assert.match(brokerPage, /collectionName:\s*'broker_payout_requests'[\s\S]*?count:\s*false/);
+  assert.match(brokerPage, /collectionName:\s*'broker_commissions'[\s\S]*?count:\s*false/);
+  const orphanPage = read('apps/admin-panel/src/pages/admin/OrphanWarRoomPage.tsx');
+  assert.match(orphanPage, /collectionName:\s*'users'[\s\S]*?count:\s*false/);
+});
+
