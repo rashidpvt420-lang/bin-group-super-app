@@ -786,9 +786,9 @@ async function seedOperationalFixtures() {
 
   await Promise.all([
     db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 1_250, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_APPROVE_ID, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
-    db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: BROKER_APPROVE_NAME, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 1_250, currency: 'AED', commissionIds: [COMMISSION_APPROVE_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
+    db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: BROKER_APPROVE_NAME, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 1_250, currency: 'AED', paymentMethod: 'CHEQUE', commissionIds: [COMMISSION_APPROVE_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
     db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 750, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_REJECT_ID, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
-    db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: `E2E Payout Reject ${RUN_ID}`, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 750, currency: 'AED', commissionIds: [COMMISSION_REJECT_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
+    db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: `E2E Payout Reject ${RUN_ID}`, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 750, currency: 'AED', paymentMethod: 'CHEQUE', commissionIds: [COMMISSION_REJECT_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
   ]);
 
   const readiness = {
@@ -1177,20 +1177,47 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     let approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     await expect(approvePayoutCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
+    const approveResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('adminReviewBrokerPayoutRequest'),
+      { timeout: 45_000 },
+    );
     await approvePayoutCard.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approveResponse = await approveResponsePromise;
+    const approveText = await approveResponse.text().catch(() => '');
+    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveText)) {
+      throw new Error(`adminReviewBrokerPayoutRequest (APPROVE) failed HTTP ${approveResponse.status()}: ${approveText.slice(0, 1_500)}`);
+    }
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     page.once('dialog', async (dialog) => dialog.accept(`E2E-PAYOUT-${RUN_ID}`));
+    const markPaidResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('adminReviewBrokerPayoutRequest'),
+      { timeout: 45_000 },
+    );
     await approvePayoutCard.getByRole('button', { name: /Mark paid/i }).click();
+    const markPaidResponse = await markPaidResponsePromise;
+    const markPaidText = await markPaidResponse.text().catch(() => '');
+    if (!markPaidResponse.ok() || /\"error\"\s*:/i.test(markPaidText)) {
+      throw new Error(`adminReviewBrokerPayoutRequest (MARK_PAID) failed HTTP ${markPaidResponse.status()}: ${markPaidText.slice(0, 1_500)}`);
+    }
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('PAID');
     expect((await db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).get()).data()?.status).toBe('PAID');
 
     const rejectPayoutCard = payoutCard(page, `E2E Payout Reject ${RUN_ID}`);
     page.once('dialog', async (dialog) => dialog.accept('Protected E2E payout bank evidence requires correction.'));
+    const rejectResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('adminReviewBrokerPayoutRequest'),
+      { timeout: 45_000 },
+    );
     await rejectPayoutCard.getByRole('button', { name: 'Reject', exact: true }).click();
+    const rejectResponse = await rejectResponsePromise;
+    const rejectText = await rejectResponse.text().catch(() => '');
+    if (!rejectResponse.ok() || /\"error\"\s*:/i.test(rejectText)) {
+      throw new Error(`adminReviewBrokerPayoutRequest (REJECT) failed HTTP ${rejectResponse.status()}: ${rejectText.slice(0, 1_500)}`);
+    }
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
     expect((await db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).get()).data()?.payoutStatus).toBe('AVAILABLE');
 

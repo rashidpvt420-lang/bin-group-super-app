@@ -101,6 +101,8 @@ type PayoutRequest = {
     currency?: string;
     commissionCount?: number;
     commissionIds?: string[];
+    paymentMethod?: string;
+    method?: string;
     status?: string;
     approvalStatus?: string;
     paymentStatus?: string;
@@ -311,11 +313,16 @@ export default function BrokerManagementPage() {
         setBusy(`payout-${request.id}`);
         try {
             const callable = httpsCallable(functions, 'adminReviewBrokerPayoutRequest');
+            const candidateMethod = String(
+                request.paymentMethod || request.method || 'CHEQUE'
+            ).trim().toUpperCase();
+            const resolvedMethod = ['CASH', 'CHEQUE'].includes(candidateMethod) ? candidateMethod : 'CHEQUE';
             await callable({
                 requestId: request.id,
                 action,
                 reason: reason.trim(),
                 paymentReference: action === 'MARK_PAID' ? reason.trim() : '',
+                paymentMethod: action === 'MARK_PAID' ? resolvedMethod : undefined,
             });
             setNotice(`Payout request ${action.replace('_', ' ').toLowerCase()} saved.`);
         } catch (error: any) {
