@@ -101,6 +101,8 @@ type PayoutRequest = {
     currency?: string;
     commissionCount?: number;
     commissionIds?: string[];
+    paymentMethod?: string;
+    method?: string;
     status?: string;
     approvalStatus?: string;
     paymentStatus?: string;
@@ -308,6 +310,21 @@ export default function BrokerManagementPage() {
                 ? window.prompt('Payment reference or notes for paid payout?', '') || ''
                 : '';
         if (action === 'REJECT' && !reason.trim()) return;
+        let resolvedMethod: string | undefined;
+        if (action === 'MARK_PAID') {
+            const rawMethod = String(request.paymentMethod || request.method || '').trim().toUpperCase();
+            if (['CASH', 'CHEQUE'].includes(rawMethod)) {
+                resolvedMethod = rawMethod;
+            } else {
+                const chosen = window.prompt('Settlement method for paid payout? Enter CASH or CHEQUE:', 'CHEQUE') || '';
+                const normalized = chosen.trim().toUpperCase();
+                if (!['CASH', 'CHEQUE'].includes(normalized)) {
+                    setNotice('Phase 1 payout settlement requires CASH or CHEQUE.');
+                    return;
+                }
+                resolvedMethod = normalized;
+            }
+        }
         setBusy(`payout-${request.id}`);
         try {
             const callable = httpsCallable(functions, 'adminReviewBrokerPayoutRequest');
@@ -316,6 +333,7 @@ export default function BrokerManagementPage() {
                 action,
                 reason: reason.trim(),
                 paymentReference: action === 'MARK_PAID' ? reason.trim() : '',
+                paymentMethod: resolvedMethod,
             });
             setNotice(`Payout request ${action.replace('_', ' ').toLowerCase()} saved.`);
         } catch (error: any) {
