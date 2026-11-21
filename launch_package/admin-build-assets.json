@@ -6,7 +6,7 @@
   "indexScriptAssetCount": 2,
   "indexScriptAssets": [
     {
-      "path": "static/js/main.ab2a4764.js",
+      "path": "static/js/main.7288c4a3.js",
       "size": 148760
     },
     {
@@ -17,8 +17,8 @@
   "generatedScriptAssetCount": 9,
   "generatedScriptAssets": [
     {
-      "path": "static/js/198.a37835e8.chunk.js",
-      "size": 996388
+      "path": "static/js/198.c6d82096.chunk.js",
+      "size": 996397
     },
     {
       "path": "static/js/207.35fbeda5.chunk.js",
@@ -49,7 +49,7 @@
       "size": 27172
     },
     {
-      "path": "static/js/main.ab2a4764.js",
+      "path": "static/js/main.7288c4a3.js",
       "size": 148760
     }
   ],

@@ -105,11 +105,12 @@ test('usePagedCollection guards against unbounded aggregation on restricted dire
     assert.match(hook, /if \(shouldCount\) \{/);
   }
   const brokerPage = read('apps/admin-panel/src/pages/brokers/BrokerManagementPage.tsx');
-  assert.match(brokerPage, /collectionName:\s*'users'[\s\S]*?count:\s*false/);
-  assert.match(brokerPage, /collectionName:\s*'brokerDocuments'[\s\S]*?count:\s*false/);
-  assert.match(brokerPage, /collectionName:\s*'broker_payout_requests'[\s\S]*?count:\s*false/);
-  assert.match(brokerPage, /collectionName:\s*'broker_commissions'[\s\S]*?count:\s*false/);
+  assert.match(brokerPage, /usePagedCollection\(\s*\{[\s\S]*?collectionName:\s*'users'[\s\S]*?count:\s*false[\s\S]*?\}\s*\)/);
+  assert.match(brokerPage, /usePagedCollection\(\s*\{[\s\S]*?collectionName:\s*'brokerDocuments'[\s\S]*?count:\s*false[\s\S]*?\}\s*\)/);
+  assert.match(brokerPage, /usePagedCollection\(\s*\{[\s\S]*?collectionName:\s*'broker_payout_requests'[\s\S]*?count:\s*false[\s\S]*?\}\s*\)/);
+  assert.match(brokerPage, /usePagedCollection\(\s*\{[\s\S]*?collectionName:\s*'broker_commissions'[\s\S]*?count:\s*false[\s\S]*?\}\s*\)/);
+  assert.match(brokerPage, /label:\s*'Loaded Brokers'/);
   const orphanPage = read('apps/admin-panel/src/pages/admin/OrphanWarRoomPage.tsx');
-  assert.match(orphanPage, /collectionName:\s*'users'[\s\S]*?count:\s*false/);
+  assert.match(orphanPage, /usePagedCollection\(\s*\{[\s\S]*?collectionName:\s*'users'[\s\S]*?count:\s*false[\s\S]*?\}\s*\)/);
 });
 

@@ -362,7 +362,7 @@ export default function BrokerManagementPage() {
 
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {[
-                    { label: 'Total Brokers', value: stats.total, color: 'primary.main', icon: <PeopleIcon /> },
+                    { label: 'Loaded Brokers', value: stats.total, color: 'primary.main', icon: <PeopleIcon /> },
                     { label: 'KYC Needs Review', value: stats.pending, color: 'warning.main', icon: <TrendingUpIcon /> },
                     { label: 'Approved Partners', value: stats.approved, color: 'success.main', icon: <CheckCircleIcon /> },
                     { label: 'Payout Requests', value: stats.payoutPending, color: 'secondary.main', icon: <WalletCards size={22} /> },
