@@ -1177,15 +1177,15 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     let approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     await expect(approvePayoutCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
-    const approveResponsePromise = page.waitForResponse(
+    const approvePayoutPromise = page.waitForResponse(
       (response) => response.request().method() === 'POST' && response.url().includes('adminReviewBrokerPayoutRequest'),
       { timeout: 45_000 },
     );
     await approvePayoutCard.getByRole('button', { name: 'Approve', exact: true }).click();
-    const approveResponse = await approveResponsePromise;
-    const approveText = await approveResponse.text().catch(() => '');
-    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveText)) {
-      throw new Error(`adminReviewBrokerPayoutRequest (APPROVE) failed HTTP ${approveResponse.status()}: ${approveText.slice(0, 1_500)}`);
+    const approvePayoutResponse = await approvePayoutPromise;
+    const approvePayoutText = await approvePayoutResponse.text().catch(() => '');
+    if (!approvePayoutResponse.ok() || /\"error\"\s*:/i.test(approvePayoutText)) {
+      throw new Error(`adminReviewBrokerPayoutRequest (APPROVE) failed HTTP ${approvePayoutResponse.status()}: ${approvePayoutText.slice(0, 1_500)}`);
     }
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
 
