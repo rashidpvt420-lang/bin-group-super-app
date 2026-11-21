@@ -195,10 +195,10 @@ export default function BrokerManagementPage() {
     const { user, mfaVerified } = useAuth();
     const canApprovePayout = canApproveBrokerPayout(user, mfaVerified);
     const brokerConstraints = useMemo(() => [where('role', 'in', ['broker', 'BROKER'])], []);
-    const brokersPage = usePagedCollection({ db, collectionName: 'users', constraints: brokerConstraints, resetKey: 'brokers' });
-    const documentsPage = usePagedCollection({ db, collectionName: 'brokerDocuments', resetKey: 'broker-docs' });
-    const payoutsPage = usePagedCollection({ db, collectionName: 'broker_payout_requests', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'broker-payouts' });
-    const commissionsPage = usePagedCollection({ db, collectionName: 'broker_commissions', resetKey: 'broker-commissions' });
+    const brokersPage = usePagedCollection({ db, collectionName: 'users', constraints: brokerConstraints, resetKey: 'brokers', count: false });
+    const documentsPage = usePagedCollection({ db, collectionName: 'brokerDocuments', resetKey: 'broker-docs', count: false });
+    const payoutsPage = usePagedCollection({ db, collectionName: 'broker_payout_requests', orderByField: 'createdAt', orderDirection: 'desc', resetKey: 'broker-payouts', count: false });
+    const commissionsPage = usePagedCollection({ db, collectionName: 'broker_commissions', resetKey: 'broker-commissions', count: false });
     const brokers = brokersPage.rows as Broker[];
     const commissions = commissionsPage.rows as Array<Record<string, unknown>>;
     const payoutRequests = payoutsPage.rows as PayoutRequest[];
@@ -233,7 +233,7 @@ export default function BrokerManagementPage() {
         pending: brokers.filter(brokerNeedsReview).length,
         approved: brokers.filter((broker) => statusText(broker.status || broker.approvalStatus) === 'APPROVED').length,
         payoutPending: payoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
-    }), [brokers, payoutRequests]);
+    }), [brokers, payoutRequests, brokersPage.total]);
     const commissionTotals = useMemo(() => commissionTotalsExcludingVoid(commissions), [commissions]);
 
     const selectedDocuments = selectedBroker ? documents[selectedBroker.id] || [] : [];
@@ -362,7 +362,7 @@ export default function BrokerManagementPage() {
 
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {[
-                    { label: 'Total Brokers', value: stats.total, color: 'primary.main', icon: <PeopleIcon /> },
+                    { label: 'Loaded Brokers', value: stats.total, color: 'primary.main', icon: <PeopleIcon /> },
                     { label: 'KYC Needs Review', value: stats.pending, color: 'warning.main', icon: <TrendingUpIcon /> },
                     { label: 'Approved Partners', value: stats.approved, color: 'success.main', icon: <CheckCircleIcon /> },
                     { label: 'Payout Requests', value: stats.payoutPending, color: 'secondary.main', icon: <WalletCards size={22} /> },

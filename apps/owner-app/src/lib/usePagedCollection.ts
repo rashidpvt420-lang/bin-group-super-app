@@ -33,6 +33,12 @@ export type UsePagedCollectionOptions = {
   enabled?: boolean;
   /** Change this when filters change so the first page reloads. */
   resetKey?: string;
+  /**
+   * Whether to fetch server-side total count. Defaults to true for standard collections,
+   * but defaults to false when explicitly disabled or for collections like `users`
+   * where directory security rules require bounded limits (`request.query.limit != null`).
+   */
+  count?: boolean;
 };
 
 async function countFor(base: Query): Promise<number | null> {
@@ -53,7 +59,9 @@ export function usePagedCollection<T extends PagedRow = PagedRow>(options: UsePa
     orderDirection = 'asc',
     enabled = true,
     resetKey = '',
+    count,
   } = options;
+  const shouldCount = count ?? (collectionName !== 'users');
   const [rows, setRows] = useState<T[]>([]);
   const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -92,7 +100,11 @@ export function usePagedCollection<T extends PagedRow = PagedRow>(options: UsePa
     setError('');
     try {
       await loadPage(null, false);
-      setTotal(await countFor(query(collection(db, collectionName), ...constraints)));
+      if (shouldCount) {
+        setTotal(await countFor(query(collection(db, collectionName), ...constraints)));
+      } else {
+        setTotal(null);
+      }
     } catch (err: any) {
       setError(err?.message || 'This list could not be loaded.');
       setRows([]);
@@ -100,7 +112,7 @@ export function usePagedCollection<T extends PagedRow = PagedRow>(options: UsePa
     } finally {
       setLoading(false);
     }
-  }, [enabled, loadPage, db, collectionName, constraints, resetKey]);
+  }, [enabled, loadPage, db, collectionName, constraints, resetKey, shouldCount]);
 
   const loadMore = useCallback(async () => {
     if (!hasMore || loadingMore || !cursor) return;
